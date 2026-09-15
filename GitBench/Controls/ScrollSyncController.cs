@@ -18,7 +18,7 @@ internal sealed class ScrollSyncController : IDisposable
         vScrollBar.ScrollPositionChanged += content.SetVerticalNormalizedScrollPosition;
         // Pull the content's current scale so the bar reflects "fits / hidden" state
         // even when no event has fired yet. Critical for views that detach + re-attach
-        // (e.g. LocalChangesPanel inside a placeholder-swap parent): each re-attach
+        // (e.g. FileRowList inside a placeholder-swap parent): each re-attach
         // builds a fresh controller, and without this initial pull the bar would sit
         // at its built-in default (PreferredHeight=12, Scale=0.5) until something
         // unrelated triggered an event.

@@ -71,7 +71,7 @@ internal readonly record struct FileRowRef(DiffSide Side, string FullPath, bool 
 
 /// <summary>
 /// Pure flattening of a <see cref="FileChange"/> list plus (view-mode, collapsed-folders) into the linear
-/// <see cref="FileRow"/> sequence a <c>LocalChangesPanel</c> renders. Flat mode emits one file row per
+/// <see cref="FileRow"/> sequence a <see cref="FileRowList"/> renders. Flat mode emits one file row per
 /// file; tree mode builds a <see cref="PathTree"/> over the file paths (with single-child folder
 /// compaction, e.g. <c>Assets/Scripts/UI</c>) and emits a row per node, hiding rows under collapsed
 /// folders. No dependency on layout pixels or the view tree, so both the panel (render) and the view

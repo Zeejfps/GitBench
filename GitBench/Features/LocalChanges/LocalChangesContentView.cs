@@ -25,8 +25,8 @@ namespace GitBench.Features.LocalChanges;
 /// </summary>
 internal sealed class LocalChangesContentView : ContainerView
 {
-    private readonly LocalChangesPanel _unstagedPanel;
-    private readonly LocalChangesPanel _stagedPanel;
+    private readonly View _unstagedPanel;
+    private readonly View _stagedPanel;
     private readonly TextView _placeholder;
     private readonly FlexRowView _errorActions;
     private readonly FlexColumnView _placeholderHost;
@@ -34,7 +34,6 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly LocalChangesSubmoduleSection _submoduleSection;
     private readonly BorderLayoutView _contentRoot;
 
-    private readonly State<Selection> _selection = new(Selection.Empty);
     private readonly LocalChangesViewModel _vm;
     private readonly ListArrowKbmController _arrowController;
     private readonly ILocalizationService _loc;
@@ -69,66 +68,84 @@ internal sealed class LocalChangesContentView : ContainerView
         var discardButton = new LocalChangesHeaderActionButton
         {
             Icon = LucideIcons.Trash, Command = vm.Discard, Tooltip = L.T(s => s.LocalchangesDiscardSelectedTooltip),
-        }.BuildView(ctx);
+        };
         var stageSelectedButton = new LocalChangesHeaderActionButton
         {
             Icon = Direction.Glyph(ctx, LucideIcons.ChevronRight, LucideIcons.ChevronLeft), Command = vm.StageSelected, Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
-        }.BuildView(ctx);
+        };
         var stageAllButton = new LocalChangesHeaderActionButton
         {
             Icon = Direction.Glyph(ctx, LucideIcons.ChevronsRight, LucideIcons.ChevronsLeft), Command = vm.StageAll, Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
-        }.BuildView(ctx);
+        };
         var unstageAllButton = new LocalChangesHeaderActionButton
         {
             Icon = Direction.Glyph(ctx, LucideIcons.ChevronsLeft, LucideIcons.ChevronsRight), Command = vm.UnstageAll, Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
-        }.BuildView(ctx);
+        };
         var unstageSelectedButton = new LocalChangesHeaderActionButton
         {
             Icon = Direction.Glyph(ctx, LucideIcons.ChevronLeft, LucideIcons.ChevronRight), Command = vm.UnstageSelected, Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
-        }.BuildView(ctx);
-        var viewModeButtonUnstaged = new LocalChangesHeaderActionButton
+        };
+        var viewModeButton = new LocalChangesHeaderActionButton
         {
             Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = L.T(s => s.LocalchangesToggleViewTooltip),
-        }.BuildView(ctx);
-        var viewModeButtonStaged = new LocalChangesHeaderActionButton
-        {
-            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = L.T(s => s.LocalchangesToggleViewTooltip),
-        }.BuildView(ctx);
+        };
 
-        _unstagedPanel = new LocalChangesPanel(
-            ctx,
-            s => s.LocalchangesUnstagedPanelTitle,
-            DiffSide.Unstaged,
-            FileChangesUI.CreateEmptyState(
-                ctx,
-                LucideIcons.CircleCheck,
-                _loc.Strings,
-                s => s.LocalchangesUnstagedEmptyTitle,
-                s => s.LocalchangesUnstagedEmptyHint),
-            _selection,
-            OnRowClick,
-            [viewModeButtonUnstaged, discardButton, stageSelectedButton, stageAllButton],
-            onRowActivated: OnUnstagedRowActivated,
-            onEmptyAreaClicked: () => _vm.ClearSelection(),
-            onFolderToggle: OnFolderToggle,
-            buildContextMenu: BuildUnstagedMenu);
-        _stagedPanel = new LocalChangesPanel(
-            ctx,
-            s => s.LocalchangesStagedPanelTitle,
-            DiffSide.Staged,
-            FileChangesUI.CreateEmptyState(
-                ctx,
-                LucideIcons.Inbox,
-                _loc.Strings,
-                s => s.LocalchangesStagedEmptyTitle,
-                s => s.LocalchangesStagedEmptyHint),
-            _selection,
-            OnRowClick,
-            [viewModeButtonStaged, unstageAllButton, unstageSelectedButton],
-            onRowActivated: OnStagedRowActivated,
-            onEmptyAreaClicked: () => _vm.ClearSelection(),
-            onFolderToggle: OnFolderToggle,
-            buildContextMenu: BuildStagedMenu);
+        _unstagedPanel = new FileRowList
+        {
+            Title = L.T(s => s.LocalchangesUnstagedPanelTitle),
+            Side = DiffSide.Unstaged,
+            Files = Prop.Bind(vm.Unstaged),
+            Pending = Prop.Bind(vm.PendingPaths),
+            ViewMode = Prop.Bind(vm.ViewMode),
+            Collapsed = Prop.Bind(vm.UnstagedCollapsed),
+            Highlight = vm.Selection.Bind(Highlight),
+            ScrollTo = vm.Selection.Bind(s => s.Cursor),
+            ContentKey = vm.Unstaged.Bind(object? (files) => files),
+            EmptyState = new Raw
+            {
+                View = FileChangesUI.CreateEmptyState(
+                    ctx,
+                    LucideIcons.CircleCheck,
+                    _loc.Strings,
+                    s => s.LocalchangesUnstagedEmptyTitle,
+                    s => s.LocalchangesUnstagedEmptyHint),
+            },
+            HeaderActions = [viewModeButton, discardButton, stageSelectedButton, stageAllButton],
+            HeadsContentPanel = true,
+            OnRowClick = OnRowClick,
+            OnFolderToggle = OnFolderToggle,
+            OnRowActivated = OnUnstagedRowActivated,
+            OnEmptyAreaClicked = () => _vm.ClearSelection(),
+            ContextMenu = (target, point) => RepoBarContextMenu.Show(ctx, point, BuildUnstagedMenu(target)),
+        }.BuildView(ctx);
+        _stagedPanel = new FileRowList
+        {
+            Title = L.T(s => s.LocalchangesStagedPanelTitle),
+            Side = DiffSide.Staged,
+            Files = Prop.Bind(vm.Staged),
+            Pending = Prop.Bind(vm.PendingPaths),
+            ViewMode = Prop.Bind(vm.ViewMode),
+            Collapsed = Prop.Bind(vm.StagedCollapsed),
+            Highlight = vm.Selection.Bind(Highlight),
+            ScrollTo = vm.Selection.Bind(s => s.Cursor),
+            ContentKey = vm.Staged.Bind(object? (files) => files),
+            EmptyState = new Raw
+            {
+                View = FileChangesUI.CreateEmptyState(
+                    ctx,
+                    LucideIcons.Inbox,
+                    _loc.Strings,
+                    s => s.LocalchangesStagedEmptyTitle,
+                    s => s.LocalchangesStagedEmptyHint),
+            },
+            HeaderActions = [viewModeButton, unstageAllButton, unstageSelectedButton],
+            HeadsContentPanel = true,
+            OnRowClick = OnRowClick,
+            OnFolderToggle = OnFolderToggle,
+            OnRowActivated = OnStagedRowActivated,
+            OnEmptyAreaClicked = () => _vm.ClearSelection(),
+            ContextMenu = (target, point) => RepoBarContextMenu.Show(ctx, point, BuildStagedMenu(target)),
+        }.BuildView(ctx);
 
         _placeholder = new TextView(ctx.Canvas)
         {
@@ -230,27 +247,6 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             if (_rawPlaceholder != null) ShowPlaceholder(_rawPlaceholder);
         });
-        this.Bind(vm.Unstaged, list => _unstagedPanel.SetFiles(list));
-        this.Bind(vm.Staged, list => _stagedPanel.SetFiles(list));
-        this.Bind(vm.PendingPaths, pending =>
-        {
-            _unstagedPanel.SetPending(pending);
-            _stagedPanel.SetPending(pending);
-        });
-        this.Bind(vm.ViewMode, mode =>
-        {
-            _unstagedPanel.SetViewMode(mode);
-            _stagedPanel.SetViewMode(mode);
-        });
-        this.Bind(vm.UnstagedCollapsed, set => _unstagedPanel.SetCollapsed(set));
-        this.Bind(vm.StagedCollapsed, set => _stagedPanel.SetCollapsed(set));
-        this.Bind(vm.Selection, sel => _selection.Value = sel);
-        this.Bind(vm.Selection, sel =>
-        {
-            if (sel.Cursor is not { } cursor) return;
-            _unstagedPanel.EnsureRowVisible(cursor);
-            _stagedPanel.EnsureRowVisible(cursor);
-        });
         this.Bind(vm.DriftedSubmodules, drift =>
         {
             _submoduleSection.SetDrift(drift);
@@ -311,6 +307,10 @@ internal sealed class LocalChangesContentView : ContainerView
         divider.BindThemedBackgroundColor(theme, s => s.LocalChangesContent.ColumnDivider);
         return new TransferListRow(_unstagedPanel, divider, _stagedPanel);
     }
+
+    // The floating bar rides the lone selected row; a multi-select paints every row statically.
+    private static RowHighlight Highlight(Selection sel)
+        => new(sel.Count == 1 ? sel.Rows[0] : null, sel.RowSet, sel.RowSet);
 
     private void OnRowClick(FileRow row, InputModifiers modifiers)
     {

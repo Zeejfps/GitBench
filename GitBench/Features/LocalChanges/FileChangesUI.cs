@@ -12,10 +12,8 @@ using ZGF.Observable;
 namespace GitBench.Features.LocalChanges;
 
 /// <summary>
-/// Shared building blocks for the two file-change list flavors — <see cref="FileChangesSection"/>
-/// (commit details) and the staged/unstaged panels in <c>LocalChangesView</c>. Both render a
-/// titled header bar over a virtualized row list with the same colors, padding, and
-/// "Title (count)" format. Visual tweaks made here propagate to all three sites.
+/// Header bar, empty state and row painters shared by <see cref="FileRowList"/> and the file
+/// browser's path bar.
 /// </summary>
 internal static class FileChangesUI
 {
@@ -171,8 +169,7 @@ internal static class FileChangesUI
     /// Draws one row of a file-change list at <paramref name="rowRect"/>: selection/hover
     /// background, a status-representing Lucide glyph tinted by the file's status color, then
     /// the truncated file path. The tinted line icon mirrors the folder/branch icons in the
-    /// other tree views. Used by both <see cref="FileChangesSection"/> and
-    /// <c>LocalChangesPanel</c> so the two flavors stay visually identical.
+    /// other tree views.
     /// </summary>
     public static void DrawFileRow(
         ICanvas canvas,

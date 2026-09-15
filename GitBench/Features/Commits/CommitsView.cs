@@ -68,13 +68,7 @@ internal sealed record CommitsView : Widget
         // A selection SHA whose scroll-into-view was requested before the list had a measured
         // viewport; applied on the next layout, then cleared (so it never fights user scroll).
         private string? _pendingScrollSha;
-        // Selection is painted once as a floating bar that slides between rows. _selectedIndex is
-        // the resolved target row (-1 = none); the bar is drawn at CurrentSelectionIndex(), which
-        // lerps _animFromIndex → _animToIndex by the tween so navigation animates.
-        private int _selectedIndex = -1;
-        private float _animFromIndex;
-        private float _animToIndex;
-        private readonly Tween _selectionTween;
+        private readonly ListSelectionBar _selectionBar;
         // Content (rows) fade up as a repo's commits arrive from a placeholder; the placeholder text
         // blooms in (ease-in) so a fast load swaps it out before "Loading…" registers. Both park when
         // settled, and neither replays on an in-place refresh of already-shown content.
@@ -143,10 +137,8 @@ internal sealed record CommitsView : Widget
             var input = ctx.Require<InputSystem>();
             var theme = ctx.Theme();
 
-            // Drives the selection bar's slide between rows; parks itself when settled so it adds
-            // no idle repaints. EaseOutCubic = quick start, gentle landing.
             var ticker = ctx.Require<IFrameTicker>();
-            _selectionTween = new Tween(ticker, 0.18f, Easings.EaseOutCubic);
+            _selectionBar = new ListSelectionBar(ticker);
             _enterTween = new Tween(ticker, Transitions.ContentEnterSeconds, Easings.EaseOutCubic);
             _placeholderTween = new Tween(ticker, Transitions.PlaceholderBloomSeconds, Easings.EaseInCubic);
 
@@ -223,10 +215,8 @@ internal sealed record CommitsView : Widget
             this.Bind(vm.Render, SetRenderState);
             this.Bind(vm.SelectedSha, SetSelectedSha);
 
-            // Repaint each tick while the selection bar is sliding; the tween stops ticking once
-            // it lands, so this goes quiet at rest.
-            this.Bind(_selectionTween.Progress, _ => SetDirty());
-            this.Use(() => _selectionTween);
+            this.Bind(_selectionBar.Progress, _ => SetDirty());
+            this.Use(() => _selectionBar);
             this.Bind(vm.IsFiltering, f =>
             {
                 if (_filtering == f) return;
@@ -330,9 +320,7 @@ internal sealed record CommitsView : Widget
             _list.NotifyItemsChanged();
             if (!preserveScroll) _list.SetScrollY(0f);
 
-            // Row indices shifted under the selection: re-resolve and snap the bar there without
-            // sliding (the contents moved, not the user).
-            SnapSelectionToSha();
+            _selectionBar.Snap(IndexOfSha(_selectedSha));
 
             var newTruncated = newSnap?.Truncated == true;
             if (newTruncated != _truncated)
@@ -348,42 +336,11 @@ internal sealed record CommitsView : Widget
         {
             if (_selectedSha == sha) return;
             _selectedSha = sha;
-            MoveSelectionTo(IndexOfSha(sha));
+            _selectionBar.MoveTo(IndexOfSha(sha));
             _pendingScrollSha = sha;
             ApplyPendingScroll();
             SetDirty();
         }
-
-        // Retargets the selection bar. Slides only between two real rows; first-select and clear
-        // snap in place (sliding in from nowhere reads as a glitch).
-        private void MoveSelectionTo(int newIndex)
-        {
-            if (newIndex == _selectedIndex) return;
-            if (_selectedIndex >= 0 && newIndex >= 0)
-            {
-                _animFromIndex = CurrentSelectionIndex();
-                _animToIndex = newIndex;
-                _selectedIndex = newIndex;
-                _selectionTween.Restart();
-            }
-            else
-            {
-                _selectedIndex = newIndex;
-                _animFromIndex = newIndex < 0 ? 0f : newIndex;
-                _animToIndex = _animFromIndex;
-            }
-        }
-
-        // Re-resolves the selected row from the current SHA and parks the bar on it without animating.
-        private void SnapSelectionToSha()
-        {
-            _selectedIndex = IndexOfSha(_selectedSha);
-            _animFromIndex = _selectedIndex < 0 ? 0f : _selectedIndex;
-            _animToIndex = _animFromIndex;
-        }
-
-        private float CurrentSelectionIndex()
-            => _animFromIndex + (_animToIndex - _animFromIndex) * _selectionTween.Progress.Value;
 
         // Reconciles a selection scroll across layout passes. On the first History open a one-shot
         // scroll loses to two things: the list has no height until its first layout, and the new
@@ -667,17 +624,8 @@ internal sealed record CommitsView : Widget
             DrawText(c, FormatRelative(node.When), dateX, textTop, dateW, isHighlighted, z + 2);
         }
 
-        // One selection bar for the whole list, floated below row content by VirtualRowListView so
-        // it rides scroll and slides between rows (CurrentSelectionIndex is tweened). Shares the
-        // RowSelection painter so its look matches the branches sidebar / repo bar exactly.
         private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
-        {
-            if (_selectedIndex < 0) return;
-            var index = CurrentSelectionIndex();
-            var rowTop = viewport.Top + _list.ScrollY - index * RowHeight;
-            var rowRect = new RectF(viewport.Left, rowTop - RowHeight, viewport.Width, RowHeight);
-            RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
-        }
+            => _selectionBar.Draw(c, viewport, _list.ScrollY, RowHeight, _rowSelection, z, IsRtl);
 
         private float DrawBadges(ICanvas c, CommitNode node, int rowIndex, float left, float rowBottom, float rightBoundary, int z)
         {
