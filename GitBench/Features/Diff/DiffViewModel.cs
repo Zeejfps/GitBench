@@ -68,6 +68,8 @@ internal abstract record DiffRenderState
     // A conflicted (unmerged) working-tree file. Drives the Fork-style resolution header
     // (two side cards + take ours/theirs/both + open-in-editor) instead of a normal diff.
     public sealed record Conflict(string Path, ConflictContext Context) : DiffRenderState;
+    // A binary blob no codec shows as a picture: nothing to draw but the fact, and the LFS badge.
+    public sealed record Binary(string Path, DiffSide Side, bool IsLfs) : DiffRenderState;
     // A PNG/JPEG blob shown as a picture instead of a patch. There is no image diff: this is the
     // after-side blob, or — when the file was deleted on this side, so there is no after — the
     // before-side one, flagged by IsOldSide. IsLfs mirrors the diff's LFS status so the header
@@ -197,8 +199,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             : []);
         LfsStatus = Slice(s => s.Render switch
         {
-            DiffRenderState.Loaded { Result.IsBinary: true } l =>
-                l.Result.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked,
+            DiffRenderState.Binary b => b.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked,
             DiffRenderState.Image img => img.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked,
             _ => LfsBadge.None,
         });
@@ -206,6 +207,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         {
             DiffRenderState.Loaded l => l.Result.Side,
             DiffRenderState.FullFile ff => ff.Side,
+            DiffRenderState.Binary b => b.Side,
             DiffRenderState.Image img => img.Side,
             DiffRenderState.Markdown md => md.Side,
             _ => (DiffSide?)null,
@@ -729,15 +731,13 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var repo = ResolveRepo();
         if (repo == null) return;
 
-        if (State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile))
+        if (State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile or DiffRenderState.Binary))
             Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingText) });
 
         // Everything the load depends on is read here, on the UI thread, and handed over as a
         // value — the localized placeholders included. The worker then touches no observable.
         var request = new DiffPreviewRequest(
-            repo, target, State.Value.Mode, State.Value.Preview,
-            _loc.Strings.Value.DiffBinaryNotShown,
-            _loc.Strings.Value.DiffNoCurrentVersion);
+            repo, target, State.Value.Mode, State.Value.Preview, _loc.Strings.Value.DiffNoCurrentVersion);
         var loader = _loader;
 
         RunBackground<Fetched<DiffRenderState>>(work: () => loader.Load(request), onResult: OnDiffLoaded);

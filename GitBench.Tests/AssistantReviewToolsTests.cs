@@ -388,8 +388,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     // which is what the review window hands the tracker.
     private string? ContentIdOf(string path)
     {
-        var (scope, error) = ReviewScope.Resolve(_git, _repo, null);
-        Assert.Null(error);
-        return scope!.File(path)?.ContentId;
+        var resolved = Assert.IsType<ReviewScopeResolution.Resolved>(ReviewScope.Resolve(_git, _repo, null));
+        return resolved.Scope.File(path)?.ContentId;
     }
 }

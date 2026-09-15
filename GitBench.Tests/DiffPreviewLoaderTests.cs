@@ -109,7 +109,6 @@ public class DiffPreviewLoaderTests(CodeIntelFixture fixture)
             new DiffTarget("AuthService.cs", DiffSide.Unstaged),
             mode,
             Preview: false,
-            BinaryText: "binary",
             NoCurrentVersionText: "no current version"));
     }
 

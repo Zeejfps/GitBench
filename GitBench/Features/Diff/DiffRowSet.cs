@@ -133,8 +133,7 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows, IAnchoredRows
 
     /// <summary>
     /// Flattens a render state into rows. <see cref="DiffRenderState.Loaded"/> and
-    /// <see cref="DiffRenderState.FullFile"/> produce rows; every other state (and the loaded
-    /// error/binary cases, which the hosts draw as centered placeholders) produces an empty set.
+    /// <see cref="DiffRenderState.FullFile"/> produce rows; every other state produces an empty set.
     /// </summary>
     /// <param name="usageLens">Whether declarations in a whole-file render carry a usages row.
     /// Off unless the surface asks: a diff of a commit is a file as it was, and a language server
@@ -157,8 +156,6 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows, IAnchoredRows
 
     private void FlattenRows(DiffResult r, DiffAnnotations? annotations, ContextExpansion? expansion)
     {
-        if (r.ErrorMessage != null) return;
-        if (r.IsBinary) return;
         if (r.Hunks.Count == 0 && !r.IsModeOnly && r.OldPath == null) return;
 
         AddChangeBanners(r);

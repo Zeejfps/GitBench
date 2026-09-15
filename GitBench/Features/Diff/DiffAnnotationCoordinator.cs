@@ -29,7 +29,7 @@ internal static class DiffAnnotationCoordinator
     public static DiffAnnotations? ComputeNewSide(
         ISymbolExtractor extractor, ISyntaxHighlighter highlighter, DiffResult diff, string newText)
     {
-        if (diff.IsBinary || diff.ErrorMessage != null || diff.Hunks.Count == 0) return null;
+        if (diff.Hunks.Count == 0) return null;
 
         var language = FileLanguage.Detect(diff.Path);
         if (language is FileLanguage.None) return null;
@@ -54,7 +54,7 @@ internal static class DiffAnnotationCoordinator
         ISymbolExtractor extractor, ISyntaxHighlighter? highlighter, IGitDiffReader git, Repo repo, DiffResult diff,
         string? commitSha, string? baseSha, FileLanguage language)
     {
-        if (diff.IsBinary || diff.ErrorMessage != null || diff.Hunks.Count == 0) return null;
+        if (diff.Hunks.Count == 0) return null;
         if (language is FileLanguage.None) return null;
 
         // Only fetch the side(s) the diff actually shows: a pure-add diff has no removed rows
