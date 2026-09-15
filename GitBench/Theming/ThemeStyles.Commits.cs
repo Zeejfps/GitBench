@@ -4,23 +4,6 @@ public sealed record CommitBarStyles(
     uint Background,
     uint TopBorder);
 
-public sealed record ModeSwitcherStyles(
-    uint PillBorder,
-    uint SegmentSeparator,
-    uint SegmentIdleBackground,
-    uint SegmentHoverBackground,
-    uint SegmentActiveBackground,
-    uint SegmentIdleText,
-    uint SegmentHoverText,
-    uint SegmentActiveText)
-{
-    public uint SegmentBackground(bool active, bool hovered)
-        => active ? SegmentActiveBackground : hovered ? SegmentHoverBackground : SegmentIdleBackground;
-
-    public uint SegmentText(bool active, bool hovered)
-        => active ? SegmentActiveText : hovered ? SegmentHoverText : SegmentIdleText;
-}
-
 public sealed record CommitDetailsViewStyles(
     uint Background,
     uint BorderLeft,
@@ -59,17 +42,6 @@ public partial record ThemeStyles
         new(
             Background: p.SurfaceMuted,
             TopBorder: p.Border);
-
-    private static ModeSwitcherStyles BuildModeSwitcher(ThemePalette p) =>
-        new(
-            PillBorder: p.BorderStrong,
-            SegmentSeparator: p.BorderStrong,
-            SegmentIdleBackground: 0u,
-            SegmentHoverBackground: p.InputSurfaceHover,
-            SegmentActiveBackground: p.SurfaceSelected,
-            SegmentIdleText: p.TextSecondary,
-            SegmentHoverText: p.TextStrong,
-            SegmentActiveText: p.TextOnAccent);
 
     private static CommitDetailsViewStyles BuildCommitDetailsView(ThemePalette p) =>
         new(

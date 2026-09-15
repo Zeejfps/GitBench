@@ -196,7 +196,7 @@ internal sealed class GitProcessRunner
     {
         var psi = new ProcessStartInfo
         {
-            FileName = GitExecutable(),
+            FileName = GitExecutable.Value,
             WorkingDirectory = workingDir,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -224,18 +224,7 @@ internal sealed class GitProcessRunner
     // Homebrew git (/opt/homebrew/bin/git, /usr/local/bin/git) is invisible to a bare
     // Process.Start("git"). Find it on the login shell's PATH, once, and reuse the
     // absolute path everywhere.
-    private static string? _gitExecutable;
-    private static readonly object _gitExecutableLock = new();
-
-    private static string GitExecutable()
-    {
-        if (_gitExecutable != null) return _gitExecutable;
-        lock (_gitExecutableLock)
-        {
-            _gitExecutable ??= ResolveGitExecutable();
-            return _gitExecutable;
-        }
-    }
+    private static readonly Lazy<string> GitExecutable = new(ResolveGitExecutable);
 
     private static string ResolveGitExecutable()
     {
@@ -271,7 +260,7 @@ internal sealed class GitProcessRunner
         {
             var psi = new ProcessStartInfo
             {
-                FileName = GitExecutable(),
+                FileName = GitExecutable.Value,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

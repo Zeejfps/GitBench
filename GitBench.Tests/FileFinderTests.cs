@@ -227,6 +227,7 @@ public class FileFinderTests : IDisposable
             FileBrowserFakes.NoIgnore,
             _catalog.List,
             new UnparsedFiles(),
+            new PlainText(),
             _dispatcher,
             new FileBrowserUiState(),
             _persisted.Add,

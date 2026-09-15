@@ -2,7 +2,6 @@ using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.App;
 
@@ -12,18 +11,11 @@ namespace GitBench.App;
 /// </summary>
 internal sealed record AppLogo : Widget
 {
-    /// <summary>
-    /// Image id of the app icon, set by startup once it's loaded into the canvas. Observable
-    /// because the root content mounts before startup gets to load the image — a logo built
-    /// early swaps from the glyph fallback when the id lands. Stays null on load failure.
-    /// </summary>
-    public static readonly State<string?> IconImageId = new(null);
-
     public int Size { get; init; } = 84;
 
     protected override IWidget Build(Context ctx) => new Switch<string?>
     {
-        Value = IconImageId,
+        Value = ctx.Require<AppIconImage>().Id,
         Case = id => id != null
             ? new Image { ImageId = id, Width = Size, Height = Size }
             : new Box

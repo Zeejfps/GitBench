@@ -17,7 +17,7 @@ internal sealed class RepoNodeFactory
 {
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
-    private readonly IRepoLoadStore _load;
+    private readonly RepoLoadStore _load;
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
     private readonly IGitWorktreeOperations _gitWorktrees;
@@ -30,7 +30,7 @@ internal sealed class RepoNodeFactory
     public RepoNodeFactory(
         IRepoRegistry registry,
         IRepoStatusStore status,
-        IRepoLoadStore load,
+        RepoLoadStore load,
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
         IGitWorktreeOperations gitWorktrees,

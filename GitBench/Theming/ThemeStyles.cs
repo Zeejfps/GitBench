@@ -19,7 +19,6 @@ public sealed partial record ThemeStyles
     public required DialogActionButtonStyles DialogActionButton { get; init; }
     public required CheckboxStyles Checkbox { get; init; }
     public required CommitBarStyles CommitBar { get; init; }
-    public required ModeSwitcherStyles ModeSwitcher { get; init; }
     public required BranchesHeaderStyles BranchesHeader { get; init; }
     public required GroupHeaderRowStyles GroupHeaderRow { get; init; }
     public required GroupRenameFieldStyles GroupRenameField { get; init; }

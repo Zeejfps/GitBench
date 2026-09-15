@@ -8,18 +8,6 @@ namespace GitBench.Features.Repos;
 // queued on or holding a permit from the shared read gate, and a push/pull/fetch in the operations
 // store. One signal, so a RepoBar row spins for "git is doing something here" rather than for one
 // particular mechanism.
-internal interface IRepoLoadStore
-{
-    // True while this repo has git work outstanding. Call inside a reactive binding (rows) — the
-    // underlying state read is auto-tracked, so the row updates live. Asking about a repo is also
-    // what starts sampling it, so a repo with no row costs nothing.
-    bool IsLoading(Guid repoId);
-
-    // True while any repo being sampled is. Drives the RepoBar's single spinner animation, so it
-    // only ticks while something is actually spinning.
-    IReadable<bool> AnyLoading { get; }
-}
-
 /// <summary>
 /// Projects "is git work outstanding for this repo" onto the UI thread, per repo, once per frame.
 ///
@@ -32,7 +20,7 @@ internal interface IRepoLoadStore
 /// <para>The read gate is the useful half: every background read in the app passes through it, so a
 /// read added later shows up here without being told to.</para>
 /// </summary>
-internal sealed class RepoLoadStore : IRepoLoadStore, IHostedService, IDisposable
+internal sealed class RepoLoadStore : IHostedService, IDisposable
 {
     private readonly IGitReadGate _gate;
     private readonly IRepoOperationsStore _ops;

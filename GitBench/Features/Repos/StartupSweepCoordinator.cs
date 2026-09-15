@@ -7,12 +7,7 @@ namespace GitBench.Features.Repos;
 /// <see cref="IGitReadGate"/>, so worktree and submodule syncs never contend with the reads the
 /// active repo is waiting on.
 /// </summary>
-internal interface IStartupSweepCoordinator
-{
-    void RunThrottled(Guid repoId, Action work);
-}
-
-internal sealed class StartupSweepCoordinator : IStartupSweepCoordinator
+internal sealed class StartupSweepCoordinator
 {
     private readonly IGitReadGate _gate;
 

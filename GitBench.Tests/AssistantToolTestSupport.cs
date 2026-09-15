@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Text;
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Observable;
 
 namespace GitBench.Tests;
@@ -33,6 +35,12 @@ internal sealed class UnparsedFiles : ISymbolExtractor
 internal sealed class NoReviewWindows : IReviewWindowRegistry
 {
     public IReadOnlyList<ReviewWindowViewModel> Windows { get; } = Array.Empty<ReviewWindowViewModel>();
+}
+
+// Stands in for the highlighter where a test asks nothing about colors: every file renders plain.
+internal sealed class PlainText : ISyntaxHighlighter
+{
+    public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language) => null;
 }
 
 // Stands in for the remote-operations store where a test's tools never fetch or pull: nothing is

@@ -244,7 +244,7 @@ internal sealed class LocalChangesPanel : ContainerView
         for (var i = 0; i < _rows.Count; i++)
         {
             var r = _rows[i];
-            if (r.FullPath == row.FullPath && (r.Kind == FileRowKind.Folder) == row.IsFolder)
+            if (r.FullPath == row.FullPath && (r is FileRow.Folder) == row.IsFolder)
             {
                 _list.EnsureRowVisible(i);
                 return;
@@ -300,7 +300,7 @@ internal sealed class LocalChangesPanel : ContainerView
         var row = _rows[rowIndex];
         // The chevron toggles the folder without disturbing the selection — it consumes
         // the click before the row's select handler runs.
-        if (row.Kind == FileRowKind.Folder && _onFolderToggle != null && IsChevronHit(row, point))
+        if (row is FileRow.Folder && _onFolderToggle != null && IsChevronHit(row, point))
         {
             // RowClicked fires on every physical click, so a double-click would toggle
             // twice (a net no-op). Swallow the second click of a double on the same
@@ -371,14 +371,14 @@ internal sealed class LocalChangesPanel : ContainerView
         // one there so they don't double-paint. -1 (multi/none) leaves every row drawing statically.
         var floatsBar = _selectedIndex >= 0 && rowIndex == _selectedIndex;
 
-        if (row.Kind == FileRowKind.Folder)
+        if (row is FileRow.Folder folder)
         {
             FileChangesUI.DrawFolderRow(
                 _canvas,
                 rowRect,
                 row.DisplayName,
                 row.Indent,
-                row.IsOpen,
+                folder.IsOpen,
                 isSelected,
                 state.IsHovered || state.IsContextHighlighted,
                 _rowSelection,
@@ -393,7 +393,7 @@ internal sealed class LocalChangesPanel : ContainerView
             return;
         }
 
-        var file = row.File!;
+        if (row is not FileRow.File { Change: var file }) return;
         FileChangesUI.DrawFileRow(
             _canvas,
             rowRect,

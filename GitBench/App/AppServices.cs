@@ -82,11 +82,18 @@ internal static class AppServices
         context.Bind(preferences, p => p.EnableUntrackedCache, (p, v) => p with { EnableUntrackedCache = v });
 
         var crashLogPath = AppPaths.AppDataPath("crash.log");
-        // Registered under its own type as well as the interface: the document annotator keeps a
-        // parse tree between edits, which is a seam only the parser-backed extractor has.
-        context.AddSingleton(_ =>
-            new TreeSitterSymbolExtractor(reason => CrashLog.Note(crashLogPath, reason)));
+        // One grammar set behind both engines, registered under their own types as well as the
+        // interfaces: the document annotator keeps a parse tree between edits, which is a seam only
+        // the parser-backed engines have.
+        context.AddSingleton(_ => new TreeSitterGrammars(reason => CrashLog.Note(crashLogPath, reason)));
+        context.AddSingleton(ctx =>
+            new TreeSitterSymbolExtractor(ctx.Require<TreeSitterGrammars>(), reason => CrashLog.Note(crashLogPath, reason)));
         context.AddAlias<ISymbolExtractor, TreeSitterSymbolExtractor>();
+        context.AddSingleton(ctx =>
+            new TreeSitterSyntaxHighlighter(ctx.Require<TreeSitterGrammars>(), reason => CrashLog.Note(crashLogPath, reason)));
+        context.AddSingleton<SyntaxHighlighter>();
+        context.AddSingleton<ISyntaxHighlighter>(ctx =>
+            new RoutedSyntaxHighlighter(ctx.Require<TreeSitterSyntaxHighlighter>(), ctx.Require<SyntaxHighlighter>()));
 
         context.AddPlatformServices();
 
@@ -97,7 +104,7 @@ internal static class AppServices
         // Defers the all-repos startup sweeps (status / worktree / submodule) behind the active
         // repo's first load so they don't contend with it. Resolved by the stores/services below.
         context.AddSingleton<AppViewModel>();
-        context.AddSingleton<IStartupSweepCoordinator, StartupSweepCoordinator>();
+        context.AddSingleton<StartupSweepCoordinator>();
         // The one throttle every background git read shares, so a many-repo tree can't seek-thrash
         // one disk. Injected into the two stores and the coordinator below; reads only — mutations
         // serialize on GitRepoLocks and never touch it.
@@ -153,6 +160,7 @@ internal static class AppServices
                 ctx.Require<IGitConflictOperations>(),
                 ctx.Require<IGitSubmoduleOperations>(),
                 ctx.Require<ISymbolExtractor>(),
+                ctx.Require<ISyntaxHighlighter>(),
                 ctx.Require<IRepoRegistry>(),
                 ctx.Require<IUiDispatcher>(),
                 ctx.Require<IMessageBus>(),
@@ -210,11 +218,7 @@ internal static class AppServices
         context.AddHostedService<IDocumentStore, DocumentStore>();
         // What keeps the colouring and the fold chevrons describing the buffer rather than the file
         // it was read from: one parse tree per open document, followed into by each edit.
-        context.AddHostedService(ctx => new DocumentAnnotations(
-            ctx.Require<IDocumentStore>(),
-            ctx.Require<IUiDispatcher>(),
-            Features.Diff.RoutedSyntaxHighlighter.Shared.TreeSitter,
-            ctx.Require<TreeSitterSymbolExtractor>()));
+        context.AddHostedService<DocumentAnnotations>();
         context.AddSingleton<IUnsavedEditsGuard, UnsavedEditsGuard>();
         context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
         // Registered after the browsers and terminals it follows: it points the content panel at
@@ -241,7 +245,7 @@ internal static class AppServices
         // Samples the read gate + the operations store once a frame into the per-repo "loading" flag
         // the RepoBar rows spin on. Registered after both, and hosted so its frame tick starts with
         // the rest of the app rather than on first row build.
-        context.AddHostedService<IRepoLoadStore, RepoLoadStore>();
+        context.AddHostedService<RepoLoadStore>();
         // The head store owns the checkout; the status store composes its pending branch into
         // RepoStatus and, in return, tells it when a fresh read has landed.
         context.AddSingleton<RepoHeadStore>();
@@ -287,6 +291,7 @@ internal static class AppServices
             ctx.Require<IDocumentStore>(),
             connection => new HttpAssistantBackend(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
+        context.AddSingleton<AppIconImage>();
         context.AddSingleton<AssistantMarkImage>();
         context.AddSingleton<AssistantViewModel>();
 
@@ -323,9 +328,9 @@ internal static class AppServices
             ctx.Require<AssistantWriteSurface>(),
             TimeProvider.System));
 
-        context.AddHostedService<IToastService, ToastService>();
+        context.AddHostedService<ToastService>();
 
-        context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(ctx.Require<IPopupWindowFactory>()));
+        context.AddSingleton(ctx => new PopupTooltipService(ctx.Require<IPopupWindowFactory>()));
 
         context.AddSingleton(ctx => new HoverPopupService(
             ctx.Require<IPopupWindowFactory>(),

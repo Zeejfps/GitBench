@@ -3,21 +3,10 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-// The interaction surface a branch row controller drives: the hover + context-highlight flags the
-// row visual binds to, and the click / activate / context-menu dispatch for the row's kind.
-internal interface IBranchRowInteraction
-{
-    State<bool> Hovered { get; }
-    State<bool> ContextHighlighted { get; }
-    void Click();
-    void Activate();
-    IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems();
-}
-
 // Per-row live state: owns the hover/context flags and what the trailing badge shows, and routes the
 // row's click (select or toggle), double-click (checkout / apply), and context menu to the shared
 // BranchesViewModel based on the row's variant.
-internal sealed class BranchRowState(BranchRow row, BranchesViewModel vm) : IBranchRowInteraction, IDisposable
+internal sealed class BranchRowState(BranchRow row, BranchesViewModel vm) : IDisposable
 {
     public State<bool> Hovered { get; } = new(false);
     public State<bool> ContextHighlighted { get; } = new(false);

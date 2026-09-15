@@ -516,7 +516,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             var allRows = FileTreeBuilder.BuildRows(files, side, FileViewMode.Tree, EmptyCollapsed);
             var folders = new HashSet<string>();
             foreach (var row in allRows)
-                if (row.Kind == FileRowKind.Folder) folders.Add(row.FullPath);
+                if (row is FileRow.Folder) folders.Add(row.FullPath);
             if (folders.Count == 0) return s;
             return side == DiffSide.Unstaged
                 ? s with { UnstagedCollapsed = folders }
@@ -579,7 +579,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            if (row.FullPath == r.FullPath && (row.Kind == FileRowKind.Folder) == r.IsFolder)
+            if (row.FullPath == r.FullPath && (row is FileRow.Folder) == r.IsFolder)
                 return i;
         }
         return -1;

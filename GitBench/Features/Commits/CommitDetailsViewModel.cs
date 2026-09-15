@@ -37,6 +37,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly IGitConflictOperations _gitConflicts;
     private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly ISymbolExtractor _extractor;
+    private readonly ISyntaxHighlighter _highlighter;
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
@@ -77,6 +78,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IGitConflictOperations gitConflicts,
         IGitSubmoduleOperations gitSubmodules,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,
@@ -96,6 +98,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _gitConflicts = gitConflicts;
         _gitSubmodules = gitSubmodules;
         _extractor = extractor;
+        _highlighter = highlighter;
         _registry = registry;
         _bus = bus;
         _loc = loc;
@@ -158,7 +161,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             var allRows = FileTreeBuilder.BuildRows(loaded.Details.Files, DiffSide.Commit, FileViewMode.Tree, EmptyCollapsed);
             var folders = new HashSet<string>();
             foreach (var row in allRows)
-                if (row.Kind == FileRowKind.Folder) folders.Add(row.FullPath);
+                if (row is FileRow.Folder) folders.Add(row.FullPath);
             return folders.Count == 0 ? s : s with { Collapsed = folders };
         });
     }
@@ -182,7 +185,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
                 var allRows = FileTreeBuilder.BuildRows(loaded.Details.Files, DiffSide.Commit, FileViewMode.Tree, EmptyCollapsed);
                 foreach (var row in allRows)
                 {
-                    if (row.Kind != FileRowKind.Folder) continue;
+                    if (row is not FileRow.Folder) continue;
                     if (row.FullPath != folderPath && !row.FullPath.StartsWith(prefix, StringComparison.Ordinal)) continue;
                     changed |= next.Add(row.FullPath);
                 }
@@ -233,7 +236,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _localChanges, _windows, _shell, _currentBaseSha));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _highlighter, _loc, _localChanges, _windows, _shell, _currentBaseSha));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -246,9 +249,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public CommitFileTab? CreateFileDiff(string path)
     {
         if (_workingTree)
-            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _localChanges, _windows, _shell);
+            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _highlighter, _loc, _localChanges, _windows, _shell);
         if (string.IsNullOrEmpty(_currentSha)) return null;
-        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _localChanges, _windows, _shell, _currentBaseSha);
+        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _highlighter, _loc, _localChanges, _windows, _shell, _currentBaseSha);
     }
 
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>

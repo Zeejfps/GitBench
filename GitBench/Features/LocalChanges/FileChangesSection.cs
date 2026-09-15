@@ -306,7 +306,7 @@ public sealed class FileChangesSection : ContainerView
         _rows = FileTreeBuilder.BuildRows(_files, DiffSide.Commit, _viewMode, _collapsed);
         var visible = new List<string>(_rows.Count);
         foreach (var row in _rows)
-            if (row.Kind == FileRowKind.File) visible.Add(row.FullPath);
+            if (row is FileRow.File) visible.Add(row.FullPath);
         _visibleFilePaths = visible;
         // Only swap the body on a real empty↔non-empty transition. Re-adding the list view
         // churns its InputSystem controller registration and drops the hover path, so clicks
@@ -335,7 +335,7 @@ public sealed class FileChangesSection : ContainerView
         for (var i = 0; i < _rows.Count; i++)
         {
             var row = _rows[i];
-            if (row.Kind == FileRowKind.File && row.FullPath == path)
+            if (row is FileRow.File && row.FullPath == path)
             {
                 _list.EnsureRowVisible(i);
                 return;
@@ -374,14 +374,14 @@ public sealed class FileChangesSection : ContainerView
         // keeps its highlight while the bar sits on a folder.
         var floatsBar = _selectionTween != null && rowIndex == _selectedIndex;
 
-        if (row.Kind == FileRowKind.Folder)
+        if (row is FileRow.Folder folder)
         {
             FileChangesUI.DrawFolderRow(
                 _canvas,
                 rowRect,
                 row.DisplayName,
                 row.Indent,
-                row.IsOpen,
+                folder.IsOpen,
                 row.FullPath == _cursorFolder,
                 state.IsHovered,
                 _rowSelection,
@@ -396,7 +396,7 @@ public sealed class FileChangesSection : ContainerView
             return;
         }
 
-        var file = row.File!;
+        if (row is not FileRow.File { Change: var file }) return;
         // The lead row's fill is the floating bar's job; any other selected row paints its own, and
         // wears no accent bar so the lead stays the one the eye (and the diff view) is anchored to.
         var isLead = _selectedPath?.Value == file.Path;
@@ -469,7 +469,7 @@ public sealed class FileChangesSection : ContainerView
         for (var i = 0; i < _rows.Count; i++)
         {
             var row = _rows[i];
-            if (row.Kind == FileRowKind.File && row.File!.Path == path) return i;
+            if (row is FileRow.File && row.FullPath == path) return i;
         }
         return -1;
     }
@@ -479,7 +479,7 @@ public sealed class FileChangesSection : ContainerView
         for (var i = 0; i < _rows.Count; i++)
         {
             var row = _rows[i];
-            if (row.Kind == FileRowKind.Folder && row.FullPath == folderPath) return i;
+            if (row is FileRow.Folder && row.FullPath == folderPath) return i;
         }
         return -1;
     }
@@ -506,7 +506,7 @@ public sealed class FileChangesSection : ContainerView
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
         var row = _rows[rowIndex];
 
-        if (row.Kind == FileRowKind.Folder)
+        if (row is FileRow.Folder)
         {
             // The chevron folds the row without disturbing the cursor; a click anywhere else parks
             // the cursor on the folder and leaves it folded as it was.
@@ -531,7 +531,7 @@ public sealed class FileChangesSection : ContainerView
             return;
         }
 
-        var file = row.File!;
+        if (row is not FileRow.File { Change: var file }) return;
         if (file.Status == FileChangeStatus.Submodule && file.PointerChange is { } pc)
         {
             ActivateSubmoduleAndJump(file.Path, pc);
@@ -550,12 +550,12 @@ public sealed class FileChangesSection : ContainerView
         }
         var row = _rows[rowIndex];
         // A folder row acts on every file beneath it, so it hands over its descendant leaves.
-        if (row.Kind == FileRowKind.Folder)
+        if (row is FileRow.Folder)
         {
             _onFolderContextMenu?.Invoke(row.FullPath, row.Files, point);
             return;
         }
-        _onFileContextMenu?.Invoke(row.File!, point);
+        if (row is FileRow.File { Change: var file }) _onFileContextMenu?.Invoke(file, point);
     }
 
     // The chevron occupies the indent + chevron column at the left of a folder row; a hit

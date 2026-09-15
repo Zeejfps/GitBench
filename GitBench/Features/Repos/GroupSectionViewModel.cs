@@ -33,27 +33,10 @@ internal sealed class GroupSectionViewModel : IDisposable
 
     private IReadOnlyList<Repo> ComputeVisiblePrimaries()
     {
-        var reposById = _registry.Repos.ToDictionary(r => r.Id);
-        var result = new List<Repo>();
-
-        if (_group.IsCollapsed.Value)
-        {
-            var active = _registry.Active.Value;
-            if (active is null) return result;
-            foreach (var repoId in _group.RepoIds)
-            {
-                if (repoId == active.PrimaryId && reposById.TryGetValue(repoId, out var repo))
-                    result.Add(repo);
-            }
-            return result;
-        }
-
-        foreach (var repoId in _group.RepoIds)
-        {
-            if (reposById.TryGetValue(repoId, out var repo) && repo.IsPrimary)
-                result.Add(repo);
-        }
-        return result;
+        var primaries = _registry.PrimariesIn(_group);
+        if (!_group.IsCollapsed.Value) return primaries;
+        var active = _registry.Active.Value;
+        return active is null ? [] : primaries.Where(r => r.Id == active.PrimaryId).ToList();
     }
 
     public void Dispose()

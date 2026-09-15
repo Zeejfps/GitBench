@@ -1,4 +1,5 @@
 using GitBench.Features.Repos;
+using GitBench.Infrastructure;
 using GitBench.Git;
 using GitBench.Messages;
 using ZGF.Gui;
@@ -27,7 +28,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
     private readonly IGitSubmoduleOperations _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
-    private readonly IStartupSweepCoordinator _sweep;
+    private readonly StartupSweepCoordinator _sweep;
     private IDisposable? _reposSub;
     private IDisposable? _activeSub;
     private IDisposable? _submodulesChangedSub;
@@ -38,7 +39,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
         IGitSubmoduleOperations git,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        IStartupSweepCoordinator sweep)
+        StartupSweepCoordinator sweep)
     {
         _registry = registry;
         _git = git;
@@ -104,7 +105,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
             }
             if (host is null || (!host.IsPrimary && !host.IsWorktree)) return;
 
-            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { NormalizeForVisit(host.Path) };
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { PathKey.Normalize(host.Path) };
             var roots = EnumerateSubmoduleTree(host.Path, 0, visited);
 
             _dispatcher.Post(() => _registry.ReplaceSubmoduleForest(hostId, roots));
@@ -136,18 +137,12 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
             // Only descend into a checked-out submodule — an uninitialized one has no working
             // tree to read .gitmodules from. visited.Add breaks symlink/path cycles.
             var children = new List<SubmoduleNode>();
-            if (info.Status != SubmoduleStatus.NotInitialized && visited.Add(NormalizeForVisit(info.AbsolutePath)))
+            if (info.Status != SubmoduleStatus.NotInitialized && visited.Add(PathKey.Normalize(info.AbsolutePath)))
                 children = EnumerateSubmoduleTree(info.AbsolutePath, depth + 1, visited);
 
             nodes.Add(new SubmoduleNode(new SubmoduleDescriptor(info.AbsolutePath, display, info.Branch), children));
         }
         return nodes;
-    }
-
-    private static string NormalizeForVisit(string path)
-    {
-        try { return System.IO.Path.GetFullPath(path); }
-        catch { return path; }
     }
 
     public void Dispose()

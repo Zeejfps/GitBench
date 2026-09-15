@@ -5,7 +5,7 @@ using ZGF.Gui.Desktop;
 
 namespace GitBench.Controls;
 
-public sealed class PopupTooltipService : ITooltipService
+public sealed class PopupTooltipService
 {
     private const int Gap = 8;
 

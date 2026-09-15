@@ -57,17 +57,7 @@ internal sealed class RailSectionViewModel : IDisposable
     {
         Group = group;
         HeaderVm = new GroupHeaderRowViewModel(group, registry, bus, newGroup, beforeRename);
-        _primaryRepos = new Derived<IReadOnlyList<Repo>>(() =>
-        {
-            var reposById = registry.Repos.ToDictionary(r => r.Id);
-            var result = new List<Repo>();
-            foreach (var repoId in group.RepoIds)
-            {
-                if (reposById.TryGetValue(repoId, out var repo) && repo.IsPrimary)
-                    result.Add(repo);
-            }
-            return result;
-        });
+        _primaryRepos = new Derived<IReadOnlyList<Repo>>(() => registry.PrimariesIn(group));
         _primaries = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _primaryRepos, r => r.Id, r => nodes.Create(r, 0));
         _isExpanded = new Derived<bool>(() => !group.IsCollapsed.Value);

@@ -185,6 +185,7 @@ public sealed class ContentNavigatorTests(CodeIntelFixture fixture) : IDisposabl
             FileBrowserFakes.NoIgnore,
             FileBrowserFakes.EmptyCatalog,
             fixture.Extractor,
+            fixture.Colors,
             _dispatcher,
             new FileBrowserUiState(),
             _persisted.Add,

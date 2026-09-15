@@ -7,13 +7,13 @@ namespace GitBench.Features.Repos;
 
 // Names each row variant's controller target so a call site reads `row.WithController<RepoRowController>()`
 // — the controller is explicit, the target interface is implied by the variant. Keyed to the concrete
-// variant (not IWidget<IRepoRow>) because both variants share RepoRowState — which is an IRepoRow — so an
+// variant (not IWidget<RepoRowState>) because both variants share RepoRowState, so an
 // interface-typed receiver couldn't tell them apart.
 internal static class RowControllerExtensions
 {
     public static IWidget WithController<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TController>(this PrimaryRepoRow row)
         where TController : class, IKeyboardMouseController =>
-        row.WithController<TController, IRepoRow>();
+        row.WithController<TController, RepoRowState>();
 
     public static IWidget WithController<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TController>(this NavigableRepoRow row)
         where TController : class, IKeyboardMouseController =>

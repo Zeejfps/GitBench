@@ -23,7 +23,7 @@ internal sealed class RepoBarViewModel : IDisposable
     // in phase and nothing ticks while the bar is idle.
     public IReadable<float> LoadRotation => _loadSpinner.Rotation;
 
-    public RepoBarViewModel(IRepoRegistry registry, IMessageBus bus, RepoNodeFactory nodes, IRepoLoadStore load, IFrameTicker ticker)
+    public RepoBarViewModel(IRepoRegistry registry, IMessageBus bus, RepoNodeFactory nodes, RepoLoadStore load, IFrameTicker ticker)
     {
         _registry = registry;
         NewGroup = new Command(DoNewGroup);

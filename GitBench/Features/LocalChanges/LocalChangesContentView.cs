@@ -363,12 +363,12 @@ internal sealed class LocalChangesContentView : ContainerView
     // folder an unpredictable number of times.
     private void OnUnstagedRowActivated(FileRow row)
     {
-        if (row.Kind == FileRowKind.File) _vm.Stage(row.Files);
+        if (row is FileRow.File) _vm.Stage(row.Files);
     }
 
     private void OnStagedRowActivated(FileRow row)
     {
-        if (row.Kind == FileRowKind.File) _vm.Unstage(row.Files);
+        if (row is FileRow.File) _vm.Unstage(row.Files);
     }
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildUnstagedMenu(FileRow? target)
@@ -437,8 +437,8 @@ internal sealed class LocalChangesContentView : ContainerView
     // The jump is single-file by nature, so it targets the clicked row regardless of selection.
     private void AppendViewInDiff(List<RepoBarContextMenu.Item> items, FileRow target)
     {
-        if (target.Kind != FileRowKind.File) return;
-        var path = target.File!.Path;
+        if (target is not FileRow.File) return;
+        var path = target.FullPath;
         items.Add(new RepoBarContextMenu.Item(
             _loc.Strings.Value.LocalchangesViewInDiff,
             () => ViewInDiff(path),
@@ -449,7 +449,7 @@ internal sealed class LocalChangesContentView : ContainerView
     // Open-folder / terminal target the clicked row: the folder itself for a folder row,
     // otherwise the file.
     private static string Representative(FileRow target)
-        => target.Kind == FileRowKind.Folder ? target.FullPath : target.File!.Path;
+        => target.FullPath;
 
     // Right-clicking a row that's part of the current selection acts on the whole
     // selection's files; right-clicking any other row acts on just that row's files

@@ -89,7 +89,7 @@ public sealed class Tooltip : IDisposable
     {
         var text = _text.Value;
         if (string.IsNullOrEmpty(text)) return;
-        var service = _context.Get<ITooltipService>();
+        var service = _context.Get<PopupTooltipService>();
         var coordinates = _context.Get<IWindowCoordinates>();
         if (service == null || coordinates == null) return;
         service.Show(this, text, coordinates.ToScreenPoints(CanvasRect.From(_target.Position)));
@@ -99,7 +99,7 @@ public sealed class Tooltip : IDisposable
     private void HideNow()
     {
         if (!_isShown) return;
-        _context.Get<ITooltipService>()?.Hide(this);
+        _context.Get<PopupTooltipService>()?.Hide(this);
         _isShown = false;
     }
 }

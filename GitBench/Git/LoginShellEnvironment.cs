@@ -18,33 +18,18 @@ internal static class LoginShellEnvironment
     private const string SnapshotMarker = "@@gitbench-env@@";
     private const int SnapshotTimeoutMs = 10_000;
 
-    private static readonly object Gate = new();
-    private static IReadOnlyDictionary<string, string>? _variables;
-    private static IReadOnlyDictionary<string, string>? _forChildProcess;
+    private static readonly Lazy<IReadOnlyDictionary<string, string>> _variables = new(Resolve);
+    private static readonly Lazy<IReadOnlyDictionary<string, string>> _forChildProcess = new(() => Merge(Variables));
 
     /// <summary>What the login shell says, and nothing else. Empty off macOS.</summary>
-    public static IReadOnlyDictionary<string, string> Variables
-    {
-        get
-        {
-            if (_variables != null) return _variables;
-            lock (Gate) return _variables ??= Resolve();
-        }
-    }
+    public static IReadOnlyDictionary<string, string> Variables => _variables.Value;
 
     /// <summary>
     /// What a child process should start with: this process's own environment, with the login
     /// shell's over the top. The overlay direction matters — the shell's <c>PATH</c> is the one
     /// that can see the user's tools.
     /// </summary>
-    public static IReadOnlyDictionary<string, string> ForChildProcess
-    {
-        get
-        {
-            if (_forChildProcess != null) return _forChildProcess;
-            lock (Gate) return _forChildProcess ??= Merge(Variables);
-        }
-    }
+    public static IReadOnlyDictionary<string, string> ForChildProcess => _forChildProcess.Value;
 
     /// <summary>The absolute path to a program on the login shell's <c>PATH</c>, or null when it is
     /// not there. Bare names only; a caller with an absolute path already has its answer.</summary>

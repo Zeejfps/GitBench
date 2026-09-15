@@ -55,13 +55,13 @@ public class TextLineSplittingTests : IDisposable
     {
         var path = Path.Combine(_dir.Path, "sample.txt");
         File.WriteAllText(path, content);
-        var preview = FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None);
+        var preview = FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None);
         return Assert.IsType<FilePreview.Text>(preview).Lines;
     }
 
     private static IReadOnlyList<string> DiffLines(string content)
     {
-        var loader = new DiffPreviewLoader(new OneBlob(content), new NoConflicts(), new UnparsedFiles());
+        var loader = new DiffPreviewLoader(new OneBlob(content), new NoConflicts(), new UnparsedFiles(), new PlainText());
         var lines = loader.NewSideLines(
             new Repo(Guid.NewGuid(), "/repo", "repo"), new DiffTarget("sample.txt", DiffSide.Unstaged));
         return Assert.IsType<List<string>>(lines);

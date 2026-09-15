@@ -7,12 +7,12 @@ using ZGF.KeyboardModule;
 
 namespace GitBench.Features.Repos;
 
-public sealed class RepoRowController : KeyboardMouseController, IDisposable
+internal sealed class RepoRowController : KeyboardMouseController, IDisposable
 {
     private const float DragThresholdSq = 6f * 6f;
 
     private readonly View _view;
-    private readonly IRepoRow _target;
+    private readonly RepoRowState _target;
     private readonly IRepoRegistry _registry;
     private readonly RepoHoverState _hover;
     private readonly Context _context;
@@ -25,7 +25,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
 
     public RepoRowController(
         View view,
-        IRepoRow target,
+        RepoRowState target,
         IRepoRegistry registry,
         RepoHoverState hover,
         InputSystem inputSystem,

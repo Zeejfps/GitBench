@@ -294,6 +294,7 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
         FileBrowserFakes.NoIgnore,
         FileBrowserFakes.EmptyCatalog,
         fixture.Extractor,
+        fixture.Colors,
         _dispatcher,
         restored ?? new FileBrowserUiState(),
         _persisted.Add,

@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
 using GitBench.Input;
@@ -610,9 +611,9 @@ public sealed class DefinitionProbeControllerTests
 
         public FileSpan? Link => Shown.Count == 0 ? null : Shown[^1];
 
-        public FilePositionHit? HitTestFilePosition(PointF point) =>
+        public TextPosition? HitTestFilePosition(PointF point) =>
             fixture.Positions.TryGetValue((point.X, point.Y), out var at)
-                ? new FilePositionHit(new FileLine(at.Line), new RawColumn(at.Column))
+                ? new TextPosition(new FileLine(at.Line), new RawColumn(at.Column))
                 : null;
 
         public FileSpan? HitTestIdentifier(PointF point) =>

@@ -162,7 +162,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Subscriptions.Add(store.Branches.Subscribe(OnStoreBranches));
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
         Subscriptions.Add(_bus.SubscribeScoped<CheckoutRequestedMessage>(OnCheckoutRequested));
-        Subscriptions.Add(_bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged));
         Subscriptions.Add(_registry.WorktreesChanged.Subscribe(_ => RefreshWorktreeBranches()));
 
         // Row badges spin off the operations store (push/pull/fetch) and our own fast-forward, so
@@ -224,8 +223,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         else
             _syncSpinner.Stop();
     }
-
-    private void OnWorktreesChanged(WorktreesChangedMessage _) => RefreshWorktreeBranches();
 
     // Checkout requests raised elsewhere (history badge clicks) funnel into the same activation
     // paths as sidebar double-clicks, so every guard applies identically.

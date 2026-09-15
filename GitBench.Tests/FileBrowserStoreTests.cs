@@ -90,7 +90,7 @@ public class FileBrowserStoreTests : IDisposable
     {
         var documents = new DocumentStore(_registry, new LocalizationService(new State<Locale>(Locale.En)));
         var store = new FileBrowserStore(
-            _registry, new NoIgnores(), _files, new UnparsedFiles(), _bus, _dispatcher, documents);
+            _registry, new NoIgnores(), _files, new UnparsedFiles(), new PlainText(), _bus, _dispatcher, documents);
         store.Start();
         return store;
     }

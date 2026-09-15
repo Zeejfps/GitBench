@@ -152,15 +152,15 @@ internal sealed class CommitChangesPanelView : ContainerView
             {
                 var next = _changesSection.NextRow(vm.CursorFolder.Value, cursor.Value, delta);
                 if (next == null) return;
-                if (next.Kind == FileRowKind.Folder)
+                if (next is FileRow.Folder)
                 {
                     vm.SetCursorFolder(next.FullPath);
                     _changesSection.EnsureFolderVisible(next.FullPath);
                     return;
                 }
                 vm.SetCursorFolder(null);
-                Gesture(next.File!.Path, shift ? InputModifiers.Shift : InputModifiers.None);
-                _changesSection.EnsureRowVisible(next.File!.Path);
+                Gesture(next.FullPath, shift ? InputModifiers.Shift : InputModifiers.None);
+                _changesSection.EnsureRowVisible(next.FullPath);
             },
             vm.SetCursorFolderExpanded,
             () => props.OnActivateSelection?.Invoke(),
