@@ -36,15 +36,14 @@ namespace GitBench.Features.LocalChanges;
 /// to make rows highlight against an external selection and dispatch clicks (with their modifiers)
 /// back. A host that supports multi-select also passes <paramref name="selectedPaths"/>: every row in
 /// that set fills, while <paramref name="selectedPath"/> stays the one the floating bar and its accent
-/// mark. Submodule pointer rows handle their own click (activate the submodule + broadcast
-/// <see cref="JumpToSubmoduleCommitMessage"/>) without going through the callback.
+/// mark. Submodule pointer rows handle their own click (activate the submodule) without going
+/// through the callback.
 /// </summary>
 public sealed class FileChangesSection : ContainerView, IScrollableContent
 {
     private readonly string _title;
     private readonly ICanvas _canvas;
     private readonly IRepoRegistry? _registry;
-    private readonly IMessageBus? _bus;
     private readonly TextView _headerText;
     private readonly View _emptyPlaceholder;
     private readonly PaddingView _bodyContainer;
@@ -165,7 +164,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _title = title;
         _canvas = ctx.Canvas;
         _registry = ctx.Get<IRepoRegistry>();
-        _bus = ctx.Get<IMessageBus>();
         _reviewedFiles = ctx.Get<IReviewedFileTracker>();
         _selectedPath = selectedPath;
         _selectedPaths = selectedPaths;
@@ -621,7 +619,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             if (string.Equals(System.IO.Path.GetFullPath(r.Path), target, PathComparison))
             {
                 if (!r.IsMissing) registry.SetActive(r.Id);
-                _bus?.Broadcast(new JumpToSubmoduleCommitMessage(r.Id, change.FromSha, change.ToSha));
                 return;
             }
         }

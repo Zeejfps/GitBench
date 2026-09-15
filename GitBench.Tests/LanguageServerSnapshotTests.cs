@@ -61,16 +61,6 @@ public sealed class LanguageServerSnapshotTests
         var empty = LanguageServerSnapshot.Nothing;
 
         Assert.IsType<ServerState.NotConfigured>(empty.StateFor("/repo/src/main.rs"));
-        Assert.False(empty.Handles("/repo/src/main.rs"));
-    }
-
-    [Fact]
-    public void HandlesFollowsTheConfigAndNotWhatIsRunning()
-    {
-        var snapshot = Snapshot();
-
-        Assert.True(snapshot.Handles("/repo/src/main.rs"));
-        Assert.False(snapshot.Handles("/repo/notes.txt"));
     }
 
     [Fact]

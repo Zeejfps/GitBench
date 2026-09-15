@@ -116,8 +116,8 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         var browser = new FileBrowserViewModel(
             repo,
             _files,
-            new GitIgnoreOracle(_git, repo),
-            new GitFileCatalog(_git, repo),
+            paths => _git.IsPathIgnored(repo, paths),
+            () => _git.ListWorkingTreeFiles(repo),
             _extractor,
             _dispatcher,
             _registry.GetFileBrowserUi(repoId),

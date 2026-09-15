@@ -108,14 +108,13 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
 
     private void Track(EditorBuffer buffer)
     {
-        if (!DiffOptions.SyntaxHighlightingEnabled) return;
         if (LanguageRegistry.DetectLanguageId(buffer.Path) is not { } languageId) return;
         // The tree-sitter engine's own answer, not the routed one's: a file it declines is coloured
         // by TextMate, and publishing an annotation with no highlight in it would blank that out.
         if (!_highlighter.Supports(languageId)) return;
 
         var id = ++_nextId;
-        var outline = DiffOptions.StructureEnabled ? CodeLanguages.Detect(buffer.Path) : null;
+        var outline = CodeLanguages.Detect(buffer.Path);
         var following = new Following(id, buffer, languageId, outline);
         _following[id] = following;
 

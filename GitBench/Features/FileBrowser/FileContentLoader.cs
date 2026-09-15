@@ -148,7 +148,6 @@ internal static class FileContentLoader
     public static FileOutline? OutlineOf(
         string absolutePath, ISymbolExtractor extractor, CancellationToken cancellation)
     {
-        if (!DiffOptions.StructureEnabled) return null;
         if (CodeLanguages.Detect(absolutePath) is not { } language) return null;
 
         try
@@ -171,7 +170,6 @@ internal static class FileContentLoader
 
     private static FileOutline? Outline(string path, string text, ISymbolExtractor extractor)
     {
-        if (!DiffOptions.StructureEnabled) return null;
         if (CodeLanguages.Detect(path) is not { } language) return null;
         return extractor.Extract(text, language);
     }
@@ -181,7 +179,7 @@ internal static class FileContentLoader
 
     private static DiffHighlight? Highlight(string path, string text, bool truncated)
     {
-        if (truncated || !DiffOptions.SyntaxHighlightingEnabled) return null;
+        if (truncated) return null;
         if (LanguageRegistry.DetectLanguageId(path) is not { } languageId) return null;
         var spans = RoutedSyntaxHighlighter.Shared.Highlight(text, languageId);
         return spans is null ? null : new DiffHighlight(null, spans);

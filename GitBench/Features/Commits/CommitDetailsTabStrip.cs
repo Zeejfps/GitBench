@@ -17,7 +17,7 @@ namespace GitBench.Features.Commits;
 /// </summary>
 internal sealed record CommitDetailsTabStrip : Widget
 {
-    public const float StripHeight = TabStrip.Height;
+    public const float StripHeight = TabStrip.StripHeight;
 
     public required CommitDetailsViewModel Vm { get; init; }
 

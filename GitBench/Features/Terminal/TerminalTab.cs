@@ -34,7 +34,7 @@ internal sealed record NewTerminalButton : Widget
 
     // Centres the button in the strip by inset rather than by a Center, whose intrinsic width a
     // trailing slot beside a Grow has nothing to lay out against.
-    const int ButtonInset = ((int)TabStrip.Height - ButtonHeight) / 2;
+    const int ButtonInset = ((int)TabStrip.StripHeight - ButtonHeight) / 2;
 
     /// <summary>Put the terminal that was made on screen. The strip's, not this control's: what
     /// "showing" means belongs to the panel these tabs are for.</summary>

@@ -33,7 +33,6 @@
         <!-- The diff syntax-highlighting logic modules are internal; the test project drives
              them directly. The automation runner builds the app through GitBenchHost. -->
         <InternalsVisibleTo Include="GitBench.Tests" />
-        <InternalsVisibleTo Include="GitBench.Automation" />
     </ItemGroup>
 
     <ItemGroup>
@@ -81,11 +80,8 @@
 
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
-        <!-- The terminal: the pseudo-terminal, the engine seam, and the XtermSharp adapter behind
-             it. Only AppServices names the adapter, so replacing the engine touches one line. -->
         <ProjectReference Include="..\GitBench.Pty\GitBench.Pty.csproj" />
         <ProjectReference Include="..\GitBench.Terminal.Vt\GitBench.Terminal.Vt.csproj" />
-        <ProjectReference Include="..\GitBench.Terminal.Vt.XtermSharp\GitBench.Terminal.Vt.XtermSharp.csproj" />
         <!-- Image codecs behind the diff view's image preview. PngSharp also arrives
              transitively through ZGF.Gui; referenced explicitly because the app decodes with it
              directly. -->
@@ -153,7 +149,7 @@
         <!--
             NStack.Core arrives transitively with the vendored engine and declares its own
             System.Rune, ambiguous with System.Text.Rune wherever the bare name is used. Same alias,
-            and for the same reason, as GitBench.Terminal.Vt.XtermSharp.
+            and for the same reason, as GitBench.Terminal.Vt.
         -->
         <Using Include="System.Text.Rune" Alias="Rune" />
     </ItemGroup>

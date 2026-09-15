@@ -126,14 +126,10 @@ internal sealed class DiffPreviewLoader(
         {
             // Intra-line pairing needs both sides; do it here while the diff is in hand, keyed by
             // new-line number so the after-file view can attach the new-side ranges per row.
-            IReadOnlyList<CharRange>?[]? hunkEmphasis = null;
-            if (DiffOptions.IntraLineHighlightingEnabled)
-            {
-                var expanded = new string[hunk.Lines.Count];
-                for (var i = 0; i < hunk.Lines.Count; i++)
-                    expanded[i] = DiffText.ExpandTabs(hunk.Lines[i].Text);
-                hunkEmphasis = IntraLineDiff.ForHunk(hunk.Lines, expanded);
-            }
+            var expanded = new string[hunk.Lines.Count];
+            for (var i = 0; i < hunk.Lines.Count; i++)
+                expanded[i] = DiffText.ExpandTabs(hunk.Lines[i].Text);
+            var hunkEmphasis = IntraLineDiff.ForHunk(hunk.Lines, expanded);
             for (var i = 0; i < hunk.Lines.Count; i++)
             {
                 var line = hunk.Lines[i];

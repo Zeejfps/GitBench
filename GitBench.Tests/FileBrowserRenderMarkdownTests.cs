@@ -47,8 +47,8 @@ public class FileBrowserRenderMarkdownTests : IDisposable
     private FileBrowserViewModel Browser(FileBrowserUiState restored) => new(
         new Repo(Guid.NewGuid(), _dir.Path, "repo"),
         new EmptyFileSystem(),
-        NoIgnoreOracle.Instance,
-        EmptyFileCatalog.Instance,
+        FileBrowserFakes.NoIgnore,
+        FileBrowserFakes.EmptyCatalog,
         new UnparsedFiles(),
         _dispatcher,
         restored,

@@ -33,7 +33,7 @@ public class FileBrowserTreeTests
         }
     }
 
-    private sealed class FakeIgnoreOracle : IIgnoreOracle
+    private sealed class FakeIgnoreOracle
     {
         public readonly HashSet<string> IgnoredPaths = new(StringComparer.Ordinal);
         public readonly List<IReadOnlyList<string>> Batches = [];
@@ -60,7 +60,7 @@ public class FileBrowserTreeTests
             .With(Root, Dir("src"), File("README.md"))
             .With(At("src"), File("main.cs"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
 
         Assert.Equal(["src", "README.md"], Names(tree));
         Assert.DoesNotContain(At("src"), fs.Listed);
@@ -74,7 +74,7 @@ public class FileBrowserTreeTests
             .With(At("src"), File("main.cs"), Dir("ui"))
             .With(At("src", "ui"), File("view.cs"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("src"));
 
         Assert.Equal(["src", "ui", "main.cs", "README.md"], Names(tree));
@@ -95,7 +95,7 @@ public class FileBrowserTreeTests
         var fs = new FakeFileSystem()
             .With(Root, File("readme"), Dir("Zed"), File("b.txt"), File("README"), Dir("alpha"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
 
         Assert.Equal(["alpha", "Zed", "b.txt", "README", "readme"], Names(tree));
     }
@@ -107,7 +107,7 @@ public class FileBrowserTreeTests
         fs.LinkTargets[At("up")] = Root;
         fs.With(At("up"), Dir("up", isLink: true), File("a.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("up"));
 
         var row = Assert.IsType<FileBrowserRow.Directory>(tree.Rows[0]);
@@ -126,7 +126,7 @@ public class FileBrowserTreeTests
         fs.LinkTargets[At("shared")] = elsewhere;
         fs.With(At("shared"), File("thing.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("shared"));
 
         Assert.Equal(["shared", "thing.txt"], Names(tree));
@@ -142,7 +142,7 @@ public class FileBrowserTreeTests
             .With(At("a", "b"), Dir("c"))
             .With(At("a", "b", "c"), File("deep.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root, maxDepth: 2);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root, maxDepth: 2);
         tree.Expand(At("a"));
         tree.Expand(At("a", "b"));
 
@@ -160,7 +160,7 @@ public class FileBrowserTreeTests
             .With(At("a"), File("x.txt"))
             .With(At("b"), File("y.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("a"));
         Assert.Equal(["a", "x.txt", "b"], Names(tree));
 
@@ -179,7 +179,7 @@ public class FileBrowserTreeTests
             .With(Root, Dir("old"))
             .With(At("old"), File("x.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("old"));
         Assert.Equal(["old", "x.txt"], Names(tree));
 
@@ -202,7 +202,7 @@ public class FileBrowserTreeTests
             .With(At("a"), Dir("b"))
             .With(At("a", "b"), File("x.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("a"));
         tree.Expand(At("a", "b"));
         tree.Collapse(At("a"));
@@ -219,7 +219,7 @@ public class FileBrowserTreeTests
     {
         var fs = new FakeFileSystem().With(Root, Dir("locked"), File("a.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("locked"));
 
         Assert.Equal(["locked", "a.txt"], Names(tree));
@@ -232,7 +232,7 @@ public class FileBrowserTreeTests
             .With(Root, Dir(".git"), Dir("nested"), File("a.txt"))
             .With(At("nested"), Dir(".git"), File("b.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
         tree.Expand(At("nested"));
 
         Assert.Equal(["nested", "b.txt", "a.txt"], Names(tree));
@@ -244,7 +244,7 @@ public class FileBrowserTreeTests
         var fs = new FakeFileSystem()
             .With(Root, Dir(".Git"), Dir(".GIT"), File("a.txt"));
 
-        var tree = new FileBrowserTree(fs, NoIgnoreOracle.Instance, Root);
+        var tree = new FileBrowserTree(fs, FileBrowserFakes.NoIgnore, Root);
 
         Assert.Equal(["a.txt"], Names(tree));
     }
@@ -257,7 +257,7 @@ public class FileBrowserTreeTests
         var fs = new FakeFileSystem()
             .With(Root, Dir("build"), Dir("src"), File(".env", isHidden: true));
 
-        var tree = new FileBrowserTree(fs, oracle, Root);
+        var tree = new FileBrowserTree(fs, oracle.Ignored, Root);
 
         Assert.Equal(["build", "src", ".env"], Names(tree));
         Assert.True(tree.Rows[0].IsIgnored);
@@ -273,7 +273,7 @@ public class FileBrowserTreeTests
         var fs = new FakeFileSystem()
             .With(Root, Dir("build"), Dir("src"), File(".env", isHidden: true));
 
-        var tree = new FileBrowserTree(fs, oracle, Root);
+        var tree = new FileBrowserTree(fs, oracle.Ignored, Root);
         tree.SetShowHidden(false);
         Assert.Equal(["src"], Names(tree));
 
@@ -290,7 +290,7 @@ public class FileBrowserTreeTests
             .With(Root, Dir("build"))
             .With(At("build"), File("out.o"));
 
-        var tree = new FileBrowserTree(fs, oracle, Root);
+        var tree = new FileBrowserTree(fs, oracle.Ignored, Root);
         tree.Expand(At("build"));
 
         Assert.Equal(["build", "out.o"], Names(tree));

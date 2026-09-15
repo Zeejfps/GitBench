@@ -1,13 +1,10 @@
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.Controls;
 
 public static class TooltipWidgetExtensions
 {
-    private static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
-
     /// <summary>
     /// Adds a hover <see cref="Tooltip"/> to an interactive widget — the parent decides whether a
     /// button gets a tooltip by calling this, rather than the button carrying a tooltip field. Reads
@@ -29,7 +26,7 @@ public static class TooltipWidgetExtensions
         public View BuildView(Context ctx)
         {
             var view = Child.BuildView(ctx);
-            view.Use(() => new Tooltip(view, ctx, Text.ToReadable(ctx), State.Hovered, AlwaysEnabled));
+            view.Use(() => new Tooltip(view, ctx, Text.ToReadable(ctx), State.Hovered));
             return view;
         }
     }

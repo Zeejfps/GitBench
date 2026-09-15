@@ -18,9 +18,6 @@ namespace GitBench.Tests;
 /// file list, per-file diffs at that base, and the one write — a Viewed mark that goes through the
 /// same store a reviewer's checkbox writes to, and expires the same way.
 /// </summary>
-// In the CodeIntel collection because get_review_diff reads DiffOptions.StructureEnabled, which
-// DiffHunkHeaderTests flips: xUnit runs collections in parallel, so sharing one serializes them.
-[Collection(nameof(CodeIntelCollection))]
 public sealed class AssistantReviewToolsTests : IDisposable
 {
     private sealed class NullActivityTracker : IRepoActivityTracker

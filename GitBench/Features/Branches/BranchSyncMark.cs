@@ -34,11 +34,11 @@ internal sealed record BranchSyncMark : Widget
             Color = Theme.Color(s => s.BranchesView.AheadColor),
         }.BuildView(ctx);
 
-        view.Bind(ctx.Require<BranchesViewModel>().SyncMarkProgress, p => view.Opacity = Opacity(p));
+        view.Bind(ctx.Require<BranchesViewModel>().SyncMarkProgress, p => view.Opacity = OpacityAt(p));
         return view;
     }
 
-    private static float Opacity(float t)
+    private static float OpacityAt(float t)
     {
         if (t < FadeIn) return t / FadeIn;
         if (t > 1f - FadeOut) return (1f - t) / FadeOut;

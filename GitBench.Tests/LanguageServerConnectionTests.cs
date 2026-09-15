@@ -48,7 +48,6 @@ public sealed class LanguageServerConnectionTests : IDisposable
         RootMarkers: [],
         Environment: new Dictionary<string, string>(),
         InitializationOptionsJson: null,
-        SettingsJson: null,
         RequestTimeout: TimeSpan.FromSeconds(5),
         IdleShutdown: TimeSpan.FromMinutes(5));
 
@@ -313,8 +312,7 @@ public sealed class LanguageServerConnectionTests : IDisposable
 
         await Hover(connection, huge);
 
-        var skipped = Assert.IsType<DocumentState.NotSent>(connection.Document);
-        Assert.Equal(SkipReason.PreviewTruncated, skipped.Reason);
+        Assert.IsType<DocumentState.Truncated>(connection.Document);
     }
 
     [Fact]
@@ -342,7 +340,8 @@ public sealed class LanguageServerConnectionTests : IDisposable
             new DefinitionLocation(
                 DocumentUri.OfFile(path),
                 LspRange.Empty(new LspPosition(new LspLine(nameLine), new LspCharacter(4))),
-                LspRange.Empty(new LspPosition(new LspLine(bodyLine), new LspCharacter(0)))),
+                LspRange.Empty(new LspPosition(new LspLine(bodyLine), new LspCharacter(0))),
+                OptionalRange.Absent),
         ]));
 
     [Fact]
@@ -473,9 +472,9 @@ public sealed class LanguageServerConnectionTests : IDisposable
                 DocumentUri.OfFile(_file),
                 LspRange.Empty(new LspPosition(new LspLine(10), new LspCharacter(4))),
                 LspRange.Empty(new LspPosition(new LspLine(10), new LspCharacter(0))),
-                new LspRange(
+                OptionalRange.Of(new LspRange(
                     new LspPosition(new LspLine(8), new LspCharacter(2)),
-                    new LspPosition(new LspLine(8), new LspCharacter(7)))),
+                    new LspPosition(new LspLine(8), new LspCharacter(7))))),
         ])));
         using var connection = Connect();
 

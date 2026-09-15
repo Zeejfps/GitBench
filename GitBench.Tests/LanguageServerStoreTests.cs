@@ -90,7 +90,7 @@ public sealed class LanguageServerStoreTests : IDisposable
             _bus,
             _loc,
             files,
-            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5), files),
+            new LanguageServerLauncher<FakeSession>(_launcher, TimeSpan.FromSeconds(5), files),
             clock: null,
             configPath: _configPath);
         store.Start();
@@ -183,7 +183,8 @@ public sealed class LanguageServerStoreTests : IDisposable
             new DefinitionLocation(
                 DocumentUri.OfFile(path),
                 LspRange.Empty(new LspPosition(new LspLine(line), new LspCharacter(0))),
-                LspRange.Empty(new LspPosition(new LspLine(line), new LspCharacter(0)))),
+                LspRange.Empty(new LspPosition(new LspLine(line), new LspCharacter(0))),
+                OptionalRange.Absent),
         ]);
 
     // A server that will not start is the one failure the reader can do something about — the
@@ -431,7 +432,7 @@ public sealed class LanguageServerStoreTests : IDisposable
             _bus,
             _loc,
             FilesOnDisk.Instance,
-            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5), FilesOnDisk.Instance),
+            new LanguageServerLauncher<FakeSession>(_launcher, TimeSpan.FromSeconds(5), FilesOnDisk.Instance),
             clock: null,
             configPath: _configPath);
         store.Start();
@@ -755,7 +756,7 @@ public sealed class LanguageServerStoreTests : IDisposable
     }
 
     /// <summary>Hands out servers that answer one hover and nothing else.</summary>
-    private sealed class FakeProcessLauncher : ILanguageServerLauncher
+    private sealed class FakeProcessLauncher : ILanguageServerLauncher<FakeSession>
     {
         public List<FakeSession> Started { get; } = [];
 
@@ -767,14 +768,14 @@ public sealed class LanguageServerStoreTests : IDisposable
         /// <summary>When set, every launched session fails its handshake with this reason.</summary>
         public string? FailHandshake { get; set; }
 
-        public LaunchResult Launch(ServerLaunchRequest request)
+        public LaunchResult<FakeSession> Launch(ServerLaunchRequest request)
         {
-            if (Refuse is { } reason) return new LaunchResult.Failed(reason);
+            if (Refuse is { } reason) return new LaunchResult<FakeSession>.Failed(reason);
 
             var session = new FakeSession { HandshakeFailure = FailHandshake };
             if (Advertise is { } capabilities) session.Advertises = capabilities;
             Started.Add(session);
-            return new LaunchResult.Started(session);
+            return new LaunchResult<FakeSession>.Started(session);
         }
     }
 

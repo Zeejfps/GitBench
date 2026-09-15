@@ -133,8 +133,8 @@ public class FileBrowserUnsavedTests : IDisposable
         var browser = new FileBrowserViewModel(
             new Repo(Guid.NewGuid(), _dir.Path, "repo"),
             new FileSystemReader(),
-            NoIgnoreOracle.Instance,
-            EmptyFileCatalog.Instance,
+            FileBrowserFakes.NoIgnore,
+            FileBrowserFakes.EmptyCatalog,
             new UnparsedFiles(),
             _dispatcher,
             new FileBrowserUiState(),

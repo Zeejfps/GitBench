@@ -177,7 +177,7 @@ internal sealed record FileBrowserTextBody : Widget
                 return subscriptions;
             });
 
-            if (DiffOptions.UsageLensEnabled) KeepUsageCountsFilledIn(ctx, content, browser, definitions);
+            KeepUsageCountsFilledIn(ctx, content, browser, definitions);
         }
 
         // Both directions of the header's conversation with the body: a line to reveal on the way

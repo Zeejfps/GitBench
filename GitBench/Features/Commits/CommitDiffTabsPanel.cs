@@ -186,7 +186,7 @@ internal sealed class CommitDiffTabsPanelView : ContainerView
         var header = new Provide<DiffViewModel>
         {
             Value = tab.Diff,
-            Child = new DiffPaneHeaderWidget { Collapsible = false },
+            Child = new DiffPaneHeaderWidget(),
         }.BuildView(_ctx);
         return new BorderLayoutView
         {

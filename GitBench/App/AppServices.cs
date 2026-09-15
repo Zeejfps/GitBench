@@ -192,7 +192,7 @@ internal static class AppServices
             ctx.Require<IMessageBus>()));
 
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
-        // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
+        // anchored).
         context.AddSingleton<IReviewStackSource, GitReviewStackSource>();
         // The open review windows, one registry for the app: the windows view reflects it into OS
         // windows and the assistant's review tools point through it at what the reviewer sees.

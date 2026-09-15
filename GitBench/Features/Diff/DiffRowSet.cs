@@ -287,9 +287,7 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
             texts[j] = DiffLineText.Of(h.Lines[j].Text);
             expanded[j] = texts[j].Expanded;
         }
-        var emphasis = DiffOptions.IntraLineHighlightingEnabled
-            ? IntraLineDiff.ForHunk(h.Lines, expanded)
-            : null;
+        var emphasis = IntraLineDiff.ForHunk(h.Lines, expanded);
 
         for (var j = 0; j < h.Lines.Count; j++)
         {

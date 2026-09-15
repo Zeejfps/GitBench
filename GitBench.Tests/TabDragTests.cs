@@ -182,7 +182,7 @@ public sealed class TabDragTests : IDisposable
         _harness = GuiTestHarness.Create(
             ctx => new Box
             {
-                Height = TabStrip.Height,
+                Height = TabStrip.StripHeight,
                 Children =
                 [
                     new TabStrip

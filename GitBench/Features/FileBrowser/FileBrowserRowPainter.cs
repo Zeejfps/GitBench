@@ -29,11 +29,6 @@ internal static class FileBrowserRowPainter
     public const float IconGap = 6f;
     public const float IndentLevel = TreeMetrics.IndentLevel;
 
-    /// <summary>Where a row's content starts: files reserve the chevron column directories draw
-    /// into, so a file's icon lands under its siblings' rather than half a column left of them.</summary>
-    public static float ContentLeft(float rowLeft, int depth) =>
-        rowLeft + RowPaddingLeft + depth * IndentLevel + ChevronWidth + ChevronGap;
-
     public static void Draw(
         ICanvas canvas,
         RectF rowRect,

@@ -15,11 +15,8 @@ namespace GitBench.Features.Diff;
 /// now. The only way to render plain is for both engines to decline.
 /// </para>
 /// <para>
-/// Measured over 1,014 files of this repository, tree-sitter is 10.6x faster end to end and is not
-/// meaningfully slower on any file; see <c>docs/plans/tree-sitter-highlighting-benchmark.md</c>.
-/// That report predates injections and so has no Markdown or HTML row: both routed to TextMate
-/// until the parser could follow a fenced block, a <c>&lt;script&gt;</c> body and Markdown's own
-/// inline grammar into the languages they are written in.
+/// Measured over 1,014 files of this repository (2026-08-31), tree-sitter was 10.6x faster end to
+/// end and not meaningfully slower on any file.
 /// </para>
 /// </remarks>
 internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter, IDisposable

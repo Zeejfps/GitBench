@@ -5,12 +5,11 @@ using GitBench.Localization;
 namespace GitBench.Features.Review;
 
 /// <summary>
-/// The real <see cref="IReviewStackSource"/> (Phase 4): resolves a <see cref="ReviewSession"/> into the
+/// The real <see cref="IReviewStackSource"/>: resolves a <see cref="ReviewSession"/> into the
 /// true <c>base..head</c> first-parent stack through the git range layer. The base is the session's
 /// pinned <see cref="ReviewSession.BaseRef"/> when set, otherwise the merge-base with the branch's
-/// upstream or the repo's default branch. Replaces <see cref="StubReviewStackSource"/> through the
-/// single DI binding; the review window's GUI is unchanged. A load failure (missing repo, no
-/// resolvable base, git error) is surfaced as a thrown exception per the seam contract.
+/// upstream or the repo's default branch. A load failure (missing repo, no resolvable base, git
+/// error) is surfaced as a thrown exception per the seam contract.
 /// </summary>
 internal sealed class GitReviewStackSource : IReviewStackSource
 {

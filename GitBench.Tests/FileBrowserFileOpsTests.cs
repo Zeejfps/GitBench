@@ -205,8 +205,8 @@ public class FileBrowserFileOpsTests(CodeIntelFixture fixture) : IDisposable
         var browser = new FileBrowserViewModel(
             new Repo(Guid.NewGuid(), _dir.Path, "repo"),
             new FileSystemReader(),
-            NoIgnoreOracle.Instance,
-            EmptyFileCatalog.Instance,
+            FileBrowserFakes.NoIgnore,
+            FileBrowserFakes.EmptyCatalog,
             fixture.Extractor,
             _dispatcher,
             new FileBrowserUiState(),

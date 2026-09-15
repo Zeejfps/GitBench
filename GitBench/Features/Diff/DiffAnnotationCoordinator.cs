@@ -46,14 +46,11 @@ internal static class DiffAnnotationCoordinator
         ISymbolExtractor extractor, IGitDiffReader git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
         => Compute(extractor, git, repo, diff, commitSha, baseSha, languageId: null, StructureLanguage(diff));
 
-    // The two outputs are gated separately: TextMate recognises languages tree-sitter has no
-    // grammar for and the reverse is possible too, and each has its own kill switch. A file gets
-    // colors, or contexts, or both.
-    private static string? HighlightLanguage(DiffResult diff)
-        => DiffOptions.SyntaxHighlightingEnabled ? LanguageRegistry.DetectLanguageId(diff.Path) : null;
+    // The two outputs are detected separately: TextMate recognises languages tree-sitter has no
+    // grammar for and the reverse is possible too. A file gets colors, or contexts, or both.
+    private static string? HighlightLanguage(DiffResult diff) => LanguageRegistry.DetectLanguageId(diff.Path);
 
-    private static CodeLanguage? StructureLanguage(DiffResult diff)
-        => DiffOptions.StructureEnabled ? CodeLanguages.Detect(diff.Path) : null;
+    private static CodeLanguage? StructureLanguage(DiffResult diff) => CodeLanguages.Detect(diff.Path);
 
     private static DiffAnnotations? Compute(
         ISymbolExtractor extractor, IGitDiffReader git, Repo repo, DiffResult diff,

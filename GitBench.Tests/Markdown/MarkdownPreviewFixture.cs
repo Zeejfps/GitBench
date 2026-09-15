@@ -1,15 +1,11 @@
-namespace GitBench.Features.Markdown;
+namespace GitBench.Tests.Markdown;
 
 /// <summary>
-/// The dev-preview fixture document: one markdown source exercising every construct the renderer
-/// claims (docs/plans/markdown-renderer.md, Scope) — the full heading ladder, every inline style
-/// including a hard break, plain/nested/ordered/task lists, nested quotes with inner constructs,
-/// a thematic break, closed (highlighted), unknown-language and unterminated fences, and two
-/// tables (one per alignment kind, one wide enough to force the horizontal-scroll fallback).
-/// <see cref="MarkdownPreviewWidget"/> renders it through the streaming path;
-/// <c>MarkdownPreviewTests</c> pins that it stays parseable and wired. A const rather than an
-/// embedded resource: no csproj resource plumbing, and the text is versioned right next to the
-/// widget that shows it.
+/// One markdown source exercising every construct the renderer claims — the full heading ladder,
+/// every inline style including a hard break, plain/nested/ordered/task lists, nested quotes with
+/// inner constructs, a thematic break, closed (highlighted), unknown-language and unterminated
+/// fences, and two tables (one per alignment kind, one wide enough to force the horizontal-scroll
+/// fallback). <c>MarkdownPreviewTests</c> renders it through the streaming path.
 /// </summary>
 internal static class MarkdownPreviewFixture
 {

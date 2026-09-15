@@ -154,28 +154,6 @@ internal static class DialogFrame
         return view;
     }
 
-    public static RectView WrapInput(Context ctx, TextInputView input)
-    {
-        var view = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(ControlBorderRadius),
-            Height = Sizes.ControlHeight,
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs },
-                    Children = { input },
-                },
-            },
-        };
-        var theme = ctx.Theme();
-        view.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
-        view.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
-        return view;
-    }
-
     private static RectView Wrap(Context ctx, View child, float width)
     {
         var view = new RectView

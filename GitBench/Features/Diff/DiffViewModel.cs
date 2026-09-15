@@ -106,11 +106,6 @@ internal sealed record DiffState(
 
 internal sealed class DiffViewModel : ViewModelBase<DiffState>
 {
-    // Fallbacks used only when no localization service is supplied (some embedded panes are
-    // constructed before their owner injects one). When _loc is present these are localized.
-    private const string EmptyPlaceholder = "Select a file to view diff.";
-    private const string LoadingPlaceholder = "Loading…";
-
     private readonly IReadable<DiffTarget?> _target;
     private readonly IRepoRegistry _registry;
     private readonly IGitDiffReader _gitDiff;
@@ -118,14 +113,13 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IGitConflictOperations _gitConflicts;
     private readonly DiffPreviewLoader _loader;
     private readonly IMessageBus _bus;
-    private readonly ILocalizationService? _loc;
-    // When set, this pane is pinned to a specific repo (a commit diff in the Review window or a
-    // pop-out) and resolves it by id, so its diff stays correct no matter which repo is active in
-    // the main window. Null ⇒ the pane follows the active repo (Local Changes, History).
-    private readonly Guid? _pinnedRepoId;
+    private readonly ILocalizationService _loc;
+    // The pane is pinned to a specific repo (a commit diff in the Review window or a pop-out) and
+    // resolves it by id, so its diff stays correct no matter which repo is active in the main window.
+    private readonly Guid _pinnedRepoId;
 
-    private string EmptyText => _loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder;
-    private string LoadingText => _loc?.Strings.Value.CommonLoading ?? LoadingPlaceholder;
+    private string EmptyText => _loc.Strings.Value.DiffNoSelection;
+    private string LoadingText => _loc.Strings.Value.CommonLoading;
     // Used only for "Open in editor" on a conflict. Null in panes that never show conflicts
     // (commit details, and pop-out windows pinned to a commit diff).
     private readonly IPlatformShell? _shell;
@@ -160,12 +154,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public IReadable<bool> CanPreview { get; }
 
-    // Whether the embedded pane is collapsed to its header strip. The header chevron toggles it;
-    // the host nulls the diff body and pins the pane to header height when set. Sticky per-pane
-    // like Mode, and unused in the pop-out window (which has no collapse affordance).
-    private readonly State<bool> _isCollapsed = new(false);
-    public IReadable<bool> IsCollapsed => _isCollapsed;
-
     // The side of the currently-loaded diff (null until a diff loads). Drives the header's
     // file-level Stage/Unstage button: Unstaged → "Stage file", Staged → "Unstage file",
     // Commit → hidden (history diffs aren't stageable).
@@ -180,11 +168,11 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ISymbolExtractor extractor,
-        IPlatformShell? shell = null,
-        ILocalizationService? loc = null,
-        Guid? pinnedRepoId = null)
+        ILocalizationService loc,
+        Guid pinnedRepoId,
+        IPlatformShell? shell = null)
         : base(dispatcher, new DiffState(
-            new DiffRenderState.Placeholder(loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder), DiffViewMode.Diff))
+            new DiffRenderState.Placeholder(loc.Strings.Value.DiffNoSelection), DiffViewMode.Diff))
     {
         _target = target;
         _registry = registry;
@@ -230,28 +218,23 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // binary/no-changes/conflict labels each frame), but a placeholder bakes its text into the
         // render state, so it would stay in the old language after a live locale switch. Reload to
         // re-resolve it. Guarded to a placeholder so a shown diff isn't needlessly re-fetched.
-        if (_loc != null)
+        var first = true;
+        Subscriptions.Add(_loc.Strings.Subscribe(_ =>
         {
-            var first = true;
-            Subscriptions.Add(_loc.Strings.Subscribe(_ =>
-            {
-                if (first) { first = false; return; }
-                if (State.Value.Render is DiffRenderState.Placeholder)
-                    StartLoad();
-            }));
-        }
+            if (first) { first = false; return; }
+            if (State.Value.Render is DiffRenderState.Placeholder)
+                StartLoad();
+        }));
     }
 
     public Repo? Repo => ResolveRepo();
 
-    // The repo this pane operates on: the pinned repo (resolved by id) when set, else the active repo.
     private Repo? ResolveRepo()
     {
-        if (_pinnedRepoId is not { } id) return _registry.Active.Value;
         var active = _registry.Active.Value;
-        if (active != null && active.Id == id) return active;
+        if (active != null && active.Id == _pinnedRepoId) return active;
         foreach (var r in _registry.Repos)
-            if (r.Id == id) return r;
+            if (r.Id == _pinnedRepoId) return r;
         return null;
     }
 
@@ -398,8 +381,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (target == null) return;
         _bus.Broadcast(new OpenDiffWindowMessage(target, _pinnedRepoId));
     }
-
-    public void ToggleCollapse() => _isCollapsed.Value = !_isCollapsed.Value;
 
     // Flips this pane between Diff and FullFile, then reloads so the render state is rebuilt for
     // the current target under the new mode. Sticky: the new mode carries to the next file too.
@@ -633,25 +614,25 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     }
 
     private string NothingToStageText
-        => _loc?.Strings.Value.DiffHunkNothingToStage ?? "This change is already staged.";
+        => _loc.Strings.Value.DiffHunkNothingToStage;
 
     private string NothingToDiscardText
-        => _loc?.Strings.Value.DiffHunkNothingToDiscard ?? "No unstaged changes to discard here.";
+        => _loc.Strings.Value.DiffHunkNothingToDiscard;
 
     private string NothingToUnstageText
-        => _loc?.Strings.Value.DiffHunkNothingToUnstage ?? "Nothing staged in this hunk.";
+        => _loc.Strings.Value.DiffHunkNothingToUnstage;
 
     private string PatchUnavailableText
-        => _loc?.Strings.Value.DiffHunkPatchUnavailable ?? "This file can't be staged by hunk.";
+        => _loc.Strings.Value.DiffHunkPatchUnavailable;
 
     private string StageFailedText
-        => _loc?.Strings.Value.LocalchangesErrorStageFailed ?? "Stage failed";
+        => _loc.Strings.Value.LocalchangesErrorStageFailed;
 
     private string UnstageFailedText
-        => _loc?.Strings.Value.LocalchangesErrorUnstageFailed ?? "Unstage failed";
+        => _loc.Strings.Value.LocalchangesErrorUnstageFailed;
 
     private string ResolveFailedText
-        => _loc?.Strings.Value.DiffErrorResolveFailed ?? "Resolve conflict failed";
+        => _loc.Strings.Value.DiffErrorResolveFailed;
 
     // Failures here go to the app-wide operation-error dialog, the same as the file lists'.
     private void ReportFailure<T>(T outcome, string title) where T : IOutcome<T>
@@ -756,8 +737,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // value — the localized placeholders included. The worker then touches no observable.
         var request = new DiffPreviewRequest(
             repo, target, State.Value.Mode, State.Value.Preview,
-            _loc?.Strings.Value.DiffBinaryNotShown ?? "Binary file not shown",
-            _loc?.Strings.Value.DiffNoCurrentVersion ?? "File has no current version");
+            _loc.Strings.Value.DiffBinaryNotShown,
+            _loc.Strings.Value.DiffNoCurrentVersion);
         var loader = _loader;
 
         RunBackground<DiffRenderState>(work: () => (loader.Load(request), null), onResult: OnDiffLoaded);

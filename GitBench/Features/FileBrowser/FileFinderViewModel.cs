@@ -34,7 +34,7 @@ internal sealed class FileFinderViewModel : IDisposable
     /// rather than reading an answer, and the thing to do is type another letter.</summary>
     public const int MaxResults = 200;
 
-    private readonly IFileCatalog _catalog;
+    private readonly Func<IReadOnlyList<string>> _listFiles;
     private readonly IUiDispatcher _dispatcher;
 
     private readonly State<bool> _isOpen = new(false);
@@ -46,9 +46,9 @@ internal sealed class FileFinderViewModel : IDisposable
     private int _generation;
     private bool _disposed;
 
-    public FileFinderViewModel(IFileCatalog catalog, IUiDispatcher dispatcher)
+    public FileFinderViewModel(Func<IReadOnlyList<string>> listFiles, IUiDispatcher dispatcher)
     {
-        _catalog = catalog;
+        _listFiles = listFiles;
         _dispatcher = dispatcher;
     }
 
@@ -149,7 +149,7 @@ internal sealed class FileFinderViewModel : IDisposable
     {
         try
         {
-            return _catalog.List();
+            return _listFiles();
         }
         catch (Exception ex)
         {

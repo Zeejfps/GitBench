@@ -33,7 +33,7 @@ namespace GitBench.Controls;
 /// </remarks>
 internal sealed record TabStrip : Widget
 {
-    public const float Height = 32f;
+    public const float StripHeight = 32f;
 
     /// <summary>
     /// The tabs, in order. A single <see cref="Each{T}"/> is as valid here as a fixed set, and a
@@ -106,7 +106,7 @@ internal sealed record TabStrip : Widget
 
         return new Box
         {
-            Height = Height,
+            Height = StripHeight,
             Background = Theme.Color(static s => s.TabStrip.Background),
             Children =
             [

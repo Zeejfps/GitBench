@@ -65,7 +65,7 @@ internal sealed class CommitFileTab : IDisposable
         FileName = LastSegment(path);
         Sha = WorkingTreeSha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.WorkingTree));
-        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, shell, loc: loc, pinnedRepoId: repoId);
+        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, repoId, shell);
     }
 
     public CommitFileTab(
@@ -90,7 +90,7 @@ internal sealed class CommitFileTab : IDisposable
         _target = new State<DiffTarget?>(baseSha == null
             ? new DiffTarget(path, DiffSide.Commit, sha)
             : new DiffTarget(path, DiffSide.Range, sha, baseSha));
-        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc: loc, pinnedRepoId: repoId);
+        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, repoId);
     }
 
     public void Dispose()

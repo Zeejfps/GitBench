@@ -23,7 +23,7 @@ public sealed class DialogPresenter : IViewBehavior
         if (bus is null) return;
 
         _bus = bus;
-        _onShowDialog = m => ShowDialog(m.CreateDialog(_windowContext, OnDialogClosed));
+        _onShowDialog = m => ShowDialog(m.CreateDialog(OnDialogClosed).BuildView(_windowContext));
         bus.Subscribe(_onShowDialog);
         bus.Subscribe<ShowOperationErrorMessage>(OnShowOperationError);
     }

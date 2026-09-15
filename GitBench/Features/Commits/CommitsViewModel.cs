@@ -581,8 +581,6 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                 if (headSha != null) SelectCommit(headSha);
             }
         }
-
-        _bus.Broadcast(new CommitsLoadedMessage(activeId ?? Guid.Empty));
     }
 
     // Broadcasts against the given repo (the one the cleared selection belonged to), which is

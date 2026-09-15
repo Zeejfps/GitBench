@@ -16,8 +16,6 @@ internal sealed class MacOsPopupDecorator : IPopupNativeDecorator
     private const ulong NSWindowCollectionBehaviorIgnoresCycle = 1UL << 6;
     private const ulong NSWindowCollectionBehaviorCanJoinAllSpaces = 1UL << 0;
 
-    private IntPtr? _localMonitor;
-    private IntPtr? _globalMonitor;
     private IntPtr _capturedNsWindow;
     private Action<PointI>? _activeCallback;
 

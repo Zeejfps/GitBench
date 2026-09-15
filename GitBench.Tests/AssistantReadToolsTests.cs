@@ -12,9 +12,6 @@ namespace GitBench.Tests;
 
 // The read tools are thin wrappers over IGitService, so they are exercised against a real fixture
 // repository rather than a mock — a shape change in git's output should fail here.
-// In the CodeIntel collection because get_diff reads DiffOptions.StructureEnabled, which
-// DiffHunkHeaderTests flips: xUnit runs collections in parallel, so sharing one serializes them.
-[Collection(nameof(CodeIntelCollection))]
 public sealed class AssistantReadToolsTests : IDisposable
 {
     private sealed class NullActivityTracker : IRepoActivityTracker

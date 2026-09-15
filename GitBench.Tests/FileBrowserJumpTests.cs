@@ -344,8 +344,8 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
     private FileBrowserViewModel Browser() => new(
         new Repo(Guid.NewGuid(), _dir.Path, "repo"),
         _reader,
-        NoIgnoreOracle.Instance,
-        EmptyFileCatalog.Instance,
+        FileBrowserFakes.NoIgnore,
+        FileBrowserFakes.EmptyCatalog,
         fixture.Extractor,
         _dispatcher,
         new FileBrowserUiState(),

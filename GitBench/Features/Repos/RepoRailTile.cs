@@ -18,7 +18,6 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
     internal const int RingGap = 2;
     internal const int RingInset = RingThickness + RingGap;
 
-    internal static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
     private static readonly char[] NameSeparators = [' ', '-', '_', '.'];
 
     protected override RepoRowState CreateState(Context ctx) => new(ctx.Require<RepoNodeViewModel>());
@@ -87,7 +86,7 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
 
         return Compose(ring, statusDot, hotkeyBadge)
             .Use(_ => tooltipText)
-            .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered, AlwaysEnabled));
+            .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered));
     }
 
     internal static IWidget Ring(IWidget face, IReadable<bool> isActive, IReadable<bool> isHovered) => new Box

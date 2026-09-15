@@ -50,7 +50,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 {
     private readonly string _root;
     private readonly IFileSystemReader _files;
-    private readonly IIgnoreOracle _ignore;
+    private readonly Func<IReadOnlyList<string>, IReadOnlySet<string>> _ignored;
     private readonly ISymbolExtractor _extractor;
     private readonly IUiDispatcher _dispatcher;
     private readonly Action<FileBrowserUiState> _persist;
@@ -92,8 +92,8 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     public FileBrowserViewModel(
         Repo repo,
         IFileSystemReader files,
-        IIgnoreOracle ignore,
-        IFileCatalog catalog,
+        Func<IReadOnlyList<string>, IReadOnlySet<string>> ignored,
+        Func<IReadOnlyList<string>> listFiles,
         ISymbolExtractor extractor,
         IUiDispatcher dispatcher,
         FileBrowserUiState restored,
@@ -105,7 +105,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _root = PathKey.Normalize(repo.Path);
         RepoId = repo.Id;
         _files = files;
-        _ignore = ignore;
+        _ignored = ignored;
         _extractor = extractor;
         _dispatcher = dispatcher;
         _persist = persist;
@@ -117,7 +117,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _search = new FileSearchViewModel(() => _preview.Value, () => _topVisibleLine);
         _searchRetarget = _preview.Subscribe(_ => _search.Retarget());
 
-        _finder = new FileFinderViewModel(catalog, dispatcher);
+        _finder = new FileFinderViewModel(listFiles, dispatcher);
         _finder.Changed += PublishRows;
 
         _showHidden.Value = restored.ShowHidden;
@@ -837,7 +837,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
                 try
                 {
                     var tree = _tree ??= new FileBrowserTree(
-                        _files, _ignore, _root,
+                        _files, _ignored, _root,
                         (path, ct) => FileContentLoader.OutlineOf(path, _extractor, ct));
                     work(tree);
                     rows = tree.Rows;

@@ -12,30 +12,16 @@ using ZGF.Observable;
 namespace GitBench.Features.Diff;
 
 /// <summary>
-/// Header strip for the embedded diff panes (Local Changes, Commit Details): a collapse chevron and
-/// "Diff View" title, an LFS badge, and full-file / open-in-window buttons. The whole bar is the
-/// collapse toggle — a press flips <see cref="DiffViewModel.IsCollapsed"/>; the nested buttons consume
-/// their own clicks first. Live hover/press state lives on an <see cref="ButtonState"/> exposed
-/// as the widget's <see cref="IInteractable"/> surface, so the host attaches the controller
-/// (<c>header.WithController&lt;KbmController&gt;()</c>) and provides the <see cref="DiffViewModel"/> the
-/// header reads collapse, mode, and LFS status from.
+/// Header strip for the embedded diff pane (Commit Details): the "Diff View" title or change
+/// summary, an LFS badge, and preview / full-file / open-in-window buttons. Live hover/press state
+/// lives on a <see cref="ButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface;
+/// the host provides the <see cref="DiffViewModel"/> the header reads mode and LFS status from.
 /// </summary>
 internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
 {
-    // Height of the always-visible header strip. The host pins the collapsed pane to exactly this
-    // height, keeping the chevron clickable.
     public const float HeaderHeight = 24f;
 
-    /// <summary>
-    /// Whether the bar acts as a collapse toggle. True (default) for the stacked embedded panes
-    /// (Local Changes, Commit Details) where the header collapses the diff below it. False for the
-    /// tabbed commit-details surface, where the diff fills its own tab and there is nothing to
-    /// collapse into — the chevron is dropped and pressing the bar does nothing.
-    /// </summary>
-    public bool Collapsible { get; init; } = true;
-
-    protected override ButtonState CreateState(Context ctx) =>
-        new(new Command(Collapsible ? ctx.Require<DiffViewModel>().ToggleCollapse : static () => { }));
+    protected override ButtonState CreateState(Context ctx) => new();
 
     protected override IWidget Build(Context ctx, ButtonState state)
     {
@@ -109,21 +95,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
         trailing.Add(PreviewToggleButton(vm));
         trailing.Add(FullFileToggleButton(vm));
         trailing.Add(OpenInWindowButton(vm));
-
-        if (!Collapsible) return trailing.ToArray();
-
-        var chevron = new Text
-        {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = FontSize.Body,
-            Width = 16f,
-            HAlign = TextAlignment.Center,
-            VAlign = TextAlignment.Center,
-            Value = vm.IsCollapsed.Bind(string? (c) =>
-                c ? LucideIcons.ChevronUp : LucideIcons.ChevronDown),
-            Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
-        };
-        return [chevron, .. trailing];
+        return trailing.ToArray();
     }
 
     // Toggles the diff body between the normal diff and the after-side full file. Tinted while active
