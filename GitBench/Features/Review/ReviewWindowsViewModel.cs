@@ -1,10 +1,13 @@
 using GitBench.App;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
+using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Observable;
 
 namespace GitBench.Features.Review;
@@ -48,11 +51,15 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
     private readonly IGitConflictOperations _gitConflicts;
     private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly ISymbolExtractor _extractor;
+    private readonly ISyntaxHighlighter _highlighter;
     private readonly IRepoSnapshotStore _snapshots;
     private readonly IReviewProgressStore _reviewProgress;
     private readonly IUiDispatcher _dispatcher;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
+    private readonly LocalChangesViewModel _localChanges;
+    private readonly DiffWindowsViewModel _diffWindows;
+    private readonly IPlatformShell _shell;
     private readonly IDisposable _subscription;
     private bool _disposed;
 
@@ -75,11 +82,15 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
         IGitConflictOperations gitConflicts,
         IGitSubmoduleOperations gitSubmodules,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         IRepoSnapshotStore snapshots,
         IReviewProgressStore reviewProgress,
         IUiDispatcher dispatcher,
         ILocalizationService loc,
-        PreferencesService preferences)
+        PreferencesService preferences,
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel diffWindows,
+        IPlatformShell shell)
     {
         _bus = bus;
         _source = source;
@@ -90,11 +101,15 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
         _gitConflicts = gitConflicts;
         _gitSubmodules = gitSubmodules;
         _extractor = extractor;
+        _highlighter = highlighter;
         _snapshots = snapshots;
         _reviewProgress = reviewProgress;
         _dispatcher = dispatcher;
         _loc = loc;
         _preferences = preferences;
+        _localChanges = localChanges;
+        _diffWindows = diffWindows;
+        _shell = shell;
         _subscription = _bus.SubscribeScoped<OpenReviewWindowMessage>(OnOpenRequested);
     }
 
@@ -112,7 +127,8 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
         // The window's own commit-details VM, opted out of the selection bus so the History pane's
         // selection never drives this window's right pane.
         var details = new CommitDetailsViewModel(
-            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _extractor, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
+            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _extractor, _highlighter, _registry, _dispatcher, _bus, _loc, _preferences,
+            _localChanges, _diffWindows, _shell, subscribeToSelection: false);
         Windows.Add(new ReviewWindowViewModel(
             session, _source, _dispatcher, details, _loc, _bus, _snapshots, _reviewProgress));
     }

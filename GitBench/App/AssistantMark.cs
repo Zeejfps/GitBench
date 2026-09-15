@@ -3,7 +3,6 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.App;
 
@@ -21,13 +20,6 @@ namespace GitBench.App;
 /// </remarks>
 internal sealed record AssistantMark : Widget
 {
-    /// <summary>
-    /// Image id of the mark, set by startup once it's loaded into the canvas. Observable because
-    /// the root content mounts before startup gets to load the image — a mark built early swaps
-    /// from the glyph fallback when the id lands. Stays null on load failure.
-    /// </summary>
-    public static readonly State<string?> ImageId = new(null);
-
     public int Size { get; init; } = 18;
 
     protected override IWidget Build(Context ctx) => new Column
@@ -45,7 +37,7 @@ internal sealed record AssistantMark : Widget
                 [
                     new Switch<string?>
                     {
-                        Value = ImageId,
+                        Value = ctx.Require<AssistantMarkImage>().Id,
                         Case = id => id != null
                             ? new Image { ImageId = id, Width = Size, Height = Size }
                             : new Text

@@ -82,7 +82,7 @@ internal sealed record BranchesView : Widget
                     new Each<BranchRow>
                     {
                         Items = vm.Rows,
-                        Template = new BranchListRow().WithController<BranchRowController, IBranchRowInteraction>(),
+                        Template = new BranchListRow().WithController<BranchRowController, BranchRowState>(),
                         Gap = Spacing.Hair,
                         CrossAxis = CrossAxisAlignment.Stretch,
                     },

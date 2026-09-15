@@ -4,5 +4,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Feed pins the caller's span rather than copying it into a buffer of the engine's own. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\vendor\XtermSharp.Vendored\XtermSharp.Vendored.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+        NStack.Core arrives transitively with the vendored engine and declares its own
+        System.Rune. Without this alias every mention of Rune here is ambiguous.
+    -->
+    <Using Include="System.Text.Rune" Alias="Rune" />
+  </ItemGroup>
 </Project>

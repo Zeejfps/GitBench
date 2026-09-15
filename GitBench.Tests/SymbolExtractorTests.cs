@@ -19,7 +19,8 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void EveryBundledQueryCompilesAndEveryCaptureNameValidates()
     {
-        using var extractor = new TreeSitterSymbolExtractor();
+        using var grammars = new TreeSitterGrammars();
+        var extractor = new TreeSitterSymbolExtractor(grammars);
         Assert.IsType<CodeIntelAvailability.Ready>(extractor.Availability);
 
         var missing = CodeLanguages.All.Where(l => !extractor.Supports(l)).ToArray();
@@ -27,7 +28,7 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
 
         foreach (var language in CodeLanguages.All)
         {
-            Assert.NotEmpty(TreeSitterSymbolExtractor.ReadEmbeddedQuery(language));
+            Assert.NotEmpty(TreeSitterGrammars.ReadEmbeddedOutlineQuery(language));
         }
     }
 
@@ -65,8 +66,9 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void AnUnknownCaptureKindMakesTheExtractorUnavailable()
     {
-        using var extractor = new TreeSitterSymbolExtractor(
-            queryText: _ => "(class_declaration name: (identifier) @name) @def.frobnicate");
+        using var grammars = new TreeSitterGrammars(
+            outlineQueryText: _ => "(class_declaration name: (identifier) @name) @def.frobnicate");
+        var extractor = new TreeSitterSymbolExtractor(grammars);
 
         var unavailable = Assert.IsType<CodeIntelAvailability.Unavailable>(extractor.Availability);
         Assert.Contains("frobnicate", unavailable.Reason, StringComparison.Ordinal);
@@ -76,8 +78,9 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void ACaptureOutsideTheProtocolMakesTheExtractorUnavailable()
     {
-        using var extractor = new TreeSitterSymbolExtractor(
-            queryText: _ => "(class_declaration name: (identifier) @name (declaration_list) @nmae) @def.class");
+        using var grammars = new TreeSitterGrammars(
+            outlineQueryText: _ => "(class_declaration name: (identifier) @name (declaration_list) @nmae) @def.class");
+        var extractor = new TreeSitterSymbolExtractor(grammars);
 
         var unavailable = Assert.IsType<CodeIntelAvailability.Unavailable>(extractor.Availability);
         Assert.Contains("nmae", unavailable.Reason, StringComparison.Ordinal);
@@ -86,7 +89,8 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void AMalformedQueryMakesTheExtractorUnavailableRatherThanThrowing()
     {
-        using var extractor = new TreeSitterSymbolExtractor(queryText: _ => "(no_such_node) @def.class");
+        using var grammars = new TreeSitterGrammars(outlineQueryText: _ => "(no_such_node) @def.class");
+        var extractor = new TreeSitterSymbolExtractor(grammars);
 
         Assert.IsType<CodeIntelAvailability.Unavailable>(extractor.Availability);
     }
@@ -94,8 +98,9 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void AQueryWithNoDefinitionCaptureIsRejected()
     {
-        using var extractor = new TreeSitterSymbolExtractor(
-            queryText: _ => "(class_declaration name: (identifier) @name)");
+        using var grammars = new TreeSitterGrammars(
+            outlineQueryText: _ => "(class_declaration name: (identifier) @name)");
+        var extractor = new TreeSitterSymbolExtractor(grammars);
 
         Assert.IsType<CodeIntelAvailability.Unavailable>(extractor.Availability);
     }
@@ -369,18 +374,18 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void AFileOverTheCapReturnsNull()
     {
-        var huge = new string('a', TreeSitterSymbolExtractor.MaxFileBytes + 1);
+        var huge = new string('a', ParseText.MaxFileBytes + 1);
         Assert.Null(fixture.Extractor.Extract($"class W {{ string s = \"{huge}\"; }}", CodeLanguage.CSharp));
     }
 
     [Fact]
     public void AMultiByteFileOverTheByteCapReturnsNull()
     {
-        var padding = new string('é', (TreeSitterSymbolExtractor.MaxFileBytes / 2) + 1);
+        var padding = new string('é', (ParseText.MaxFileBytes / 2) + 1);
         var source = $"class W {{ string s = \"{padding}\"; }}";
 
-        Assert.True(source.Length <= TreeSitterSymbolExtractor.MaxFileBytes);
-        Assert.True(Encoding.UTF8.GetByteCount(source) > TreeSitterSymbolExtractor.MaxFileBytes);
+        Assert.True(source.Length <= ParseText.MaxFileBytes);
+        Assert.True(Encoding.UTF8.GetByteCount(source) > ParseText.MaxFileBytes);
         Assert.Null(fixture.Extractor.Extract(source, CodeLanguage.CSharp));
     }
 
@@ -476,7 +481,8 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void ExtractionIsSafeFromSeveralThreadsAtOnce()
     {
-        using var extractor = new TreeSitterSymbolExtractor(poolCapacity: 2);
+        using var grammars = new TreeSitterGrammars(poolCapacity: 2);
+        var extractor = new TreeSitterSymbolExtractor(grammars);
         var expected = CodeIntelSamples.Render(
             extractor.Extract(CodeIntelSamples.Sample, CodeLanguage.CSharp)
             ?? throw new InvalidOperationException("Expected an outline."));

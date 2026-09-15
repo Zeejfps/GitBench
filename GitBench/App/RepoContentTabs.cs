@@ -178,7 +178,7 @@ internal sealed record ContentHistoryButtons : Widget
 
     // Centres the buttons in the strip by inset rather than by a Center, whose intrinsic height a
     // stretched leading slot has nothing to lay out against.
-    private const int Inset = ((int)TabStrip.Height - (int)LocalChangesHeaderActionButton.ButtonSize) / 2;
+    private const int Inset = ((int)TabStrip.StripHeight - (int)LocalChangesHeaderActionButton.ButtonSize) / 2;
 
     protected override IWidget Build(Context ctx)
     {

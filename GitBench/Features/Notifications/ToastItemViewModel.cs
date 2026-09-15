@@ -27,7 +27,7 @@ internal sealed class ToastItemViewModel : IDisposable
     public ICommand Dismiss { get; }
     public ICommand InvokeAction { get; }
 
-    public ToastItemViewModel(Toast toast, IToastService toasts)
+    public ToastItemViewModel(Toast toast, ToastService toasts)
     {
         _toast = toast;
         Exiting = toasts.Exiting(toast.Id);

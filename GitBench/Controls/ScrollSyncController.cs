@@ -1,59 +1,58 @@
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
+using ZGF.Gui.VerticalScrollBar;
 
 namespace GitBench.Controls;
 
 internal sealed class ScrollSyncController : IDisposable
 {
-    private readonly IScrollableContent _content;
-    private readonly VerticalScrollBarView _vScrollBar;
-    private readonly HorizontalScrollBarView? _hScrollBar;
+    private readonly Action _unsubscribe;
 
     public ScrollSyncController(
         IScrollableContent content,
-        VerticalScrollBarView vScrollBar,
+        VerticalScrollBar vScrollBar,
         HorizontalScrollBarView? hScrollBar = null)
     {
-        _content = content;
-        _vScrollBar = vScrollBar;
-        _hScrollBar = hScrollBar;
-
-        _content.VerticalScrollPositionChanged += OnContentVerticalScroll;
-        _vScrollBar.ScrollPositionChanged += _content.SetVerticalNormalizedScrollPosition;
-
-        if (_hScrollBar != null)
-        {
-            _content.HorizontalScrollPositionChanged += OnContentHorizontalScroll;
-            _hScrollBar.ScrollPositionChanged += _content.SetHorizontalNormalizedScrollPosition;
-        }
-
+        void OnVertical(float normalized) => ScrollBarSync.ApplyVertical(vScrollBar, content.VerticalScale, normalized);
+        content.VerticalScrollPositionChanged += OnVertical;
+        vScrollBar.ScrollPositionChanged += content.SetVerticalNormalizedScrollPosition;
         // Pull the content's current scale so the bar reflects "fits / hidden" state
         // even when no event has fired yet. Critical for views that detach + re-attach
-        // (e.g. LocalChangesPanel inside a placeholder-swap parent): each re-attach
+        // (e.g. FileRowList inside a placeholder-swap parent): each re-attach
         // builds a fresh controller, and without this initial pull the bar would sit
         // at its built-in default (PreferredHeight=12, Scale=0.5) until something
         // unrelated triggered an event.
-        ScrollBarSync.ApplyVertical(_vScrollBar, _content.VerticalScale, 0f);
-        if (_hScrollBar != null)
-            ScrollBarSync.ApplyHorizontal(_hScrollBar, _content.HorizontalScale, 0f);
-    }
-
-    public void Dispose()
-    {
-        _content.VerticalScrollPositionChanged -= OnContentVerticalScroll;
-        _vScrollBar.ScrollPositionChanged -= _content.SetVerticalNormalizedScrollPosition;
-
-        if (_hScrollBar != null)
+        OnVertical(0f);
+        _unsubscribe = () =>
         {
-            _content.HorizontalScrollPositionChanged -= OnContentHorizontalScroll;
-            _hScrollBar.ScrollPositionChanged -= _content.SetHorizontalNormalizedScrollPosition;
-        }
+            content.VerticalScrollPositionChanged -= OnVertical;
+            vScrollBar.ScrollPositionChanged -= content.SetVerticalNormalizedScrollPosition;
+        };
+
+        if (hScrollBar is not { } hBar) return;
+        void OnHorizontal(float normalized) => ScrollBarSync.ApplyHorizontal(hBar, content.HorizontalScale, normalized);
+        content.HorizontalScrollPositionChanged += OnHorizontal;
+        hBar.ScrollPositionChanged += content.SetHorizontalNormalizedScrollPosition;
+        OnHorizontal(0f);
+        _unsubscribe += () =>
+        {
+            content.HorizontalScrollPositionChanged -= OnHorizontal;
+            hBar.ScrollPositionChanged -= content.SetHorizontalNormalizedScrollPosition;
+        };
     }
 
-    private void OnContentVerticalScroll(float normalized)
-        => ScrollBarSync.ApplyVertical(_vScrollBar, _content.VerticalScale, normalized);
+    public ScrollSyncController(VerticalScrollPane pane, VerticalScrollBar scrollBar)
+    {
+        void OnPane(float normalized) => ScrollBarSync.ApplyVertical(scrollBar, pane.Scale, normalized);
+        void OnBar(float normalized) => pane.SetNormalizedScrollPosition(normalized, notify: false);
+        pane.ScrollPositionChanged += OnPane;
+        scrollBar.ScrollPositionChanged += OnBar;
+        _unsubscribe = () =>
+        {
+            pane.ScrollPositionChanged -= OnPane;
+            scrollBar.ScrollPositionChanged -= OnBar;
+        };
+    }
 
-    private void OnContentHorizontalScroll(float normalized)
-        => ScrollBarSync.ApplyHorizontal(_hScrollBar!, _content.HorizontalScale, normalized);
+    public void Dispose() => _unsubscribe();
 }

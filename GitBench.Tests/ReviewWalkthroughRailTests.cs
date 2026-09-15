@@ -385,7 +385,7 @@ public sealed class ReviewWalkthroughRailTests : IDisposable
     public void ATrailingSidebar_KeepsItsSplitterFacingTheContent_UnderBothDirections()
     {
         Show(Step("one"));
-        var sidebar = (ResizableLeftSidebar)_harness.Root.Find(v => v is ResizableLeftSidebar)!;
+        var sidebar = (ResizableSidebarView)_harness.Root.Find(v => v is ResizableSidebarView)!;
         var splitter = sidebar.Children[1];
         Assert.Equal(sidebar.Position.Left, splitter.Position.Left, 0.5f);
 

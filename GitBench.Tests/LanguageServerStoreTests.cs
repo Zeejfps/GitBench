@@ -70,7 +70,7 @@ public sealed class LanguageServerStoreTests : IDisposable
         File.WriteAllText(Path.Combine(path, marker), "");
         File.WriteAllText(Path.Combine(path, "src", "main.rs"), "fn main() {}");
         _registry.Open(path);
-        _files.With(Path.GetFullPath(path), marker, "src");
+        _files.With(Path.GetFullPath(path), new FileSystemEntry(marker, false, false, false), new FileSystemEntry("src", true, false, false));
         return _registry.Active.Value!.Id;
     }
 
@@ -90,7 +90,7 @@ public sealed class LanguageServerStoreTests : IDisposable
             _bus,
             _loc,
             files,
-            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5), files),
+            new LanguageServerLauncher<FakeSession>(_launcher, TimeSpan.FromSeconds(5), files),
             clock: null,
             configPath: _configPath);
         store.Start();
@@ -183,7 +183,8 @@ public sealed class LanguageServerStoreTests : IDisposable
             new DefinitionLocation(
                 DocumentUri.OfFile(path),
                 LspRange.Empty(new LspPosition(new LspLine(line), new LspCharacter(0))),
-                LspRange.Empty(new LspPosition(new LspLine(line), new LspCharacter(0)))),
+                LspRange.Empty(new LspPosition(new LspLine(line), new LspCharacter(0))),
+                OptionalRange.Absent),
         ]);
 
     // A server that will not start is the one failure the reader can do something about — the
@@ -422,7 +423,7 @@ public sealed class LanguageServerStoreTests : IDisposable
     [Fact]
     public async Task WhatTheViewTreeReadsIsOnlyEverWrittenOnTheUiThread()
     {
-        var dispatcher = new DeferringDispatcher();
+        var dispatcher = new QueuedUiDispatcher();
         File.WriteAllText(_configPath, ConfigJson);
         var store = new LanguageServerStore(
             _registry,
@@ -431,7 +432,7 @@ public sealed class LanguageServerStoreTests : IDisposable
             _bus,
             _loc,
             FilesOnDisk.Instance,
-            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5), FilesOnDisk.Instance),
+            new LanguageServerLauncher<FakeSession>(_launcher, TimeSpan.FromSeconds(5), FilesOnDisk.Instance),
             clock: null,
             configPath: _configPath);
         store.Start();
@@ -453,7 +454,7 @@ public sealed class LanguageServerStoreTests : IDisposable
 
     /// <summary>Plays the UI thread for a test: keeps draining while the work in flight is waiting
     /// on something that was posted to it.</summary>
-    private static async Task DrainUntilDone(DeferringDispatcher dispatcher, Task work)
+    private static async Task DrainUntilDone(QueuedUiDispatcher dispatcher, Task work)
     {
         for (var i = 0; i < 500 && !work.IsCompleted; i++)
         {
@@ -716,46 +717,8 @@ public sealed class LanguageServerStoreTests : IDisposable
         Assert.Fail("no suggestion ever arrived for the repository root");
     }
 
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
-    }
-
-    /// <summary>Holds everything posted to it, so a test can prove work was handed to the UI thread
-    /// rather than done on whichever thread happened to be running.</summary>
-    private sealed class DeferringDispatcher : IUiDispatcher
-    {
-        private readonly List<Action> _queued = [];
-
-        public void Post(Action action) => _queued.Add(action);
-
-        public void Drain()
-        {
-            var due = _queued.ToArray();
-            _queued.Clear();
-            foreach (var action in due) action();
-        }
-    }
-
-    private sealed class FakeFileSystem : IFileSystemReader
-    {
-        private readonly Dictionary<string, List<FileSystemEntry>> _directories = new(StringComparer.Ordinal);
-
-        public void With(string directory, params string[] names) =>
-            _directories[directory] = names.Select(n => new FileSystemEntry(n, false, false, false)).ToList();
-
-        public DirectoryListing List(string absoluteDirectory, CancellationToken cancellation)
-        {
-            return _directories.TryGetValue(absoluteDirectory, out var entries)
-                ? new DirectoryListing.Listed(entries)
-                : DirectoryListing.Empty;
-        }
-
-        public string? ResolveLinkTarget(string absolutePath) => null;
-    }
-
     /// <summary>Hands out servers that answer one hover and nothing else.</summary>
-    private sealed class FakeProcessLauncher : ILanguageServerLauncher
+    private sealed class FakeProcessLauncher : ILanguageServerLauncher<FakeSession>
     {
         public List<FakeSession> Started { get; } = [];
 
@@ -767,14 +730,14 @@ public sealed class LanguageServerStoreTests : IDisposable
         /// <summary>When set, every launched session fails its handshake with this reason.</summary>
         public string? FailHandshake { get; set; }
 
-        public LaunchResult Launch(ServerLaunchRequest request)
+        public LaunchResult<FakeSession> Launch(ServerLaunchRequest request)
         {
-            if (Refuse is { } reason) return new LaunchResult.Failed(reason);
+            if (Refuse is { } reason) return new LaunchResult<FakeSession>.Failed(reason);
 
             var session = new FakeSession { HandshakeFailure = FailHandshake };
             if (Advertise is { } capabilities) session.Advertises = capabilities;
             Started.Add(session);
-            return new LaunchResult.Started(session);
+            return new LaunchResult<FakeSession>.Started(session);
         }
     }
 

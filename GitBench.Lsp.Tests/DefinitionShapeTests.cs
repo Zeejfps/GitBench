@@ -105,9 +105,10 @@ public sealed class DefinitionShapeTests
     {
         var target = Assert.Single(TargetsOf($"[{ALinkWithAnOrigin}]"));
 
-        Assert.Equal(new LspLine(3), target.OriginRange!.Value.Start.Line);
-        Assert.Equal(new LspCharacter(12), target.OriginRange.Value.Start.Character);
-        Assert.Equal(new LspCharacter(20), target.OriginRange.Value.End.Character);
+        var origin = Assert.IsType<OptionalRange.Present>(target.OriginRange).Range;
+        Assert.Equal(new LspLine(3), origin.Start.Line);
+        Assert.Equal(new LspCharacter(12), origin.Start.Character);
+        Assert.Equal(new LspCharacter(20), origin.End.Character);
     }
 
     [Theory]
@@ -115,7 +116,7 @@ public sealed class DefinitionShapeTests
     [InlineData(ALink)]
     public void A_target_that_names_no_such_span_says_so_rather_than_inventing_one(string resultJson)
     {
-        Assert.Null(Assert.Single(TargetsOf($"[{resultJson}]")).OriginRange);
+        Assert.IsType<OptionalRange.NotGiven>(Assert.Single(TargetsOf($"[{resultJson}]")).OriginRange);
     }
 
     [Fact]

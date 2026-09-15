@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
@@ -12,12 +11,6 @@ namespace GitBench.Tests;
 // directories unless the add is followed by `git submodule update --init` inside it.
 public sealed class WorktreeAddTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
 
     // A submodule reached over a filesystem path is refused since CVE-2022-39253, and the clone
     // `submodule update` spawns runs outside the superproject — so its local config never reaches
@@ -47,21 +40,17 @@ public sealed class WorktreeAddTests : IDisposable
 
         var subPath = Path.Combine(_root, "sub");
         Directory.CreateDirectory(subPath);
-        Git(subPath, "init");
-        Git(subPath, "config", "user.email", "test@example.com");
-        Git(subPath, "config", "user.name", "Test");
+        TestGit.Init(subPath);
         File.WriteAllText(Path.Combine(subPath, "sub.txt"), "submodule");
         Git(subPath, "add", ".");
         Git(subPath, "commit", "-m", "sub");
 
         Directory.CreateDirectory(_repoPath);
-        Git(_repoPath, "init");
-        Git(_repoPath, "config", "user.email", "test@example.com");
-        Git(_repoPath, "config", "user.name", "Test");
+        TestGit.Init(_repoPath);
         File.WriteAllText(Path.Combine(_repoPath, "file.txt"), "hello");
         Git(_repoPath, "add", ".");
         Git(_repoPath, "commit", "-m", "init");
-        Git(_repoPath, "submodule", "add", "../sub", "sub");
+        Git(_repoPath, "-c", "protocol.file.allow=always", "submodule", "add", "../sub", "sub");
         Git(_repoPath, "commit", "-m", "add submodule");
 
         _git = new GitService(new NullActivityTracker());
@@ -113,22 +102,5 @@ public sealed class WorktreeAddTests : IDisposable
             InitSubmodules: initSubmodules,
             RecurseSubmodules: initSubmodules);
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        psi.ArgumentList.Add("-c");
-        psi.ArgumentList.Add("commit.gpgsign=false");
-        psi.ArgumentList.Add("-c");
-        psi.ArgumentList.Add("protocol.file.allow=always");
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 }

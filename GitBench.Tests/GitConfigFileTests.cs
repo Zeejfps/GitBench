@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Text;
 using GitBench.Git;
 
 using Xunit;
@@ -154,18 +152,7 @@ public class GitConfigFileTests
 
     private static string Run(string cwd, string args)
     {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-        };
-        foreach (var a in args.Split(' ', StringSplitOptions.RemoveEmptyEntries)) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        var output = process.StandardOutput.ReadToEnd();
-        process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        return process.ExitCode == 0 ? output : string.Empty;
+        var run = TestGit.Try(cwd, args.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return run.ExitCode == 0 ? run.Stdout : string.Empty;
     }
 }

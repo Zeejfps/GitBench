@@ -35,7 +35,7 @@ public class TerminalColorQueryTests
     static string AskForTheBackground(ITerminalPalette? palette)
     {
         var pty = new RecordingPty(Encoding.UTF8.GetBytes("\u001b]11;?\u001b\\"));
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
 
         using var session = TerminalSession.Start(
             () => pty,
@@ -49,7 +49,7 @@ public class TerminalColorQueryTests
         // In this order, and all three: the reader hands the bytes to the UI thread, the pump is
         // what feeds them to the engine, and only then is there a reply for the write loop to drain.
         Assert.True(dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "The reader posted nothing.");
-        dispatcher.Pump();
+        dispatcher.Drain();
         Assert.True(session.Flush(TimeSpan.FromSeconds(5)), "The reply never reached the shell.");
 
         return Encoding.UTF8.GetString(pty.Written);

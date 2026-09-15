@@ -6,7 +6,8 @@ using Xunit;
 
 namespace GitBench.Tests;
 
-public class FileContentLoaderTests : IDisposable
+[Collection(nameof(CodeIntelCollection))]
+public class FileContentLoaderTests(CodeIntelFixture fixture) : IDisposable
 {
     private readonly TempDir _dir = new("gitbench-filecontent-");
 
@@ -26,8 +27,8 @@ public class FileContentLoaderTests : IDisposable
         return path;
     }
 
-    private static FilePreview Load(string path) =>
-        FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None);
+    private FilePreview Load(string path) =>
+        FileContentLoader.Load(path, new UnparsedFiles(), fixture.Colors, CancellationToken.None);
 
     [Fact]
     public void TextIsSplitIntoLinesWithBothLineEndings()

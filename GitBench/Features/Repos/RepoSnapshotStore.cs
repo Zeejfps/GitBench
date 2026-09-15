@@ -217,7 +217,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     private void OnSubmodulesChanged(SubmodulesChangedMessage msg)
     {
         var active = _registry.Active.Value;
-        if (active != null && PrimaryId(active) == msg.PrimaryRepoId)
+        if (active != null && active.PrimaryId == msg.PrimaryRepoId)
         {
             ReloadLocal(active);
             return;
@@ -227,7 +227,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         {
             if (active != null && id == active.Id) continue;
             var r = FindRepo(id);
-            if (r != null && PrimaryId(r) == msg.PrimaryRepoId)
+            if (r != null && r.PrimaryId == msg.PrimaryRepoId)
                 WarmLocal(r);
         }
     }
@@ -259,8 +259,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
             if (r.Id == id) return r;
         return null;
     }
-
-    private static Guid PrimaryId(Repo repo) => repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
 
     // ---- loads ----
 

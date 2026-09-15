@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text;
 using GitBench.Features.Terminal;
 using GitBench.Localization;
@@ -659,7 +658,7 @@ public class TerminalInputControllerTests
                 {
                     var input = ctx.Require<InputSystem>();
                     view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                    controller = new TerminalInputController(view, input, shell, cells ?? view);
+                    controller = TerminalTestHost.Controller(ctx, view, shell, cells ?? view);
 
                     // The app's keybindings live on the window root, an ancestor of the pane, so
                     // they sit earlier in the capture path than the terminal's own controller and
@@ -668,13 +667,7 @@ public class TerminalInputControllerTests
                     input.RegisterController(view, controller);
                     return view;
                 },
-                configure: ctx =>
-                {
-                    ctx.AddService<IThemeService<ThemeStyles>>(
-                        new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                    ctx.AddService<ILocalizationService>(
-                        new LocalizationService(new State<Locale>(Locale.En)));
-                });
+                configure: TerminalTestHost.Configure);
 
             return new Pane(harness, view!, controller!, app, shell);
         }
@@ -763,7 +756,7 @@ public class TerminalInstanceInputTests
     [Fact]
     public void BeforeAShellIsAdopted_TheTerminalIsNotAcceptingInput()
     {
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         using var vm = new TerminalInstance(new RecordingLaunch(), dispatcher);
 
         Assert.False(vm.IsAcceptingInput);
@@ -772,7 +765,7 @@ public class TerminalInstanceInputTests
     [Fact]
     public void SendingInputWithNoShell_IsANoOpRatherThanAThrow()
     {
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         using var vm = new TerminalInstance(new RecordingLaunch(), dispatcher);
 
         vm.SendInput("q"u8);
@@ -838,30 +831,30 @@ public class TerminalInstanceInputTests
     /// A view model whose shell has started and been adopted. The start is a background task that
     /// posts its result, so the test waits for the post rather than for a duration.
     /// </summary>
-    static TerminalInstance Started(RecordingLaunch launch, out QueueDispatcher dispatcher)
+    static TerminalInstance Started(RecordingLaunch launch, out QueuedDispatcher dispatcher)
     {
-        dispatcher = new QueueDispatcher();
+        dispatcher = new QueuedDispatcher();
         var vm = new TerminalInstance(launch, dispatcher);
         vm.ReportViewport(new TerminalSize(80, 24));
         vm.Start();
 
         Assert.True(dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "The shell never started.");
-        dispatcher.Pump();
+        dispatcher.Drain();
         return vm;
     }
 
     /// <summary>Prints numbered lines into the shell's terminal and lets the engine take them.</summary>
-    static void Print(RecordingLaunch launch, QueueDispatcher dispatcher, int lines) =>
+    static void Print(RecordingLaunch launch, QueuedDispatcher dispatcher, int lines) =>
         Emit(
             launch,
             dispatcher,
             string.Join("\r\n", Enumerable.Range(0, lines).Select(line => $"l{line}")));
 
-    static void Emit(RecordingLaunch launch, QueueDispatcher dispatcher, string output)
+    static void Emit(RecordingLaunch launch, QueuedDispatcher dispatcher, string output)
     {
         launch.Pty.Emit(output);
         Assert.True(dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "The output never arrived.");
-        dispatcher.Pump();
+        dispatcher.Drain();
     }
 
     /// <summary>A launch over a pseudo-terminal that stays open, which is what "a shell is running"
@@ -921,7 +914,7 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
     public static TestTerminal Live(byte[]? output = null)
     {
         var pty = new RecordingPty(output ?? []);
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         var session = TerminalSession.Start(
             () => pty,
             new XtermSharpEngineFactory(),
@@ -931,7 +924,7 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
         Assert.True(
             session.Exited.Wait(TimeSpan.FromSeconds(5)),
             "The recorded output never finished.");
-        dispatcher.Pump();
+        dispatcher.Drain();
 
         return new TestTerminal(pty, session);
     }
@@ -1106,30 +1099,5 @@ internal sealed class RecordingPty : IPtySession
         }
 
         _exited.TrySetResult(new PtyExit.TornDown());
-    }
-}
-
-/// <summary>
-/// Collects posted work instead of running it, so a test says when the engine is fed rather than
-/// racing the reader thread for it.
-/// </summary>
-internal sealed class QueueDispatcher : IUiDispatcher
-{
-    readonly ConcurrentQueue<Action> _queue = new();
-    readonly SemaphoreSlim _posted = new(0);
-
-    public void Post(Action action)
-    {
-        _queue.Enqueue(action);
-        _posted.Release();
-    }
-
-    /// <summary>Waits for one posted action to arrive, for work that lands from another thread.</summary>
-    public bool WaitForPost(TimeSpan timeout) => _posted.Wait(timeout);
-
-    public void Pump()
-    {
-        while (_queue.TryDequeue(out var action))
-            action();
     }
 }

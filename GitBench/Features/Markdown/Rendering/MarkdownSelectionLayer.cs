@@ -26,7 +26,7 @@ internal sealed record MarkdownSelectionLayer : Widget
         var input = ctx.Require<InputSystem>();
         view.UseController(input, () => new MarkdownSelectionController(
             scope, view, ctx, input, ctx.Get<IFrameTicker>(),
-            ctx.Get<IClipboard>(), ctx.Get<ILocalizationService>()));
+            ctx.Require<IClipboard>(), ctx.Require<ILocalizationService>()));
         return view;
     }
 }

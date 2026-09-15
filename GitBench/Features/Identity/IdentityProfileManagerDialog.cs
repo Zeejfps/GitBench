@@ -51,7 +51,6 @@ internal sealed record IdentityProfileManagerDialog : Widget
         {
             Title = s.IdentityManageTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Width = 760f,
             CancelLabel = s.IdentityManageClose,
             Action = (s.CommonSave, DialogButtonRole.Primary),

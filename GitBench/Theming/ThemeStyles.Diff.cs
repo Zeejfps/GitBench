@@ -33,7 +33,6 @@ public sealed record DiffViewStyles(
 public sealed record DiffContentStyles(
     uint Background,
     uint PlaceholderText,
-    uint ErrorText,
     uint LineText,
     uint Caret,
     uint LineNumberText,
@@ -146,7 +145,6 @@ public partial record ThemeStyles
         new(
             Background: p.Surface,
             PlaceholderText: p.TextMuted,
-            ErrorText: status.DiffError,
             LineText: p.TextPrimary,
             Caret: p.TextPrimary,
             LineNumberText: p.TextDim,

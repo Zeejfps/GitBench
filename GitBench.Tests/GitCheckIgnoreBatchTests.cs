@@ -1,53 +1,26 @@
-using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
 
 public sealed class GitCheckIgnoreBatchTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
-    private readonly string _root;
+    private readonly TempGitRepo _work = TempGitRepo.Init();
     private readonly GitService _git;
     private readonly Repo _repo;
 
     public GitCheckIgnoreBatchTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "gitbench-checkignore-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
         _git = new GitService(new NullActivityTracker());
-        _repo = new Repo(Guid.NewGuid(), _root, "test");
+        _repo = new Repo(Guid.NewGuid(), _work.Path, "test");
 
-        Git("init");
-        File.WriteAllText(Path.Combine(_root, ".gitignore"), "build/\n*.log\n");
+        File.WriteAllText(Path.Combine(_work.Path, ".gitignore"), "build/\n*.log\n");
     }
 
     public void Dispose()
     {
-        DirectoryTree.Delete(_root);
-    }
-
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
+        _work.Dispose();
     }
 
     [Fact]
@@ -87,7 +60,7 @@ public sealed class GitCheckIgnoreBatchTests : IDisposable
     [Fact]
     public void ABlankLineInACrlfIgnoreFileIsNotARule()
     {
-        File.WriteAllText(Path.Combine(_root, ".gitignore"), "build/\r\n\r\nsrc/nested/\r\n");
+        File.WriteAllText(Path.Combine(_work.Path, ".gitignore"), "build/\r\n\r\nsrc/nested/\r\n");
 
         var ignored = _git.IsPathIgnored(_repo, ["src/", "build/", "app.log"]);
 
@@ -97,7 +70,7 @@ public sealed class GitCheckIgnoreBatchTests : IDisposable
     [Fact]
     public void APathTheRulesReAdmitIsNotIgnored()
     {
-        File.WriteAllText(Path.Combine(_root, ".gitignore"), "*.log\n!keep.log\n");
+        File.WriteAllText(Path.Combine(_work.Path, ".gitignore"), "*.log\n!keep.log\n");
 
         var ignored = _git.IsPathIgnored(_repo, ["app.log", "keep.log"]);
 

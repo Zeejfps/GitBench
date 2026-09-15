@@ -1,9 +1,3 @@
-using GitBench.Features.LocalChanges;
-using GitBench.Input;
-using GitBench.Localization;
-using GitBench.Theming;
-using ZGF.Gui.Desktop;
-
 namespace GitBench.App;
 
 public sealed class PreferencesService : IDisposable
@@ -33,89 +27,7 @@ public sealed class PreferencesService : IDisposable
         get { lock (_gate) return _current; }
     }
 
-    public void SetTheme(ThemeMode mode) => Mutate(p => p with { Theme = mode });
-
-    public void SetLanguage(Locale language) => Mutate(p => p with { Language = language });
-
-    public void SetUiScale(UiScale scale) => Mutate(p => p with { UiScale = scale });
-
-    public void SetWindowSize(int width, int height)
-    {
-        if (width <= 0 || height <= 0) return;
-        Mutate(p => p with { WindowWidth = width, WindowHeight = height });
-    }
-
-    public void SetWindowPosition(int x, int y) => Mutate(p => p with { WindowX = x, WindowY = y });
-
-    public void SetReviewWindowSize(int width, int height)
-    {
-        if (width <= 0 || height <= 0) return;
-        Mutate(p => p with { ReviewWindowWidth = width, ReviewWindowHeight = height });
-    }
-
-    public void SetReviewWindowPosition(int x, int y) => Mutate(p => p with { ReviewWindowX = x, ReviewWindowY = y });
-
-    public void SetRepoBarWidth(float width) => Mutate(p => p with { RepoBarWidth = width });
-
-    public void SetRepoBarCollapsed(bool collapsed) => Mutate(p => p with { RepoBarCollapsed = collapsed });
-
-    public void SetBranchesWidth(float width) => Mutate(p => p with { BranchesWidth = width });
-
-    public void SetCommitDetailsWidth(float width) => Mutate(p => p with { CommitDetailsWidth = width });
-
-    public void SetFileBrowserWidth(float width) => Mutate(p => p with { FileBrowserWidth = width });
-
-    public void SetCommitDetailsSplitFraction(float fraction) => Mutate(p => p with { CommitDetailsSplitFraction = fraction });
-
-    public void SetFileViewMode(FileViewMode mode) => Mutate(p => p with { FileViewMode = mode });
-
-    public void SetWorkingChangesLayout(WorkingChangesLayout layout) =>
-        Mutate(p => p with { WorkingChangesLayout = layout });
-
-    public void SetHideRemoteOnlyBranches(bool hide) => Mutate(p => p with { HideRemoteOnlyBranches = hide });
-
-    public void SetEnableUntrackedCache(bool on) => Mutate(p => p with { EnableUntrackedCache = on });
-
-    /// <summary>Records which provider the assistant talks to and what every provider was last
-    /// given.</summary>
-    public void SetAssistantProvider(string providerId, IReadOnlyList<AssistantProviderPreference> choices) =>
-        Mutate(p => p with
-        {
-            AssistantProviderId = providerId,
-            AssistantProviderPreferences = choices,
-        });
-
-    /// <summary>Records where the assistant panel was left and how big it was, measured from the
-    /// host's top leading corner.</summary>
-    public void SetAssistantPanelPlacement(float x, float y, float width, float height)
-    {
-        if (width <= 0f || height <= 0f) return;
-        Mutate(p => p with
-        {
-            AssistantPanelX = x,
-            AssistantPanelY = y,
-            AssistantPanelWidth = width,
-            AssistantPanelHeight = height,
-        });
-    }
-
-    /// <summary>Records every shortcut the user has changed from the built-in table.</summary>
-    public void SetKeyBindings(IReadOnlyList<KeyBinding> bindings) => Mutate(p => p with { KeyBindings = bindings });
-
-    /// <summary>Records the agent-connections preference: on or off, the port, and the endpoint's
-    /// token. A port outside 1–65535 is refused, since no server could bind it.</summary>
-    public void SetAgentConnections(bool enabled, int port, McpPathToken? token)
-    {
-        if (port is < 1 or > 65535) return;
-        Mutate(p => p with
-        {
-            AgentConnectionsEnabled = enabled,
-            AgentConnectionsPort = port,
-            AgentConnectionsToken = token,
-        });
-    }
-
-    private void Mutate(Func<Preferences, Preferences> mutator)
+    public void Update(Func<Preferences, Preferences> mutator)
     {
         lock (_gate)
         {

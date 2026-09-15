@@ -8,7 +8,7 @@ namespace GitBench.Input;
 /// The bindings for every <see cref="KeyCommand"/>: the built-in table, with whatever the user has
 /// rebound laid over it.
 /// </summary>
-public sealed class KeyMap : IKeyBindingsStore
+public sealed class KeyMap : IKeyMap
 {
     /// <summary>The built-in table, shared and never edited: it carries no editing surface at all.</summary>
     public static IKeyMap Defaults { get; } = new ReadOnly(new KeyMap());

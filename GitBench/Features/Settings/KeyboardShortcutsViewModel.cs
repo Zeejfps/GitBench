@@ -20,16 +20,16 @@ internal sealed record ShortcutSection(KeyCommandSection Section, string Title, 
 
 /// <summary>
 /// The whole key map as a list to read and edit: every command, grouped by the surface it belongs
-/// to, with the caps the <see cref="IKeyBindingsStore"/> binds it to. Follows the locale, so the
+/// to, with the caps the <see cref="KeyMap"/> binds it to. Follows the locale, so the
 /// names re-read in the new language; narrows to what <see cref="Query"/> matches — a command's
 /// name, one of its caps, or the group it sits in; and re-reads after every rebind. One command at
 /// a time can be <see cref="Recording"/> a new gesture.
 /// </summary>
 internal sealed class KeyboardShortcutsViewModel
 {
-    private readonly IKeyBindingsStore _keys;
+    private readonly KeyMap _keys;
 
-    public KeyboardShortcutsViewModel(IKeyBindingsStore keys, ILocalizationService localization)
+    public KeyboardShortcutsViewModel(KeyMap keys, ILocalizationService localization)
     {
         _keys = keys;
         Sections = new Derived<IReadOnlyList<ShortcutSection>>(() =>
@@ -76,7 +76,7 @@ internal sealed class KeyboardShortcutsViewModel
 
     public void ResetAll() => _keys.ResetAll();
 
-    private static IReadOnlyList<ShortcutSection> Build(IKeyBindingsStore keys, Strings s)
+    private static IReadOnlyList<ShortcutSection> Build(KeyMap keys, Strings s)
     {
         var sections = new List<ShortcutSection>(KeyCommandSections.All.Count);
         foreach (var section in KeyCommandSections.All)
@@ -145,7 +145,7 @@ internal sealed class KeyboardShortcutsViewModel
         return caps;
     }
 
-    private static IReadOnlyList<string> Conflicts(IKeyBindingsStore keys, Strings s, KeyCommand command)
+    private static IReadOnlyList<string> Conflicts(KeyMap keys, Strings s, KeyCommand command)
     {
         var labels = new List<string>();
         foreach (var gesture in keys.GesturesFor(command))

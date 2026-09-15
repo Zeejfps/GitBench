@@ -1,6 +1,7 @@
 using GitBench.Features.Terminal;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Platform;
 using GitBench.Terminal.Vt;
 using GitBench.Theming;
 using ZGF.Geometry;
@@ -207,7 +208,7 @@ internal sealed class DragPane : IDisposable
         GuiTestHarness harness,
         ScriptedCells cells,
         TerminalInputController controller,
-        RecordingShell shell,
+        FakeShell shell,
         FakeClipboard clipboard,
         QueuedUiDispatcher dispatcher,
         List<ShowDialogMessage> dialogs)
@@ -232,7 +233,7 @@ internal sealed class DragPane : IDisposable
 
     public SeamTerminal Terminal { get; }
 
-    public RecordingShell Shell { get; }
+    public FakeShell Shell { get; }
 
     public FakeClipboard Clipboard { get; }
 
@@ -256,13 +257,10 @@ internal sealed class DragPane : IDisposable
     public static DragPane Bracketing() =>
         Build(new SeamTerminal { Modes = Modes(MouseTracking.Off, bracketedPaste: true) });
 
-    /// <summary>A pane with no message bus or dispatcher, as a host that registered neither.</summary>
-    public static DragPane Unhosted() => Build(new SeamTerminal(), hosted: false);
-
-    static DragPane Build(SeamTerminal terminal, bool hosted = true)
+    static DragPane Build(SeamTerminal terminal)
     {
         var cells = new ScriptedCells();
-        var shell = new RecordingShell();
+        var shell = new FakeShell();
         var clipboard = new FakeClipboard();
         var dispatcher = new QueuedUiDispatcher();
         var bus = new MessageBus();
@@ -275,20 +273,15 @@ internal sealed class DragPane : IDisposable
             {
                 var input = ctx.Require<InputSystem>();
                 var view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                controller = new TerminalInputController(
-                    view, input, terminal, cells, clipboard, shell,
-                    ctx, ctx.Require<ILocalizationService>());
+                controller = TerminalTestHost.Controller(ctx, view, terminal, cells);
                 input.RegisterController(view, controller);
                 return view;
             },
             configure: ctx =>
             {
-                ctx.AddService<IThemeService<ThemeStyles>>(
-                    new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                ctx.AddService<ILocalizationService>(
-                    new LocalizationService(new State<Locale>(Locale.En)));
-                if (!hosted) return;
-
+                TerminalTestHost.Configure(ctx);
+                ctx.AddService<IClipboard>(clipboard);
+                ctx.AddService<IPlatformShell>(shell);
                 ctx.AddService<IMessageBus>(bus);
                 ctx.AddService<IUiDispatcher>(dispatcher);
             });

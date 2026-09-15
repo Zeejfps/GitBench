@@ -13,44 +13,28 @@ public sealed class Tooltip : IDisposable
     private readonly Context _context;
     private readonly IReadable<string?> _text;
     private readonly IReadable<bool> _isHovered;
-    private readonly IReadable<bool> _isEnabled;
 
     private readonly IDisposable _hoverSub;
-    private readonly IDisposable _enabledSub;
     private CancellationTokenSource? _pendingCts;
     private bool _isShown;
 
     public Tooltip(
         View target,
         Context context,
-        string text,
-        IReadable<bool> isHovered,
-        IReadable<bool> isEnabled)
-        : this(target, context, (IReadable<string?>)new State<string?>(text), isHovered, isEnabled)
-    {
-    }
-
-    public Tooltip(
-        View target,
-        Context context,
         IReadable<string?> text,
-        IReadable<bool> isHovered,
-        IReadable<bool> isEnabled)
+        IReadable<bool> isHovered)
     {
         _target = target;
         _context = context;
         _text = text;
         _isHovered = isHovered;
-        _isEnabled = isEnabled;
 
         _hoverSub = _isHovered.Subscribe(OnHoverChanged);
-        _enabledSub = _isEnabled.Subscribe(OnEnabledChanged);
     }
 
     public void Dispose()
     {
         _hoverSub.Dispose();
-        _enabledSub.Dispose();
         CancelPending();
         HideNow();
     }
@@ -58,21 +42,10 @@ public sealed class Tooltip : IDisposable
     private void OnHoverChanged(bool hovered)
     {
         CancelPending();
-        if (hovered && _isEnabled.Value)
-        {
+        if (hovered)
             SchedulePending();
-        }
         else
-        {
             HideNow();
-        }
-    }
-
-    private void OnEnabledChanged(bool enabled)
-    {
-        if (enabled) return;
-        CancelPending();
-        HideNow();
     }
 
     private void SchedulePending()
@@ -116,7 +89,7 @@ public sealed class Tooltip : IDisposable
     {
         var text = _text.Value;
         if (string.IsNullOrEmpty(text)) return;
-        var service = _context.Get<ITooltipService>();
+        var service = _context.Get<PopupTooltipService>();
         var coordinates = _context.Get<IWindowCoordinates>();
         if (service == null || coordinates == null) return;
         service.Show(this, text, coordinates.ToScreenPoints(CanvasRect.From(_target.Position)));
@@ -126,7 +99,7 @@ public sealed class Tooltip : IDisposable
     private void HideNow()
     {
         if (!_isShown) return;
-        _context.Get<ITooltipService>()?.Hide(this);
+        _context.Get<PopupTooltipService>()?.Hide(this);
         _isShown = false;
     }
 }

@@ -51,7 +51,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
     private readonly IRepoRegistry _registry;
     private readonly IFileSystemReader _files;
     private readonly IUiDispatcher _dispatcher;
-    private readonly LanguageServerSupervisor _supervisor;
+    private readonly LanguageServerSupervisor<LanguageServerConnection> _supervisor;
     private readonly State<LanguageServerSnapshot> _active = new(LanguageServerSnapshot.Nothing);
     private readonly State<FileDiagnostics> _diagnostics = new(FileDiagnostics.None);
     private readonly Dictionary<Guid, IReadOnlyList<StarterServer>> _suggestions = [];
@@ -77,7 +77,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         IMessageBus bus,
         ILocalizationService loc,
         IFileTextSource fileText,
-        ILanguageServerLauncher? launcher = null,
+        ILanguageServerLauncher<LanguageServerConnection>? launcher = null,
         IClock? clock = null,
         string? configPath = null)
     {
@@ -87,8 +87,8 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         _bus = bus;
         _loc = loc;
         ConfigPath = configPath ?? AppPaths.AppDataPath(ConfigFileName);
-        _supervisor = new LanguageServerSupervisor(
-            launcher ?? new LanguageServerLauncher(
+        _supervisor = new LanguageServerSupervisor<LanguageServerConnection>(
+            launcher ?? new LanguageServerLauncher<ProcessLanguageServer>(
                 new ProcessLanguageServerLauncher(
                     new MapServerEnvironment(LoginShellEnvironment.ForChildProcess),
                     dispatcher.Post,
@@ -132,7 +132,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (_registry.Active.Value is not { } repo) return false;
 
         return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language)
-            is not LanguageServerConnection connection || connection.AnswersDefinitions;
+            is not { } connection || connection.AnswersDefinitions;
     }
 
     public async Task<DefinitionReply> DefineAsync(
@@ -150,7 +150,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (_registry.Active.Value is not { } repo) return false;
 
         return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language)
-            is not LanguageServerConnection connection || connection.AnswersReferences;
+            is not { } connection || connection.AnswersReferences;
     }
 
     public async Task<ReferenceReply> ReferencesAsync(
@@ -256,7 +256,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
             _supervisor.OpenFile(path);
             EnsurePump();
             Publish();
-            return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language) as LanguageServerConnection;
+            return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language);
         }
     }
 
@@ -277,7 +277,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
     {
         if (_config.ServerFor(absolutePath) is { } entry &&
             _registry.Active.Value is { } active &&
-            _supervisor.ProcessFor(new RepositoryId(active.Id), entry.Language) is LanguageServerConnection connection)
+            _supervisor.ProcessFor(new RepositoryId(active.Id), entry.Language) is { } connection)
         {
             Watch(connection, absolutePath);
             _ = connection.PrepareAsync(absolutePath, CancellationToken.None);
@@ -487,19 +487,22 @@ internal sealed class SystemClock : IClock
     public DateTimeOffset Now => DateTimeOffset.UtcNow;
 }
 
-internal sealed class LanguageServerLauncher(
-    ILanguageServerLauncher processes,
+/// <summary>Wraps every server the underlying launcher starts in the connection the store asks
+/// questions of.</summary>
+internal sealed class LanguageServerLauncher<TSession>(
+    ILanguageServerLauncher<TSession> sessions,
     TimeSpan handshakeTimeout,
     IFileTextSource files,
     Action<Action>? post = null)
-    : ILanguageServerLauncher
+    : ILanguageServerLauncher<LanguageServerConnection>
+    where TSession : class, ILanguageServerSession
 {
-    public LaunchResult Launch(ServerLaunchRequest request)
-    {
-        var launched = processes.Launch(request);
-        return launched is LaunchResult.Started { Process: ILanguageServerSession session }
-            ? new LaunchResult.Started(new LanguageServerConnection(
-                session, request, handshakeTimeout, post: post, files: files))
-            : launched;
-    }
+    public LaunchResult<LanguageServerConnection> Launch(ServerLaunchRequest request) =>
+        sessions.Launch(request) switch
+        {
+            LaunchResult<TSession>.Started started => new LaunchResult<LanguageServerConnection>.Started(
+                new LanguageServerConnection(started.Process, request, handshakeTimeout, post: post, files: files)),
+            LaunchResult<TSession>.Failed failed => new LaunchResult<LanguageServerConnection>.Failed(failed.Reason),
+            var other => throw new NotSupportedException($"unhandled launch result {other.GetType().Name}"),
+        };
 }

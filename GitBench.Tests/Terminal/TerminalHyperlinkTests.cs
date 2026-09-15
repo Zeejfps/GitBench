@@ -1,5 +1,4 @@
 using GitBench.Features.Terminal;
-using GitBench.Platform;
 using GitBench.Terminal.Vt;
 using ZGF.Desktop;
 using ZGF.Gui.Desktop.Input;
@@ -288,24 +287,5 @@ public class TerminalLinkHoverTests
 
         Assert.Null(pane.Cells.HoverPoint);
         Assert.Equal(MouseCursor.Default, pane.Controller.Cursor);
-    }
-}
-
-internal sealed class RecordingShell : IPlatformShell
-{
-    public List<string> OpenedUrls { get; } = [];
-
-    public Exception? OpenUrlThrows { get; set; }
-
-    public void OpenFolder(string path) { }
-
-    public void OpenTerminal(string path) { }
-
-    public void OpenFile(string path) { }
-
-    public void OpenUrl(string url)
-    {
-        OpenedUrls.Add(url);
-        if (OpenUrlThrows is { } e) throw e;
     }
 }

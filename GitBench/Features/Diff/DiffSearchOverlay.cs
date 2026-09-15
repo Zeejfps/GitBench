@@ -15,8 +15,8 @@ internal sealed class DiffSearchOverlay
 {
     public static readonly DiffSearchOverlay Empty = new(FileSearchHits.None);
 
-    private readonly Dictionary<int, List<FileSearchMatch>> _byLine = [];
-    private readonly FileSearchMatch? _current;
+    private readonly Dictionary<int, List<FileSpan>> _byLine = [];
+    private readonly FileSpan? _current;
 
     public DiffSearchOverlay(FileSearchHits hits)
     {

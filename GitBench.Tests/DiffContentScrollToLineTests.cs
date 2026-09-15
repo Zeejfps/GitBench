@@ -167,19 +167,4 @@ public class DiffContentScrollToLineTests
         ctx.AddService<IPlatformShell>(new FakeShell());
         ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
     }
-
-    private sealed class FakeClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
 }

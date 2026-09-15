@@ -127,7 +127,7 @@ public sealed class MaintainedTreeTests(CodeIntelFixture fixture)
     }
 
     private MaintainedTree Track() =>
-        fixture.Symbols.Track(CodeLanguage.CSharp)
+        fixture.Grammars.Track(CodeLanguage.CSharp)
         ?? throw new InvalidOperationException("The C# grammar did not load.");
 
     private static byte[] Utf8(string text) => Encoding.UTF8.GetBytes(text);

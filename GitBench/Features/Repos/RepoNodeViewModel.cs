@@ -36,14 +36,14 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Repo _initial;
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
-    private readonly IRepoLoadStore _load;
+    private readonly RepoLoadStore _load;
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
     private readonly IGitWorktreeOperations _gitWorktrees;
-    private readonly IPlatformShell? _shell;
+    private readonly IPlatformShell _shell;
     private readonly ILocalizationService _loc;
-    private readonly IClipboard? _clipboard;
-    private readonly IFilePicker? _filePicker;
+    private readonly IClipboard _clipboard;
+    private readonly IFilePicker _filePicker;
     private readonly IUiDispatcher _dispatcher;
 
     private readonly Derived<Repo?> _currentRepo;
@@ -101,14 +101,14 @@ internal sealed class RepoNodeViewModel : IDisposable
         int depth,
         IRepoRegistry registry,
         IRepoStatusStore status,
-        IRepoLoadStore load,
+        RepoLoadStore load,
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
         IGitWorktreeOperations gitWorktrees,
-        IPlatformShell? shell,
+        IPlatformShell shell,
         ILocalizationService loc,
-        IClipboard? clipboard,
-        IFilePicker? filePicker,
+        IClipboard clipboard,
+        IFilePicker filePicker,
         IUiDispatcher dispatcher,
         RepoNodeFactory factory)
     {
@@ -220,12 +220,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         return ids.Count == 0 || ids[ids.Count - 1] == repo.Id;
     }
 
-    private Repo? FindRepo(Guid id)
-    {
-        foreach (var r in _registry.Repos)
-            if (r.Id == id) return r;
-        return null;
-    }
+    private Repo? FindRepo(Guid id) => _registry.Find(id);
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems() => Kind switch
     {
@@ -254,36 +249,28 @@ internal sealed class RepoNodeViewModel : IDisposable
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new RemoveRepoDialog { Repo = repo, OnClose = onClose })),
             LucideIcons.Trash));
-        if (_clipboard is not null)
-            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(repo.Path), LucideIcons.Copy));
-        if (_shell is not null)
-            items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(repo.Path), LucideIcons.Copy));
+        items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
         AddOpenRemoteItem(items, s, repo);
 
-        if (_filePicker is not null)
-        {
+        items.Add(new RepoBarContextMenu.Item(
+            s.ReposRepoSetCustomIcon,
+            () => PickCustomIcon(repo),
+            LucideIcons.Image));
+        if (repo.CustomIconPath is not null)
             items.Add(new RepoBarContextMenu.Item(
-                s.ReposRepoSetCustomIcon,
-                () => PickCustomIcon(repo),
-                LucideIcons.Image));
-            if (repo.CustomIconPath is not null)
-                items.Add(new RepoBarContextMenu.Item(
-                    s.ReposRepoRemoveCustomIcon,
-                    () => _registry.SetCustomIcon(repo.Id, null),
-                    LucideIcons.X));
-        }
+                s.ReposRepoRemoveCustomIcon,
+                () => _registry.SetCustomIcon(repo.Id, null),
+                LucideIcons.X));
     }
 
     private void PickCustomIcon(Repo repo)
     {
-        var picker = _filePicker;
-        if (picker is null) return;
-
         var s = _loc.Strings.Value;
         var initialDirectory = repo.CustomIconPath is { } current
             ? Path.GetDirectoryName(current) ?? repo.Path
             : repo.Path;
-        picker.PickFile(
+        _filePicker.PickFile(
             s.ReposPickerChooseCustomIcon,
             initialDirectory,
             [new FileFilter(s.ReposPickerChooseCustomIcon, ["*.png", "*.jpg", "*.jpeg", "*.ico"])],
@@ -354,7 +341,6 @@ internal sealed class RepoNodeViewModel : IDisposable
 
     private void AddOpenRemoteItem(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
     {
-        if (_shell is null) return;
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoOpenRemote, () => OpenRemote(repo), LucideIcons.ExternalLink));
     }
 
@@ -362,8 +348,6 @@ internal sealed class RepoNodeViewModel : IDisposable
     // wins when several remotes exist; a repo with no web-openable remote surfaces the error dialog.
     private void OpenRemote(Repo repo)
     {
-        var shell = _shell;
-        if (shell is null) return;
         Task.Run(() =>
         {
             var remotes = _gitRemotes.GetRemoteNames(repo);
@@ -372,7 +356,7 @@ internal sealed class RepoNodeViewModel : IDisposable
             var webUrl = rawUrl is null ? null : RemoteWebUrl.FromRemoteUrl(rawUrl);
             if (webUrl is not null)
             {
-                shell.OpenUrl(webUrl);
+                _shell.OpenUrl(webUrl);
                 return;
             }
             _dispatcher.Post(() =>
@@ -387,7 +371,7 @@ internal sealed class RepoNodeViewModel : IDisposable
 
     private void CopyPath(string path)
     {
-        _clipboard?.SetText(path);
+        _clipboard.SetText(path);
         _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCopiedPath)));
     }
 
@@ -406,10 +390,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (worktree.CustomName is not null)
             items.Add(new RepoBarContextMenu.Item(s.ReposRepoResetName, () => _registry.ResetRepoName(worktree.Id), LucideIcons.X));
 
-        if (_clipboard is not null)
-            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(worktree.Path), LucideIcons.Copy));
-        if (_shell is not null)
-            items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(worktree.Path), LucideIcons.Copy));
+        items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));
         AddOpenRemoteItem(items, s, worktree);
 
         if (worktree.ParentRepoId is { } parentId && FindRepo(parentId) is { } primary)
@@ -432,10 +414,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (!submodule.IsMissing)
             items.Add(new RepoBarContextMenu.Item(s.ReposSubmoduleSwitchTo, () => _registry.SetActive(submodule.Id), LucideIcons.Package));
 
-        if (_clipboard is not null)
-            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(submodule.Path), LucideIcons.Copy));
-        if (_shell is not null)
-            items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(submodule.Path), LucideIcons.FolderOpen));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(submodule.Path), LucideIcons.Copy));
+        items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(submodule.Path), LucideIcons.FolderOpen));
         if (!submodule.IsMissing)
             AddOpenRemoteItem(items, s, submodule);
 

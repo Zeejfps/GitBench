@@ -183,10 +183,7 @@ public sealed class GitUntrackedCacheTests : IDisposable
     {
         var path = Path.Combine(_root, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", "main");
-        Git(path, "config", "user.name", "Test");
-        Git(path, "config", "user.email", "test@example.com");
-        Git(path, "config", "commit.gpgsign", "false");
+        TestGit.Init(path);
         File.WriteAllText(Path.Combine(path, "a.txt"), "0");
         Git(path, "add", "a.txt");
         Git(path, "commit", "-qm", "base");
@@ -194,18 +191,18 @@ public sealed class GitUntrackedCacheTests : IDisposable
     }
 
     private static bool ProbeSupported(string path)
-        => RunGit(path, out _, "update-index", "--test-untracked-cache") == 0;
+        => TestGit.Try(path, "update-index", "--test-untracked-cache").ExitCode == 0;
 
     private static string? ReadLocal(string path, string key)
     {
-        var code = RunGit(path, out var stdout, "config", "--local", "--get", key);
-        return code == 0 ? stdout.Trim() : null;
+        var run = TestGit.Try(path, "config", "--local", "--get", key);
+        return run.ExitCode == 0 ? run.Stdout.Trim() : null;
     }
 
     private static string? ReadGlobal(string key)
     {
-        var code = RunGit(null, out var stdout, "config", "--global", "--get", key);
-        return code == 0 ? stdout.Trim() : null;
+        var run = TestGit.Try(Path.GetTempPath(), "config", "--global", "--get", key);
+        return run.ExitCode == 0 ? run.Stdout.Trim() : null;
     }
 
     private static void WaitUntil(Func<bool> done, string what)
@@ -219,30 +216,7 @@ public sealed class GitUntrackedCacheTests : IDisposable
         throw new TimeoutException($"Timed out waiting for {what}.");
     }
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var code = RunGit(cwd, out var _, args);
-        if (code != 0) throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({code}).");
-    }
-
-    private static int RunGit(string? cwd, out string stdout, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        if (cwd != null) psi.WorkingDirectory = cwd;
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        stdout = proc.StandardOutput.ReadToEnd();
-        proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        return proc.ExitCode;
-    }
+    private static void Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose()
     {

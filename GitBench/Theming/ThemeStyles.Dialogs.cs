@@ -140,27 +140,27 @@ public sealed record CheckboxStyles(
     uint BoxFillDisabled,
     uint CheckGlyph)
 {
-    public uint Foreground(ICheckbox cb)
+    public uint Foreground(CheckboxState cb)
     {
         if (!cb.Enabled.Value) return TextDisabled;
         return cb.Hovered.Value ? TextHover : TextIdle;
     }
 
-    public uint BoxFill(ICheckbox cb)
+    public uint BoxFill(CheckboxState cb)
     {
         if (!cb.Enabled.Value) return cb.Checked.Value ? BoxFillDisabled : 0x00000000u;
         if (!cb.Checked.Value) return 0x00000000u;
         return cb.Hovered.Value ? BoxFillCheckedHover : BoxFillChecked;
     }
 
-    public uint BoxBorder(ICheckbox cb)
+    public uint BoxBorder(CheckboxState cb)
     {
         if (!cb.Enabled.Value) return BoxBorderDisabled;
         if (cb.Checked.Value) return cb.Hovered.Value ? BoxFillCheckedHover : BoxFillChecked;
         return cb.Hovered.Value ? BoxBorderHover : BoxBorderIdle;
     }
 
-    public uint GlyphColor(ICheckbox cb) => cb.Enabled.Value ? CheckGlyph : TextDisabled;
+    public uint GlyphColor(CheckboxState cb) => cb.Enabled.Value ? CheckGlyph : TextDisabled;
 }
 
 public sealed record DialogBodyStyles(

@@ -9,6 +9,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
@@ -36,10 +37,14 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly IGitConflictOperations _gitConflicts;
     private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly ISymbolExtractor _extractor;
+    private readonly ISyntaxHighlighter _highlighter;
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
+    private readonly LocalChangesViewModel _localChanges;
+    private readonly DiffWindowsViewModel _windows;
+    private readonly IPlatformShell _shell;
     private string? _currentSha;
     // Non-null only in the Review window's Combined mode: the range base. When set, opened files are
     // range tabs (base→head) rather than commit-vs-parent. Null for every commit/History selection.
@@ -73,11 +78,15 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IGitConflictOperations gitConflicts,
         IGitSubmoduleOperations gitSubmodules,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
         PreferencesService preferences,
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel windows,
+        IPlatformShell shell,
         bool subscribeToSelection = true)
         : base(dispatcher, new CommitDetailsState(
             new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
@@ -89,10 +98,14 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _gitConflicts = gitConflicts;
         _gitSubmodules = gitSubmodules;
         _extractor = extractor;
+        _highlighter = highlighter;
         _registry = registry;
         _bus = bus;
         _loc = loc;
         _preferences = preferences;
+        _localChanges = localChanges;
+        _windows = windows;
+        _shell = shell;
 
         RenderState = Slice(s => s.Render);
         SelectedPath = Slice(s => s.SelectedPath);
@@ -115,7 +128,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private void DoToggleViewMode()
     {
         var next = State.Value.ViewMode == FileViewMode.Flat ? FileViewMode.Tree : FileViewMode.Flat;
-        _preferences.SetFileViewMode(next);
+        _preferences.Update(p => p with { FileViewMode = next });
         Update(s => s with { ViewMode = next });
     }
 
@@ -148,7 +161,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             var allRows = FileTreeBuilder.BuildRows(loaded.Details.Files, DiffSide.Commit, FileViewMode.Tree, EmptyCollapsed);
             var folders = new HashSet<string>();
             foreach (var row in allRows)
-                if (row.Kind == FileRowKind.Folder) folders.Add(row.FullPath);
+                if (row is FileRow.Folder) folders.Add(row.FullPath);
             return folders.Count == 0 ? s : s with { Collapsed = folders };
         });
     }
@@ -172,7 +185,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
                 var allRows = FileTreeBuilder.BuildRows(loaded.Details.Files, DiffSide.Commit, FileViewMode.Tree, EmptyCollapsed);
                 foreach (var row in allRows)
                 {
-                    if (row.Kind != FileRowKind.Folder) continue;
+                    if (row is not FileRow.Folder) continue;
                     if (row.FullPath != folderPath && !row.FullPath.StartsWith(prefix, StringComparison.Ordinal)) continue;
                     changed |= next.Add(row.FullPath);
                 }
@@ -223,7 +236,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _currentBaseSha));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _highlighter, _loc, _localChanges, _windows, _shell, _currentBaseSha));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -236,9 +249,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public CommitFileTab? CreateFileDiff(string path)
     {
         if (_workingTree)
-            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc);
+            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _highlighter, _loc, _localChanges, _windows, _shell);
         if (string.IsNullOrEmpty(_currentSha)) return null;
-        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _currentBaseSha);
+        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _highlighter, _loc, _localChanges, _windows, _shell, _currentBaseSha);
     }
 
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>
@@ -342,24 +355,13 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Render = new CommitDetailsRenderState.Loading(),
         });
 
-        RunBackground<CommitDetailsRenderState>(
-            work: () =>
+        RunBackground(
+            work: () => _gitHistory.LoadDetails(repo, sha).Map(details =>
             {
-                var fetched = _gitHistory.LoadDetails(repo, sha);
-                if (fetched is Fetched<CommitDetails>.Failed failed)
-                    return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
-
-                var details = ((Fetched<CommitDetails>.Ok)fetched).Value;
                 var pointerChanges = _gitSubmodules.GetSubmodulePointerChanges(repo, sha);
-                if (pointerChanges.Count > 0)
-                    details = MergePointerChanges(details, pointerChanges);
-                return (new CommitDetailsRenderState.Loaded(details), null);
-            },
-            onResult: (result, error) =>
-                Update(s => s with
-                {
-                    Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
-                }));
+                return pointerChanges.Count > 0 ? MergePointerChanges(details, pointerChanges) : details;
+            }),
+            onResult: fetched => Update(s => s with { Render = RenderOf(fetched) }));
     }
 
     /// <summary>
@@ -384,22 +386,18 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Render = new CommitDetailsRenderState.Loading(),
         });
 
-        RunBackground<CommitDetailsRenderState>(
-            work: () =>
-            {
-                var fetched = _gitDiff.LoadRangeFiles(repo, baseSha, headSha);
-                if (fetched is Fetched<IReadOnlyList<FileChange>>.Failed failed)
-                    return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
-
-                var files = ((Fetched<IReadOnlyList<FileChange>>.Ok)fetched).Value;
-                return (new CommitDetailsRenderState.Loaded(BuildRangeDetails(repoId, baseSha, headSha, files)), null);
-            },
-            onResult: (result, error) =>
-                Update(s => s with
-                {
-                    Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
-                }));
+        RunBackground(
+            work: () => _gitDiff.LoadRangeFiles(repo, baseSha, headSha)
+                .Map(files => BuildRangeDetails(repoId, baseSha, headSha, files)),
+            onResult: fetched => Update(s => s with { Render = RenderOf(fetched) }));
     }
+
+    private static CommitDetailsRenderState RenderOf(Fetched<CommitDetails> fetched) => fetched switch
+    {
+        Fetched<CommitDetails>.Ok ok => new CommitDetailsRenderState.Loaded(ok.Value),
+        Fetched<CommitDetails>.Failed failed => new CommitDetailsRenderState.Placeholder(failed.Message),
+        _ => throw new System.Diagnostics.UnreachableException(),
+    };
 
     /// <summary>
     /// Shows the working tree's changed files as one list, for the working-tree review surface.
@@ -461,14 +459,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Files: files);
     }
 
-    private Repo? ResolveRepo(Guid repoId)
-    {
-        var active = _registry.Active.Value;
-        if (active != null && active.Id == repoId) return active;
-        foreach (var r in _registry.Repos)
-            if (r.Id == repoId) return r;
-        return null;
-    }
+    private Repo? ResolveRepo(Guid repoId) => _registry.Find(repoId);
 
     private static CommitDetails MergePointerChanges(CommitDetails details, IReadOnlyList<SubmodulePointerChange> changes)
     {

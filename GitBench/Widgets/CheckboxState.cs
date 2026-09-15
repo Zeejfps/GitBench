@@ -7,11 +7,11 @@ namespace GitBench.Widgets;
 /// A <see cref="CheckboxWidget"/>'s live state: the controller-driven interaction trio plus the bound
 /// <see cref="Checked"/> value, and the toggle behavior that writes the rising edge of
 /// <see cref="IInteractable.Pressed"/> back through the checked source. The widget delegates its
-/// <see cref="IInteractable"/>/<see cref="ICheckbox"/> surface to this, so the controller drives it
+/// <see cref="IInteractable"/> surface to this, so the controller drives it
 /// and the theme reads it from one place. Plain leaf states (nothing external subscribes to them),
 /// so they need no disposal — they fall out of scope with the view tree.
 /// </summary>
-public sealed class CheckboxState : ICheckbox
+public sealed class CheckboxState : IInteractable
 {
     private readonly State<bool> _hovered = new(false);
     private readonly State<bool> _pressed = new(false);

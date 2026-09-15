@@ -1,6 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Platform;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -59,6 +60,8 @@ public class DiffDefinitionLinkViewTests
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new FakeClipboard());
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
         view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
         harness.Render(); // resolve font metrics

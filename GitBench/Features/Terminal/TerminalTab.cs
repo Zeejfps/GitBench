@@ -34,7 +34,7 @@ internal sealed record NewTerminalButton : Widget
 
     // Centres the button in the strip by inset rather than by a Center, whose intrinsic width a
     // trailing slot beside a Grow has nothing to lay out against.
-    const int ButtonInset = ((int)TabStrip.Height - ButtonHeight) / 2;
+    const int ButtonInset = ((int)TabStrip.StripHeight - ButtonHeight) / 2;
 
     /// <summary>Put the terminal that was made on screen. The strip's, not this control's: what
     /// "showing" means belongs to the panel these tabs are for.</summary>
@@ -165,7 +165,7 @@ internal sealed record TerminalTab : Widget
             },
             // Tracked: the label follows the running command's title, and the trailing index follows
             // whichever siblings currently share it.
-            Label = Prop.Bind(() => Label(loc.Strings.Value, tabs.Terminals, terminal)),
+            Label = Prop.Bind<string?>(() => Label(loc.Strings.Value, tabs.Terminals, terminal)),
             ContentBackground = static s => s.Terminal.DefaultBackground,
             IsActive = IsShowing,
             OnActivate = () =>

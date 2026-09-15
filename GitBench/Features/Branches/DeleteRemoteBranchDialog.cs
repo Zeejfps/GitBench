@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -23,29 +24,33 @@ internal sealed record DeleteRemoteBranchDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new DeleteRemoteBranchDialogViewModel(
-            new DeleteRemoteBranchRequest(Repo, RemoteName, BranchName),
-            ctx.Require<IGitBranchOperations>(),
+        var repo = Repo;
+        var remoteName = RemoteName;
+        var branchName = BranchName;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitBranchOperations>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var delete = AsyncCommand.ForOutcome(
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            work: () => gitService.DeleteRemoteBranch(repo, remoteName, branchName),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                onClose();
+            });
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.BranchesDeleteRemoteTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Action = (s.CommonDelete, DialogButtonRole.Destructive),
-            Command = vm.Delete,
+            Command = delete,
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.BranchesDeleteRemoteDescription(BranchName, RemoteName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.BranchesDeleteRemoteDescription(BranchName, RemoteName) },
                 new Text
                 {
                     Value = s.BranchesDeleteRemoteInfo,

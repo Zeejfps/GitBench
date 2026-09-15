@@ -169,7 +169,7 @@ public class KeyBindingsTests
     [Fact]
     public void TheSharedDefaultsCannotBeEdited()
     {
-        Assert.IsNotAssignableFrom<IKeyBindingsStore>(KeyMap.Defaults);
+        Assert.IsNotAssignableFrom<KeyMap>(KeyMap.Defaults);
     }
 
     [Fact]

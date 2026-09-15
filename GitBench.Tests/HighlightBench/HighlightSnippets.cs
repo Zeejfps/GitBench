@@ -10,9 +10,9 @@ namespace GitBench.Tests.HighlightBench;
 /// </summary>
 internal static class HighlightSnippets
 {
-    public static IReadOnlyList<(CodeLanguage Language, string LanguageId, string Source)> All { get; } =
+    public static IReadOnlyList<(CodeLanguage Language, string Source)> All { get; } =
     [
-        (CodeLanguage.CSharp, "csharp", Lf(
+        (CodeLanguage.CSharp, Lf(
             """""
             record Point(int X, int Y);
             var record = 1;                       // contextual keyword used as an identifier
@@ -24,7 +24,7 @@ internal static class HighlightSnippets
             [Obsolete("gone")] static int Local(scoped ReadOnlySpan<char> s) => s.Length;
             """"")),
 
-        (CodeLanguage.TypeScript, "typescript", Lf(
+        (CodeLanguage.TypeScript, Lf(
             """
             const enum Mode { On, Off }
             type Pair<T> = { left: T; right: T };
@@ -35,7 +35,7 @@ internal static class HighlightSnippets
             class Box { #secret = 0; get value(): number { return this.#secret; } }
             """)),
 
-        (CodeLanguage.Python, "python", Lf(
+        (CodeLanguage.Python, Lf(
             """
             match = 1
             case = 2
@@ -46,7 +46,7 @@ internal static class HighlightSnippets
             async def run(): await asyncio.sleep(0)
             """)),
 
-        (CodeLanguage.Rust, "rust", Lf(
+        (CodeLanguage.Rust, Lf(
             """
             pub fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { if x.len() > y.len() { x } else { y } }
             let v: Vec<Box<dyn Fn(u32) -> u32>> = vec![];
@@ -56,7 +56,7 @@ internal static class HighlightSnippets
             macro_rules! shout { ($x:expr) => { println!("{}", $x) } }
             """)),
 
-        (CodeLanguage.Go, "go", Lf(
+        (CodeLanguage.Go, Lf(
             """
             type User struct {
                 Name string `json:"name" db:"user_name"`
@@ -67,7 +67,7 @@ internal static class HighlightSnippets
             ch := make(chan<- int, 8)
             """)),
 
-        (CodeLanguage.JavaScript, "javascript", Lf(
+        (CodeLanguage.JavaScript, Lf(
             """
             const re = /ab+c\/[a-z]*/gi;
             const div = a / b / c;

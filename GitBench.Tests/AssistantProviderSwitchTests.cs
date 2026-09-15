@@ -442,7 +442,10 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
 
     public AssistantProviderSwitchTimingTests()
     {
-        foreach (var variable in AssistantProviders.All.Select(p => p.EnvironmentVariable).OfType<string>())
+        foreach (var variable in AssistantProviders.All
+                     .Select(p => p.Hosting)
+                     .OfType<AssistantHosting.Hosted>()
+                     .Select(h => h.EnvironmentVariable))
         {
             _environment[variable] = Environment.GetEnvironmentVariable(variable);
             Environment.SetEnvironmentVariable(variable, null);
@@ -590,15 +593,6 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
         _loc.Dispose();
         _dir.Dispose();
     }
-}
-
-/// Nothing is being tracked here: the git service these tests hand out is never asked to read.
-internal sealed class NullActivityTracker : IRepoActivityTracker
-{
-    private sealed class Scope : IDisposable { public void Dispose() { } }
-
-    public IDisposable Begin(string repoPath) => new Scope();
-    public bool IsActive(string repoPath) => false;
 }
 
 /// What a provider switch does to a conversation already under way.
@@ -835,12 +829,15 @@ public sealed class AssistantProviderPreferencesTests : IDisposable
     {
         var path = Path.Combine(_dir.Path, "prefs.json");
         var service = new PreferencesService(Preferences.Default, path);
-        service.SetAssistantProvider(
-            "openai",
+        service.Update(p => p with
+        {
+            AssistantProviderId = "openai",
+            AssistantProviderPreferences =
             [
                 new AssistantProviderPreference("anthropic", "claude-sonnet-5", null),
                 new AssistantProviderPreference("openai", "gpt-5.6-terra", null),
-            ]);
+            ],
+        });
         service.Dispose();
 
         var loaded = PreferencesStore.Load(path);

@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -22,25 +23,64 @@ internal sealed record PublishBranchDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new PublishBranchDialogViewModel(
-            new PublishBranchRequest(Repo, LocalBranch),
-            ctx.Require<IGitBranchOperations>(),
-            ctx.Require<IGitRemoteOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Localization());
+        var repo = Repo;
+        var localBranch = LocalBranch;
+        var onClose = OnClose;
+        var gitBranches = ctx.Require<IGitBranchOperations>();
+        var gitRemotes = ctx.Require<IGitRemoteOperations>();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+        var bus = ctx.Require<IMessageBus>();
+        var loc = ctx.Localization();
 
-        var s = ctx.Localization().Strings.Value;
+        var remotes = new State<IReadOnlyList<string>>(Array.Empty<string>());
+        var selectedRemote = new State<string>(string.Empty);
+        var setUpstream = new State<bool>(true);
+        // Load-time inline message (no remotes configured). The publish failure itself surfaces
+        // in the operation-error dialog, not here.
+        var loadError = new State<string?>(null);
+        var gate = new Derived<bool>(() => !string.IsNullOrEmpty(selectedRemote.Value));
+
+        var publish = AsyncCommand.ForOutcome(
+            dispatcher,
+            work: () => gitBranches.PublishBranch(repo, localBranch, selectedRemote.Value, localBranch, setUpstream.Value),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                onClose();
+            },
+            gate: gate);
+
+        Task.Run(() =>
+        {
+            IReadOnlyList<string> names;
+            try { names = gitRemotes.GetRemoteNames(repo); }
+            catch { names = Array.Empty<string>(); }
+
+            dispatcher.Post(() =>
+            {
+                remotes.Value = names;
+                if (names.Count == 0)
+                {
+                    loadError.Value = loc.Strings.Value.BranchesPublishErrorNoRemotes;
+                }
+                else
+                {
+                    loadError.Value = null;
+                    selectedRemote.Value = names.FirstOrDefault(o => o == "origin") ?? names[0];
+                }
+            });
+        });
+
+        var s = loc.Strings.Value;
         return new Dialog
         {
             Title = s.BranchesPublishTitle,
-            OnClose = OnClose,
+            OnClose = onClose,
             Width = DialogFrame.WidthWide,
             Action = (s.BranchesPublishAction, DialogButtonRole.Primary),
-            Command = vm.Publish,
-            InlineError = vm.LoadError,
+            Command = publish,
+            InlineError = loadError,
             ConfirmKeys = true,
-            ViewModel = vm,
             Body =
             [
                 new Text
@@ -51,11 +91,11 @@ internal sealed record PublishBranchDialog : Widget
                     Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
                 new LabeledRow { Label = s.BranchesPublishBranchLabel, Value = BranchChip(LocalBranch) },
-                new LabeledRow { Label = s.BranchesPublishRemoteLabel, Value = new RemoteDropdown { Selected = vm.SelectedRemote, Remotes = vm.Remotes } },
+                new LabeledRow { Label = s.BranchesPublishRemoteLabel, Value = new RemoteDropdown { Selected = selectedRemote, Remotes = remotes } },
                 new CheckboxWidget
                 {
                     Label = s.BranchesPublishTrackLabel,
-                    Checked = vm.SetUpstream,
+                    Checked = setUpstream,
                     Height = 24,
                 }.WithController<KbmController>(),
             ],
@@ -85,8 +125,6 @@ internal sealed record PublishBranchDialog : Widget
         ],
     };
 }
-
-internal readonly record struct PublishBranchRequest(Repo Repo, string LocalBranch);
 
 internal sealed record RemoteDropdown : Widget
 {

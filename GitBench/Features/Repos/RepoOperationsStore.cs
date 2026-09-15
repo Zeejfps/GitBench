@@ -60,6 +60,11 @@ public interface IRepoOperationsStore
     // True while a push/pull/fetch is in flight on this repo. Tracked.
     bool IsBusy(Guid repoId);
 
+    // A pull on the *active* repo failed because local and upstream diverged — the one pull failure
+    // that's recoverable in-app. The toolbar turns it into the reconcile dialog; a background repo's
+    // divergence goes to the unseen-error badge instead and never raises this.
+    event Action<Repo>? PullDiverged;
+
     void Push(Repo repo, bool force = false);
     void Pull(Repo repo, PullStrategy? strategy = null);
     void Fetch(Repo repo);
@@ -103,6 +108,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
     private IDisposable? _activeSub;
 
     public IReadable<RepoOperations> Active => _active;
+
+    public event Action<Repo>? PullDiverged;
 
     public RepoOperationsStore(IRepoRegistry registry, IGitRemoteOperations git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
     {
@@ -284,7 +291,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         if (diverged && _registry.Active.Value?.Id == repo.Id)
         {
             s.Value = next;
-            _bus.Broadcast(new PullDivergedMessage(repo));
+            PullDiverged?.Invoke(repo);
             completion?.TrySetResult(new RemoteOpResult.Diverged());
             return;
         }

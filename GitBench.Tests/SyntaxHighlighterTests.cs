@@ -155,9 +155,8 @@ public class SyntaxHighlighterTests
     [Fact]
     public void EveryRegisteredLanguage_ResolvesToAGrammar()
     {
-        using var routed = new RoutedSyntaxHighlighter();
         foreach (var id in LanguageRegistry.AllLanguageIds)
-            Assert.True(routed.Highlight("x", id) is not null, $"language id '{id}' did not resolve to a grammar");
+            Assert.True(Highlighter.Highlight("x", id) is not null, $"language id '{id}' did not resolve to a grammar");
     }
 
     [Fact]

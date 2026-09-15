@@ -98,9 +98,11 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         return OpenRepoOutcome.Opened;
     }
 
+    public Repo? Find(Guid id) => Repos.FirstOrDefault(r => r.Id == id);
+
     public void SetActive(Guid id)
     {
-        var target = Repos.FirstOrDefault(r => r.Id == id);
+        var target = Find(id);
         if (target is null) return;
         if (ReferenceEquals(Active.Value, target)) return;
         Active.Value = target;

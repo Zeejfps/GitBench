@@ -9,15 +9,6 @@ using ZGF.Observable;
 
 namespace GitBench.Controls;
 
-// The host-facing slice of a sliding selection bar: its eased progress, a revision bump for non-tween
-// repaints, and the current bar rect. Lets the overlay host stay key-agnostic.
-internal interface ISelectionBar
-{
-    IReadable<float> Progress { get; }
-    IReadable<int> Revision { get; }
-    bool TryGetRect(out RectF rect);
-}
-
 // Slides one selection bar between the rows of a grouped, variable-height widget tree (the repo bar and
 // the branches sidebar). There is no row index to lerp — rows publish their live laid-out rect, the
 // active row is resolved from an injected key readable, and the bar lerps between the previous and
@@ -26,7 +17,7 @@ internal interface ISelectionBar
 //
 // TKey is the row identity the selection is keyed on (a repo id, a branch row key). The bar subscribes
 // to <paramref name="active"/> for the current key but does not own it — the caller disposes the readable.
-internal sealed class TreeSelectionBar<TKey> : ISelectionBar, IDisposable where TKey : struct
+internal sealed class TreeSelectionBar<TKey> : IDisposable where TKey : struct
 {
     private readonly Tween _tween;
     private readonly IDisposable _activeSub;
@@ -143,14 +134,14 @@ internal sealed class TreeSelectionBar<TKey> : ISelectionBar, IDisposable where 
 // Draws the sliding selection bar behind its child rows, clipped to the scroll viewport: a full-width
 // fill with a 2px accent down the leading edge — the look the repo bar established and the branches
 // sidebar shares.
-internal sealed class TreeSelectionOverlayHost : ContainerView
+internal sealed class TreeSelectionOverlayHost<TKey> : ContainerView where TKey : struct
 {
     private const float AccentBarWidth = 2f;
 
-    private readonly ISelectionBar _bar;
+    private readonly TreeSelectionBar<TKey> _bar;
     private RowSelectionStyles _styles = ThemeStyles.Dark.RowSelection;
 
-    public TreeSelectionOverlayHost(ISelectionBar bar, IThemeService<ThemeStyles> theme)
+    public TreeSelectionOverlayHost(TreeSelectionBar<TKey> bar, IThemeService<ThemeStyles> theme)
     {
         _bar = bar;
         this.BindThemed(theme, s => { _styles = s.RowSelection; SetDirty(); });
@@ -193,7 +184,7 @@ internal sealed record TreeSelectionOverlay<TKey> : Widget where TKey : struct
 
     protected override View CreateView(Context ctx)
     {
-        var host = new TreeSelectionOverlayHost(Bar, ctx.Theme());
+        var host = new TreeSelectionOverlayHost<TKey>(Bar, ctx.Theme());
         var scope = new Context(ctx);
         scope.AddService(Bar);
         host.Children.Add(Child.BuildView(scope));

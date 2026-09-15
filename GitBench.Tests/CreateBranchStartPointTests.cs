@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Branches;
 using GitBench.Features.Repos;
@@ -40,10 +39,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
         // start from" is answerable by comparing SHAs.
         _repoPath = Path.Combine(_root, "solo");
         Directory.CreateDirectory(_repoPath);
-        Git("init", "-q", "-b", "main");
-        Git("config", "user.name", "Test");
-        Git("config", "user.email", "test@example.com");
-        Git("config", "commit.gpgsign", "false");
+        TestGit.Init(_repoPath);
         File.WriteAllText(Path.Combine(_repoPath, "a.txt"), "0");
         Git("add", "a.txt");
         Git("commit", "-qm", "base");
@@ -81,7 +77,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
     [Fact]
     public void An_untouched_start_point_field_sends_HEAD_however_it_is_labelled()
     {
-        using var vm = NewDialog(GitRef.Head, label: "main");
+        var vm = NewDialog(GitRef.Head, label: "main");
         vm.Name.Value = "created";
 
         Execute(vm);
@@ -93,7 +89,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
     [Fact]
     public void A_cleared_start_point_field_sends_HEAD()
     {
-        using var vm = NewDialog(GitRef.Head, label: "main");
+        var vm = NewDialog(GitRef.Head, label: "main");
         vm.Name.Value = "created";
         vm.StartPoint.Value = "";
 
@@ -106,7 +102,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
     [Fact]
     public void An_edited_start_point_field_sends_what_was_typed()
     {
-        using var vm = NewDialog(GitRef.Head, label: "main");
+        var vm = NewDialog(GitRef.Head, label: "main");
         vm.Name.Value = "created";
         vm.StartPoint.Value = "feature";
 
@@ -122,7 +118,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
     public void A_dialog_opened_at_a_commit_keeps_that_commit_as_the_start_point()
     {
         var sha = Sha("feature");
-        using var vm = NewDialog(GitRef.Named(sha), label: sha);
+        var vm = NewDialog(GitRef.Named(sha), label: sha);
         vm.Name.Value = "created";
 
         Execute(vm);
@@ -138,7 +134,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
     {
         var vm = new CreateBranchDialogViewModel(
             _repo, startPoint, label, initialName: "",
-            _git, _dispatcher, _bus, _head, _loc);
+            _git, _dispatcher, _bus, _head, _loc, onClose: () => { });
         vm.Checkout.Value = false;
         return vm;
     }
@@ -150,30 +146,9 @@ public sealed class CreateBranchStartPointTests : IDisposable
         Assert.Null(vm.Create.Error.Value);
     }
 
-    private string Sha(string rev) => RunGit("rev-parse", rev).Trim();
+    private string Sha(string rev) => Git("rev-parse", rev).Trim();
 
-    private void Git(params string[] args) => RunGit(args);
-
-    private string RunGit(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _repoPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-        return stdout;
-    }
+    private string Git(params string[] args) => TestGit.Run(_repoPath, args);
 
     private void DrainUntil(Func<bool> done, string what)
     {
@@ -193,17 +168,5 @@ public sealed class CreateBranchStartPointTests : IDisposable
         _registry.Dispose();
         _loc.Dispose();
         DirectoryTree.Delete(_root);
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

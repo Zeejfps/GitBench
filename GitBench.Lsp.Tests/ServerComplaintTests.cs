@@ -21,7 +21,6 @@ public sealed class ServerComplaintTests
         RootMarkers: [],
         Environment: new Dictionary<string, string>(),
         InitializationOptionsJson: null,
-        SettingsJson: null,
         RequestTimeout: TimeSpan.FromSeconds(2),
         IdleShutdown: TimeSpan.FromMinutes(5));
 
@@ -31,7 +30,7 @@ public sealed class ServerComplaintTests
             new MapServerEnvironment(new Dictionary<string, string>()),
             action => action());
         var launched = launcher.Launch(new ServerLaunchRequest(entry, Path.GetTempPath(), Path.GetTempPath()));
-        return (ILanguageServerSession)Assert.IsType<LaunchResult.Started>(launched).Process;
+        return Assert.IsType<LaunchResult<ProcessLanguageServer>.Started>(launched).Process;
     }
 
     [Fact]
@@ -99,5 +98,23 @@ public sealed class ServerComplaintTests
         var seen = await exited.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Contains("no such toolchain component", seen.Detail);
+    }
+
+    // A server that writes something other than the protocol to its output ends the conversation
+    // while the process lives on. Nothing would ever answer again, and nothing else tells the
+    // supervisor so.
+    [Fact]
+    public async Task AServerWhoseOutputCannotBeFramedIsReportedAsGone()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux()) return;
+
+        using var server = Launch(Entry("-c", "echo 'this is not a header'; sleep 30"));
+        var exited = new TaskCompletionSource<ServerExit>(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.Exited += exit => exited.TrySetResult(exit);
+
+        var seen = await exited.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Null(seen.ExitCode);
+        Assert.Contains("could not be read", seen.Detail);
     }
 }

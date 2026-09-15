@@ -57,14 +57,10 @@ public sealed class WalkthroughToolsTests : IDisposable
         var statePath = Path.Combine(_dir.Path, "repos.json");
         var registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
         var loc = new LocalizationService(new State<Locale>(Locale.En));
-        _windows = new ReviewWindowsViewModel(
+        _windows = TestWindows.Review(
             _bus,
             new EmptyStackSource(),
             registry,
-            git,
-            git,
-            git,
-            git,
             git,
             new UnparsedFiles(),
             new IdleSnapshotStore(),

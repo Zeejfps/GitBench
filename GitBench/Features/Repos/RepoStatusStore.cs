@@ -46,15 +46,22 @@ public interface IRepoStatusStore
     RepoStatus For(Guid repoId);
 }
 
-// The write side of IRepoStatusStore's per-repo slot, for a summary observed by another store's git
-// read. Two phase because the ordering is decided when the read *starts*, not when it lands: Reserve
-// takes the repo's next probe epoch exactly as an internal probe would, and Publish is dropped if a
-// newer probe or reservation has happened since. Deliberately not a member of IRepoStatusStore — that
-// interface is the read seam five view models hold, and none of them writes.
+// The write side of IRepoStatusStore's per-repo slot. Reserve/Publish carry a summary observed by
+// another store's git read; two phase because the ordering is decided when the read *starts*, not
+// when it lands: Reserve takes the repo's next probe epoch exactly as an internal probe would, and
+// Publish is dropped if a newer probe or reservation has happened since. NoteLocalCommit is the
+// one optimistic patch: a plain commit just landed, so the ahead count snaps to ahead + 1 before the
+// post-commit reload confirms it — on the active repo that count rides in on the file-list read's
+// `git status`, the whole working-tree walk, so the push button would otherwise sit disabled for a
+// beat after the panel had emptied. Only a plain commit qualifies: an amend's effect on ahead isn't
+// knowable without reading, and a branch with no upstream has nothing to be ahead of.
+// Deliberately not a member of IRepoStatusStore — that interface is the read seam the view models
+// hold.
 internal interface IRepoStatusIngest
 {
     int Reserve(Guid repoId);
     void Publish(Guid repoId, int reservation, GitStatusSummary? summary);
+    void NoteLocalCommit(Guid repoId);
 }
 
 /// <summary>
@@ -104,7 +111,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     private IDisposable? _refsSub;
     private IDisposable? _commitSub;
     private IDisposable? _optimisticSyncSub;
-    private IDisposable? _optimisticCommitSub;
     private IDisposable? _refreshSub;
 
     public IReadable<RepoStatus> Active => _active;
@@ -141,7 +147,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _commitSub = _bus.SubscribeScoped<CommitCreatedMessage>(m => RefreshUnlessActive(m.RepoId));
         _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(m => Refresh(m.RepoId));
         _optimisticSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(ApplyOptimisticSync);
-        _optimisticCommitSub = _bus.SubscribeScoped<LocalCommitOptimisticMessage>(ApplyOptimisticCommit);
         // Subscribe fires Reset immediately with the current list, seeding a probe for every repo.
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
         // A switch has to re-probe: every consumer reads the *active* repo's slot, so without this
@@ -213,10 +218,10 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     // Grows the repo's ahead count by the one commit that just landed, ahead of the post-commit
     // reload that reconciles it. Skipped without a tracked upstream: Ahead means nothing then, and
     // the toolbar already enables push as a publish. UI-thread only, like every other probe write.
-    private void ApplyOptimisticCommit(LocalCommitOptimisticMessage msg)
+    public void NoteLocalCommit(Guid repoId)
     {
         if (_disposed) return;
-        var state = Probe(msg.RepoId);
+        var state = Probe(repoId);
         var cur = state.Value;
         if (cur.IsDetached || !cur.HasUpstream) return;
         state.Value = cur with { Ahead = cur.Ahead + 1 };
@@ -381,7 +386,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _refsSub?.Dispose();
         _commitSub?.Dispose();
         _optimisticSyncSub?.Dispose();
-        _optimisticCommitSub?.Dispose();
         _refreshSub?.Dispose();
         _active.Dispose();
         foreach (var s in _probe.Values) s.Dispose();

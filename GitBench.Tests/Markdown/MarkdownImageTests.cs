@@ -123,14 +123,6 @@ public class MarkdownImageTests
         public byte[]? Read(string path, int maxBytes) => null;
     }
 
-    private sealed class FakeShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
     private static readonly ImageFrame Frame = new(4, 2, new byte[4 * 2 * 4]);
 
     private static GuiTestHarness Create(string markdown, FakeLoader? loader, IMarkdownImageSource? source = null)
@@ -141,6 +133,7 @@ public class MarkdownImageTests
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new FakeShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
                 if (loader != null) ctx.AddService<IMarkdownImageLoader>(loader);

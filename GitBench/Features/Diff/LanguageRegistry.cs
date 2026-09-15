@@ -233,9 +233,6 @@ internal static class LanguageRegistry
         [".mts"] = "typescript",
         [".cts"] = "typescript",
         [".tsx"] = "typescriptreact",
-        // TOML is tree-sitter-only: TextMateSharp bundles no grammar for it, so a .toml file
-        // renders plain in the fallback rather than in regexes.
-        [".toml"] = "toml",
         [".typ"] = "typst",
         [".typc"] = "typst-code",
         [".vb"] = "vb",
@@ -364,12 +361,19 @@ internal static class LanguageRegistry
         ["zshrc_Apple_Terminal"] = "shellscript",
     };
 
-    public static string? DetectLanguageId(string path)
+    public static string? DetectLanguageId(string path) =>
+        DetectByFileName(path) ?? DetectByExtension(path);
+
+    public static string? DetectByFileName(string path)
     {
         if (string.IsNullOrEmpty(path)) return null;
-        var fileName = Path.GetFileName(path);
-        if (ByFileName.TryGetValue(fileName, out var byName)) return byName;
-        var ext = Path.GetExtension(fileName);
+        return ByFileName.TryGetValue(Path.GetFileName(path), out var id) ? id : null;
+    }
+
+    public static string? DetectByExtension(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        var ext = Path.GetExtension(Path.GetFileName(path));
         if (string.IsNullOrEmpty(ext)) return null;
         return ByExtension.TryGetValue(ext, out var id) ? id : null;
     }

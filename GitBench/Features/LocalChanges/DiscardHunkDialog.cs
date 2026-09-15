@@ -19,61 +19,39 @@ internal sealed record DiscardHunkDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new DiscardHunkViewModel(
-            new DiscardHunkRequest(Repo, Patch),
-            ctx.Require<IGitWorkingTreeOperations>(),
+        var repo = Repo;
+        var patch = Patch;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitWorkingTreeOperations>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var discard = AsyncCommand.ForOutcome(
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            work: () => gitService.ApplyPatch(repo, patch, cached: false, reverse: true),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                onClose();
+            });
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            ViewModel = vm,
             Title = s.LocalchangesDiscardHunkTitle,
-            OnClose = OnClose,
+            OnClose = onClose,
             Width = DialogFrame.WidthCompact,
             Height = 200f,
             Action = (s.CommonDiscard, DialogButtonRole.Destructive),
-            Command = vm.Discard,
+            Command = discard,
             ConfirmKeys = true,
             Body =
             [
                 new Grow
                 {
-                    Child = new Text
-                    {
-                        Value = s.LocalchangesDiscardHunkBody(Path),
-                        Wrap = TextWrap.Wrap,
-                        Color = Theme.Color(t => t.DialogBody.BodyText),
-                    },
+                    Child = new DialogBodyText { Value = s.LocalchangesDiscardHunkBody(Path) },
                 },
             ],
         };
     }
 }
 
-public readonly record struct DiscardHunkRequest(Repo Repo, string Patch);
-
-internal sealed class DiscardHunkViewModel : IDialogViewModel
-{
-    public AsyncCommand Discard { get; }
-    public event Action? CloseRequested;
-
-    public DiscardHunkViewModel(
-        DiscardHunkRequest request,
-        IGitWorkingTreeOperations gitService,
-        IUiDispatcher dispatcher,
-        IMessageBus bus)
-    {
-        Discard = AsyncCommand.ForOutcome(
-            dispatcher,
-            work: () => gitService.ApplyPatch(request.Repo, request.Patch, cached: false, reverse: true),
-            onSuccess: () =>
-            {
-                bus.Broadcast(new WorkingTreeChangedMessage(request.Repo.Id));
-                CloseRequested?.Invoke();
-            });
-    }
-
-    public void Dispose() { }
-}

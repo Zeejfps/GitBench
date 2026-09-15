@@ -21,8 +21,8 @@ internal static class AppHostSetup
     {
         public void UseWindowGeometry(PreferencesService preferences)
         {
-            appHost.OnWindowResized += preferences.SetWindowSize;
-            appHost.OnWindowMoved += preferences.SetWindowPosition;
+            appHost.OnWindowResized += (w, h) => preferences.Update(p => p with { WindowWidth = w, WindowHeight = h });
+            appHost.OnWindowMoved += (x, y) => preferences.Update(p => p with { WindowX = x, WindowY = y });
         }
 
         /// <summary>
@@ -41,12 +41,14 @@ internal static class AppHostSetup
         }
 
         /// <summary>
-        /// Builds the shared highlighter on a worker before anything asks it for colors. First
-        /// touch compiles thirteen tree-sitter queries and a TextMate registry, and whichever
-        /// surface reached it first used to pay for that — as a stall on the first file opened.
+        /// Builds the TextMate registry on a worker before anything asks it for colors; whichever
+        /// surface reached it first used to pay for that, as a stall on the first file opened.
         /// </summary>
         public void UseWarmHighlighter()
-            => Task.Run(() => _ = RoutedSyntaxHighlighter.Shared);
+        {
+            var textMate = appHost.Context.Require<SyntaxHighlighter>();
+            Task.Run(textMate.Warm);
+        }
 
         public void UseUpdateChecks()
         {
@@ -140,7 +142,7 @@ internal static class AppHostSetup
             try
             {
                 appHost.MakeMainContextCurrent();
-                AppLogo.IconImageId.Value = appHost.LoadImage(iconPng);
+                appHost.Context.Require<AppIconImage>().Id.Value = appHost.LoadImage(iconPng);
             }
             catch (Exception ex) { Console.WriteLine($"[AppLogo] icon load failed: {ex.Message}"); }
 
@@ -148,7 +150,7 @@ internal static class AppHostSetup
             try
             {
                 appHost.MakeMainContextCurrent();
-                AssistantMark.ImageId.Value = appHost.LoadImage("Assets/assistant_mark.png");
+                appHost.Context.Require<AssistantMarkImage>().Id.Value = appHost.LoadImage("Assets/assistant_mark.png");
             }
             catch (Exception ex) { Console.WriteLine($"[AssistantMark] mark load failed: {ex.Message}"); }
         }

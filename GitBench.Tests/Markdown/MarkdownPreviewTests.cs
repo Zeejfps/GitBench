@@ -1,4 +1,7 @@
+using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
+using GitBench.Features.Markdown.Parsing;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Theming;
@@ -9,36 +12,24 @@ using ZGF.Observable;
 
 namespace GitBench.Tests.Markdown;
 
-// Smoke test for the Step 8 dev preview (MarkdownPreviewWidget over MarkdownPreviewFixture).
-// The widget is composed directly — the DIFFDINO_MARKDOWN_PREVIEW gate is AppWidget wiring, not
-// under test here. What is pinned: the preview composition builds and renders the fixture without
-// throwing, and sentinel texts from three different construct families (a heading, a fenced code
-// line, a table cell) actually reach the canvas — guarding that the fixture stays parseable and
-// the streaming path stays wired to it. Per-construct visuals are pinned by the Step 5/6/7 suites.
+// Smoke test over MarkdownPreviewFixture through the streaming path (MarkdownBlockList seeded via
+// SetText, bound by MarkdownStream — the integration the assistant transcript uses). What is
+// pinned: the fixture renders without throwing, and sentinel texts from three different construct
+// families (a heading, a fenced code line, a table cell) actually reach the canvas — guarding that
+// the fixture stays parseable and the streaming path stays wired to it. Per-construct visuals are
+// pinned by the other Markdown suites.
 public class MarkdownPreviewTests
 {
-    private sealed class FakeClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
 
     [Fact]
     public void PreviewRendersTheFixtureDocument()
     {
         // Tall enough for the whole fixture: views below the viewport are culled from the draw,
         // and a smoke test wants every construct on the canvas rather than scroll choreography.
+        var list = new MarkdownBlockList(new BasicMarkdownParser());
+        list.SetText(MarkdownPreviewFixture.Text);
         using var h = GuiTestHarness.Create(
-            ctx => new MarkdownPreviewWidget().BuildView(ctx),
+            ctx => new MarkdownStream { Source = list }.BuildView(ctx),
             width: 1000, height: 6000,
             configure: ctx =>
             {
@@ -50,6 +41,7 @@ public class MarkdownPreviewTests
                 ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new FakeShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
+                ctx.AddService<ISyntaxHighlighter>(new PlainText());
             });
 
         var canvas = h.Render();

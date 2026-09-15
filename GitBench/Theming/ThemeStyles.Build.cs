@@ -31,7 +31,6 @@ public partial record ThemeStyles
             DialogActionButton = BuildDialogActionButton(p, status),
             Checkbox = BuildCheckbox(p),
             CommitBar = BuildCommitBar(p),
-            ModeSwitcher = BuildModeSwitcher(p),
             BranchesHeader = BuildBranchesHeader(p),
             GroupHeaderRow = BuildGroupHeaderRow(p),
             GroupRenameField = BuildGroupRenameField(p),

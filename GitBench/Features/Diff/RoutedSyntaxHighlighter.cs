@@ -15,33 +15,14 @@ namespace GitBench.Features.Diff;
 /// now. The only way to render plain is for both engines to decline.
 /// </para>
 /// <para>
-/// Measured over 1,014 files of this repository, tree-sitter is 10.6x faster end to end and is not
-/// meaningfully slower on any file; see <c>docs/plans/tree-sitter-highlighting-benchmark.md</c>.
-/// That report predates injections and so has no Markdown or HTML row: both routed to TextMate
-/// until the parser could follow a fenced block, a <c>&lt;script&gt;</c> body and Markdown's own
-/// inline grammar into the languages they are written in.
+/// Measured over 1,014 files of this repository (2026-08-31), tree-sitter was 10.6x faster end to
+/// end and not meaningfully slower on any file.
 /// </para>
 /// </remarks>
-internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter, IDisposable
+internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter
 {
-    /// <summary>
-    /// The one instance every highlighting surface shares — diffs, the file browser and markdown
-    /// code blocks alike.
-    /// </summary>
-    /// <remarks>
-    /// Each instance builds a TextMate registry and compiles a query per bundled grammar, so a
-    /// second one means paying both costs twice. First touch is what builds them: reach for this
-    /// only from a background lane, never during a widget build.
-    /// </remarks>
-    public static RoutedSyntaxHighlighter Shared { get; } = new();
-
     private readonly TreeSitterSyntaxHighlighter _treeSitter;
     private readonly ISyntaxHighlighter _textMate;
-
-    public RoutedSyntaxHighlighter(Action<string>? log = null)
-        : this(new TreeSitterSyntaxHighlighter(log), SyntaxHighlighter.Shared)
-    {
-    }
 
     public RoutedSyntaxHighlighter(TreeSitterSyntaxHighlighter treeSitter, ISyntaxHighlighter textMate)
     {
@@ -49,24 +30,13 @@ internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter, IDisposable
         _textMate = textMate;
     }
 
-    /// <inheritdoc cref="SyntaxHighlighter.Highlight"/>
-    public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, string languageId)
+    public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language)
     {
-        if (_treeSitter.Supports(languageId) && _treeSitter.Highlight(fileText, languageId) is { } spans)
+        if (language is FileLanguage.TreeSitter(var parsed) && _treeSitter.Highlight(fileText, parsed) is { } spans)
         {
             return spans;
         }
 
-        return _textMate.Highlight(fileText, languageId);
+        return _textMate.Highlight(fileText, language);
     }
-
-    /// <summary>Whether a language would be colored by the parser rather than by regexes.</summary>
-    public bool RoutesToTreeSitter(string languageId) => _treeSitter.Supports(languageId);
-
-    /// <summary>The parser-backed engine behind this one, for the callers that keep a tree between
-    /// edits rather than handing over a whole file each time. TextMate has no such path — a
-    /// re-highlight there is the whole file at a tenth the speed — so this is the parser only.</summary>
-    public TreeSitterSyntaxHighlighter TreeSitter => _treeSitter;
-
-    public void Dispose() => _treeSitter.Dispose();
 }

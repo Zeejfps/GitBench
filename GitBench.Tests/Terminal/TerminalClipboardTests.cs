@@ -337,16 +337,6 @@ public class TerminalClipboardChordTests
     }
 }
 
-/// <summary>A clipboard that stays in the test rather than on the machine running it.</summary>
-internal sealed class FakeClipboard : IClipboard
-{
-    public string? Text { get; set; }
-
-    public void SetText(string text) => Text = text;
-
-    public string? GetText() => Text;
-}
-
 /// <summary>
 /// A mounted pane whose controller has a clipboard, which the shared harness deliberately does not
 /// give it.
@@ -382,16 +372,14 @@ internal sealed class ClipboardPane : IDisposable
             {
                 var input = ctx.Require<InputSystem>();
                 var view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                controller = new TerminalInputController(view, input, shell, view, clipboard);
+                controller = TerminalTestHost.Controller(ctx, view, shell, view);
                 input.RegisterController(view, controller);
                 return view;
             },
             configure: ctx =>
             {
-                ctx.AddService<IThemeService<ThemeStyles>>(
-                    new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                ctx.AddService<ILocalizationService>(
-                    new LocalizationService(new State<Locale>(Locale.En)));
+                TerminalTestHost.Configure(ctx);
+                ctx.AddService<IClipboard>(clipboard);
             });
 
         var pane = new ClipboardPane(harness, controller!, shell, clipboard);

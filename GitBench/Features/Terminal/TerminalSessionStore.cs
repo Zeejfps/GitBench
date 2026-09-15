@@ -1,7 +1,5 @@
 ﻿using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Pty;
-using GitBench.Terminal.Vt;
 using ZGF.Gui;
 using ZGF.Observable;
 
@@ -50,11 +48,7 @@ internal interface ITerminalSessionStore
 internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedService, IDisposable
 {
     readonly IRepoRegistry _registry;
-    readonly IPtySessionFactory _ptys;
-    readonly ITerminalEngineFactory _engines;
     readonly IUiDispatcher _dispatcher;
-    readonly IClipboard? _clipboard;
-    readonly ITerminalPalette? _palette;
     readonly TerminalLaunchFactory _launches;
 
     readonly Dictionary<Guid, TerminalTabs> _tabs = new();
@@ -65,30 +59,11 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
     bool _started;
     bool _disposed;
 
-    public TerminalSessionStore(
-        IRepoRegistry registry,
-        IPtySessionFactory ptys,
-        ITerminalEngineFactory engines,
-        IUiDispatcher dispatcher,
-        TerminalLaunchFactory? launches = null,
-        IClipboard? clipboard = null,
-        ITerminalPalette? palette = null)
+    public TerminalSessionStore(IRepoRegistry registry, IUiDispatcher dispatcher, TerminalLaunchFactory launches)
     {
         _registry = registry;
-        _ptys = ptys;
-        _engines = engines;
         _dispatcher = dispatcher;
-        _clipboard = clipboard;
-        _palette = palette;
-        _launches = launches ?? DefaultLaunch;
-
-        // Only the shell launch spawns anything, and only a spawn has to say what colour the pane
-        // is. A caller that brings its own launch brings whatever that launch needs with it, which
-        // is why this is checked here rather than required of everyone.
-        if (launches is null && palette is null)
-            throw new ArgumentNullException(
-                nameof(palette),
-                "A store that starts real shells needs the palette they are told the pane's colours from.");
+        _launches = launches;
     }
 
     public IReadable<TerminalTabs?> Tabs => _active;
@@ -149,11 +124,6 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
         }
     }
 
-    // Reached only when the constructor accepted no launch of its own, which is the one case the
-    // constructor insisted on a palette for.
-    ITerminalLaunch DefaultLaunch(Repo repo) =>
-        new ShellLaunch(repo.Path, _ptys, _engines, _palette!, _clipboard);
-
     public void Dispose()
     {
         if (_disposed) return;
@@ -172,5 +142,5 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
     }
 }
 
-/// <summary>What a repository's terminal runs. Substituted in tests, which have no shell to spawn.</summary>
+/// <summary>What a repository's terminal runs: the user's shell in the app, a stub in tests.</summary>
 internal delegate ITerminalLaunch TerminalLaunchFactory(Repo repo);

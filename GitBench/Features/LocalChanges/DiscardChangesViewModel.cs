@@ -1,140 +1,40 @@
-using GitBench.Features.Commits;
+using GitBench.Controls.Dialogs;
 using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
-internal sealed record DiscardFileRow(string Path, FileChange Display);
-
-internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesState>, IDialogViewModel
+internal sealed class DiscardChangesViewModel
 {
-    private readonly Repo _repo;
-    private readonly IGitWorkingTreeOperations _gitService;
-    private readonly IMessageBus _bus;
-    private readonly string _doneToast;
-
-    public IReadable<IReadOnlyList<DiscardFileRow>> Files { get; }
-    public IReadable<IReadOnlySet<string>> CheckedPaths { get; }
-    public IReadable<string> FilesHeader { get; }
+    public CheckedFileList Files { get; }
     public AsyncCommand Discard { get; }
 
-    public event Action? CloseRequested;
-
-    // The pivot a Shift-click extends a range from; moves to the row of every plain/toggle click.
-    private int _anchorIndex = -1;
-
     public DiscardChangesViewModel(
-        DiscardChangesRequest request,
+        Repo repo,
+        IReadOnlyList<string> paths,
         LocalChangesSnapshot snapshot,
         IGitWorkingTreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        ILocalizationService loc)
-        : base(dispatcher, DiscardChangesState.Initial)
+        ILocalizationService loc,
+        Action onClose)
     {
-        _repo = request.Repo;
-        _gitService = gitService;
-        _bus = bus;
         var strings = loc.Strings.Value;
-        _doneToast = strings.ToastChangesDiscarded;
+        Files = new CheckedFileList(snapshot.Unstaged, paths, strings);
 
-        var rows = BuildRows(snapshot);
-        var preChecked = ComputePreChecked(rows, request.Paths);
-        Update(s => s with
-        {
-            Files = rows,
-            CheckedPaths = new HashSet<string>(preChecked),
-        });
-
-        Files = Slice(s => s.Files);
-        CheckedPaths = Slice(s => s.CheckedPaths);
-        FilesHeader = Slice(s => s.Files.Count == 0
-            ? strings.LocalchangesFilesHeaderEmpty
-            : strings.LocalchangesFilesHeader(s.CheckedPaths.Count, s.Files.Count));
-
-        var canDiscard = Slice(s => s.CheckedPaths.Count > 0);
-        Discard = AsyncCommand.ForOutcome(dispatcher, DoDiscard, OnDiscardSucceeded, canDiscard);
-    }
-
-    /// <summary>
-    /// Handles a click on the row at <paramref name="index"/>. Shift extends a range from the anchor
-    /// to the clicked row and sets the whole range to match the clicked row's toggled state — a Shift
-    /// on an unchecked row checks the range, on a checked row unchecks it (the anchor stays put for
-    /// further extends). Any other click toggles just that row and moves the anchor to it.
-    /// </summary>
-    public void ClickRow(int index, InputModifiers modifiers)
-    {
-        var files = State.Value.Files;
-        if ((uint)index >= (uint)files.Count) return;
-
-        if ((modifiers & InputModifiers.Shift) != 0 && (uint)_anchorIndex < (uint)files.Count)
-        {
-            var lo = Math.Min(_anchorIndex, index);
-            var hi = Math.Max(_anchorIndex, index);
-            Update(s =>
+        Discard = AsyncCommand.ForOutcome(
+            dispatcher,
+            () => gitService.DiscardChanges(repo, Files.CheckedInOrder()),
+            () =>
             {
-                var targetChecked = !s.CheckedPaths.Contains(s.Files[index].Path);
-                var next = new HashSet<string>(s.CheckedPaths);
-                for (var i = lo; i <= hi; i++)
-                {
-                    if (targetChecked) next.Add(s.Files[i].Path);
-                    else next.Remove(s.Files[i].Path);
-                }
-                return s with { CheckedPaths = next };
-            });
-            return;
-        }
-
-        _anchorIndex = index;
-        var path = files[index].Path;
-        Update(s =>
-        {
-            var next = new HashSet<string>(s.CheckedPaths);
-            if (!next.Add(path)) next.Remove(path);
-            return s with { CheckedPaths = next };
-        });
-    }
-
-    private GitOutcome DoDiscard()
-    {
-        var state = State.Value;
-        var paths = new List<string>(state.CheckedPaths.Count);
-        foreach (var f in state.Files)
-            if (state.CheckedPaths.Contains(f.Path)) paths.Add(f.Path);
-
-        return _gitService.DiscardChanges(_repo, paths);
-    }
-
-    private void OnDiscardSucceeded()
-    {
-        _bus.Broadcast(new WorkingTreeChangedMessage(_repo.Id));
-        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_doneToast)));
-        CloseRequested?.Invoke();
-    }
-
-    private static IReadOnlyList<DiscardFileRow> BuildRows(LocalChangesSnapshot snapshot)
-    {
-        var rows = new List<DiscardFileRow>(snapshot.Unstaged.Count);
-        foreach (var f in snapshot.Unstaged)
-            rows.Add(new DiscardFileRow(f.Path, f));
-        rows.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
-        return rows;
-    }
-
-    private static IReadOnlyList<string> ComputePreChecked(IReadOnlyList<DiscardFileRow> rows, IReadOnlyList<string> requested)
-    {
-        if (requested.Count == 0)
-            return rows.Select(r => r.Path).ToList();
-
-        var reqSet = new HashSet<string>(requested);
-        var preChecked = new List<string>(requested.Count);
-        foreach (var r in rows)
-            if (reqSet.Contains(r.Path)) preChecked.Add(r.Path);
-        return preChecked;
+                bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                bus.Broadcast(new ShowToastMessage(ToastIntent.Success(strings.ToastChangesDiscarded)));
+                onClose();
+            },
+            new Derived<bool>(() => Files.CheckedPaths.Value.Count > 0));
     }
 }

@@ -5,16 +5,14 @@ using GitBench.Git;
 namespace GitBench.Features.Diff;
 
 /// <summary>
-/// One diff to load. BinaryText and NoCurrentVersionText are localized strings read on the UI
-/// thread and carried in, because the loader runs on a worker and must not touch the localization
-/// observable from there.
+/// One diff to load. NoCurrentVersionText is a localized string read on the UI thread and carried
+/// in, because the loader runs on a worker and must not touch the localization observable from there.
 /// </summary>
 internal sealed record DiffPreviewRequest(
     Repo Repo,
     DiffTarget Target,
     DiffViewMode Mode,
     bool Preview,
-    string BinaryText,
     string NoCurrentVersionText);
 
 /// <summary>
@@ -30,13 +28,13 @@ internal sealed record DiffPreviewRequest(
 /// lane, which drops the result of a load whose file the reader has already navigated away from.
 /// </remarks>
 internal sealed class DiffPreviewLoader(
-    IGitDiffReader git, IGitConflictOperations conflicts, ISymbolExtractor extractor)
+    IGitDiffReader git, IGitConflictOperations conflicts, ISymbolExtractor extractor, ISyntaxHighlighter highlighter)
 {
     /// <summary>The finished render. Never null: everything that cannot be drawn comes back as a
     /// <see cref="DiffRenderState.Placeholder"/> saying why.</summary>
     public DiffRenderState Load(DiffPreviewRequest request)
     {
-        var (repo, target, mode, preview, _, _) = request;
+        var (repo, target, mode, preview, _) = request;
         var (path, side, commitSha, baseSha) = (target.Path, target.Side, target.CommitSha, target.BaseSha);
 
         if (preview && MarkdownDiffPreview.IsPreviewablePath(path)
@@ -54,13 +52,15 @@ internal sealed class DiffPreviewLoader(
         // The diff is loaded either way: it supplies the added-line set for full-file tinting and
         // the removed rows the diff view colors from the before-side text.
         var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
-        // An image blob has no readable patch on either mode's terms, so the picture replaces the
-        // body in both — the full-file toggle has nothing else to offer for it.
-        if (BuildImage(repo, diff, path, side, commitSha, baseSha) is { } image) return image;
+        // A binary blob has no readable patch on either mode's terms, so the picture — or the bare
+        // fact — replaces the body in both; the full-file toggle has nothing else to offer for it.
+        if (diff.IsBinary)
+            return BuildImage(repo, diff, path, side, commitSha, baseSha)
+                ?? new DiffRenderState.Binary(path, side, diff.IsLfs);
 
         return mode == DiffViewMode.Diff
             ? new DiffRenderState.Loaded(
-                diff, DiffAnnotationCoordinator.Compute(extractor, git, repo, diff, commitSha, baseSha))
+                diff, DiffAnnotationCoordinator.Compute(extractor, highlighter, git, repo, diff, commitSha, baseSha))
             : BuildFullFile(request, diff);
     }
 
@@ -73,13 +73,12 @@ internal sealed class DiffPreviewLoader(
         return text == null ? null : TextLines.Split(text);
     }
 
-    // Reads and decodes the blob behind a binary image file, or returns null to leave the diff
-    // rendering as it did before (non-image path, unreadable/oversized blob, LFS pointer standing
-    // in for the real bytes, a format neither codec handles).
+    // Reads and decodes the blob behind a binary image file, or returns null (non-image path,
+    // unreadable/oversized blob, LFS pointer standing in for the real bytes, a format neither codec
+    // handles).
     private DiffRenderState? BuildImage(
         Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha, string? baseSha)
     {
-        if (!diff.IsBinary || diff.ErrorMessage != null) return null;
         if (!ImagePreviewDecoder.IsPreviewablePath(path)) return null;
 
         var max = ImagePreviewDecoder.MaxSourceBytes;
@@ -101,13 +100,9 @@ internal sealed class DiffPreviewLoader(
 
     // Assembles a FullFile render from a loaded diff: fetches the after-side file text, caps it,
     // marks which lines were added, and annotates it from the text already in hand. Returns a
-    // Placeholder for cases with no readable current version (binary, diff error, or a
-    // deleted/absent file).
+    // Placeholder when there is no readable current version (a deleted/absent file).
     private DiffRenderState BuildFullFile(DiffPreviewRequest request, DiffResult diff)
     {
-        if (diff.IsBinary) return new DiffRenderState.Placeholder(request.BinaryText);
-        if (diff.ErrorMessage != null) return new DiffRenderState.Placeholder(diff.ErrorMessage);
-
         var (repo, target) = (request.Repo, request.Target);
         var text = git.GetFileText(repo, target.Path, target.Side, oldSide: false, target.CommitSha, target.BaseSha);
         if (text == null) return new DiffRenderState.Placeholder(request.NoCurrentVersionText);
@@ -126,14 +121,10 @@ internal sealed class DiffPreviewLoader(
         {
             // Intra-line pairing needs both sides; do it here while the diff is in hand, keyed by
             // new-line number so the after-file view can attach the new-side ranges per row.
-            IReadOnlyList<CharRange>?[]? hunkEmphasis = null;
-            if (DiffOptions.IntraLineHighlightingEnabled)
-            {
-                var expanded = new string[hunk.Lines.Count];
-                for (var i = 0; i < hunk.Lines.Count; i++)
-                    expanded[i] = DiffText.ExpandTabs(hunk.Lines[i].Text);
-                hunkEmphasis = IntraLineDiff.ForHunk(hunk.Lines, expanded);
-            }
+            var expanded = new string[hunk.Lines.Count];
+            for (var i = 0; i < hunk.Lines.Count; i++)
+                expanded[i] = DiffText.ExpandTabs(hunk.Lines[i].Text);
+            var hunkEmphasis = IntraLineDiff.ForHunk(hunk.Lines, expanded);
             for (var i = 0; i < hunk.Lines.Count; i++)
             {
                 var line = hunk.Lines[i];
@@ -146,6 +137,6 @@ internal sealed class DiffPreviewLoader(
 
         return new DiffRenderState.FullFile(
             target.Path, lines, added, target.Side, truncated, emphasis,
-            DiffAnnotationCoordinator.ComputeNewSide(extractor, diff, text));
+            DiffAnnotationCoordinator.ComputeNewSide(extractor, highlighter, diff, text));
     }
 }

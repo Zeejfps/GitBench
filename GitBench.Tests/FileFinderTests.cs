@@ -224,9 +224,10 @@ public class FileFinderTests : IDisposable
         var browser = new FileBrowserViewModel(
             new Repo(Guid.NewGuid(), _dir.Path, "repo"),
             new FileSystemReader(),
-            NoIgnoreOracle.Instance,
-            _catalog,
+            FileBrowserFakes.NoIgnore,
+            _catalog.List,
             new UnparsedFiles(),
+            new PlainText(),
             _dispatcher,
             new FileBrowserUiState(),
             _persisted.Add,
@@ -263,7 +264,7 @@ public class FileFinderTests : IDisposable
     }
 
     /// <summary>The repository's files as git would list them, without a git.</summary>
-    private sealed class ScriptedCatalog : IFileCatalog
+    private sealed class ScriptedCatalog
     {
         private readonly List<string> _files = [];
 

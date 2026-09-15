@@ -176,7 +176,7 @@ internal sealed record ReviewWindowRootView : Widget
         },
     };
 
-    private IWidget Message() => Centered(Prop.Bind(Model.PlaceholderText));
+    private IWidget Message() => Centered(Prop.Bind<string?>(Model.PlaceholderText));
 
     private static IWidget Centered(Prop<string?> text) => new Center
     {

@@ -8,7 +8,7 @@ namespace GitBench.Features.Editor;
 
 /// <summary>A <see cref="TextDocument"/> seen as the row stream the diff painter draws, materialized
 /// per row and re-measured per edit rather than flattened per render.</summary>
-internal sealed class EditorRowSet : IDiffRowSource
+internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 {
     private readonly TextDocument _document;
     private readonly ILocalizationService _loc;
@@ -17,7 +17,7 @@ internal sealed class EditorRowSet : IDiffRowSource
     private readonly CellWidths _widths = new();
     private readonly RowList _rows;
     private readonly DiffRow.Banner? _truncation;
-    private readonly int _thread = Environment.CurrentManagedThreadId;
+    private readonly OwningThread _thread = OwningThread.Current();
 
     private DiffHighlight? _highlight;
     private FileOutline? _outline;
@@ -78,7 +78,7 @@ internal sealed class EditorRowSet : IDiffRowSource
     }
 
     /// <summary>Max line-number digit count, for gutter width sizing.</summary>
-    public int GutterDigits => DigitCount(_lines.Count);
+    public int GutterDigits => FullFileRow.GutterDigits(_lines.Count);
 
     /// <summary>Always a single (new-side) gutter: a document has one set of line numbers.</summary>
     public bool SingleGutter => true;
@@ -145,37 +145,24 @@ internal sealed class EditorRowSet : IDiffRowSource
         return index < 0 ? null : new RowIndex(RowOfLine(index + 1));
     }
 
-    /// <summary>Where a row sits, in terms that survive the stream being rebuilt. Unnumbered rows
-    /// hang off the last line above them.</summary>
     public DiffRowAnchor? AnchorAt(RowIndex row)
     {
         AssertThread();
-        if (row.Value < 0 || row.Value >= RowCount) return null;
-        for (var i = row.Value; i >= 0; i--)
-            if (KeyAt(i) is { } key) return new DiffRowAnchor(key, row.Value - i);
-        return new DiffRowAnchor(null, row.Value + 1);
+        return DiffRowAnchors.AnchorAt(this, row);
     }
 
-    /// <summary>The row an anchor names here, or null when this document does not have it. An anchor
-    /// hanging below its line clamps to the run of unnumbered rows actually under it.</summary>
     public RowIndex? RowAt(DiffRowAnchor anchor)
     {
         AssertThread();
-        if (RowCount == 0) return null;
-
-        var line = -1;
-        if (anchor.Line is { } key)
-        {
-            if (key.Side != DiffLineSide.New) return null;
-            if (RowForNewLine(key.Line) is not { } row) return null;
-            if (anchor.RowsBelow == 0) return row;
-            line = row.Value;
-        }
-
-        var run = 0;
-        while (line + 1 + run < RowCount && KeyAt(line + 1 + run) is null) run++;
-        return new RowIndex(Math.Max(0, line + Math.Min(anchor.RowsBelow, run)));
+        return DiffRowAnchors.RowAt(this, anchor);
     }
+
+    int IAnchoredRows.RowCount => RowCount;
+
+    DiffRowKey? IAnchoredRows.KeyAt(int row) => KeyAt(row);
+
+    RowIndex? IAnchoredRows.RowFor(DiffRowKey key) =>
+        key.Side == DiffLineSide.New ? RowForNewLine(key.Line) : null;
 
     /// <summary>How many times the projection has had to rebuild itself from the document rather
     /// than follow an edit into it, for the test that holds the contract honest.</summary>
@@ -221,13 +208,13 @@ internal sealed class EditorRowSet : IDiffRowSource
 
     /// <summary>Re-colors and re-folds the projection from a fresh parse, or refuses one that
     /// describes an earlier revision. Returns whether it was applied.</summary>
-    public bool SetAnnotations(Revised<EditorAnnotations> annotations)
+    public bool SetAnnotations(Revised<DiffAnnotations> annotations)
     {
         AssertThread();
         if (!annotations.TryReadFor(_document, out var value)) return false;
 
         _highlight = value.Highlight;
-        _outline = value.Outline;
+        _outline = value.NewSide;
         Replan();
         return true;
     }
@@ -271,22 +258,7 @@ internal sealed class EditorRowSet : IDiffRowSource
     private string? HiddenAfter(RowIndex row)
     {
         AssertThread();
-        if (NewLineAt(row) is not { } line) return null;
-
-        var text = new System.Text.StringBuilder();
-        foreach (var (from, to) in _plan.Hidden)
-        {
-            if (from > line.Value + 1) break;
-            if (from != line.Value + 1) continue;
-
-            for (var n = from; n <= to && n <= _lines.Count; n++)
-            {
-                if (text.Length > 0) text.Append('\n');
-                text.Append(_document.Line(new FileLine(n)));
-            }
-            return text.ToString();
-        }
-        return null;
+        return NewLineAt(row) is { } line ? _plan.SwallowedAt(line.Value) : null;
     }
 
     private DiffRow MaterializedRow(int index)
@@ -311,21 +283,9 @@ internal sealed class EditorRowSet : IDiffRowSource
         return row;
     }
 
-    private DiffRow.Line Materialize(int lineNumber)
-    {
-        var line = new FileLine(lineNumber);
-        var text = DiffLineText.Of(_document.Line(line));
-        var spans = _highlight?.ForLine(DiffLineKind.Context, null, lineNumber);
-        if (spans is { Count: 0 }) spans = null;
-        return new DiffRow.Line(
-            DiffLineKind.Context,
-            DiffGutterNumber.None,
-            DiffGutterNumber.Of(line),
-            text,
-            spans,
-            null,
-            _plan.MarkAt(lineNumber));
-    }
+    private DiffRow.Line Materialize(int lineNumber) =>
+        FullFileRow.Line(
+            DiffLineKind.Context, lineNumber, _document.Line(new FileLine(lineNumber)), _highlight, null, _plan.MarkAt(lineNumber));
 
     private int Measure(int index)
     {
@@ -334,8 +294,7 @@ internal sealed class EditorRowSet : IDiffRowSource
     }
 
     private int Contribution(int index) =>
-        _lines[index].Cells
-        + (_plan.MarkAt(index + 1) is { Chip: true } ? DiffText.VisualCells(DiffRowSet.FoldChipText) : 0);
+        _lines[index].Cells + FullFileRow.ChipCells(_plan.MarkAt(index + 1));
 
     private void Replace(int first, int lastOld, int lastNew)
     {
@@ -439,7 +398,7 @@ internal sealed class EditorRowSet : IDiffRowSource
             {
                 lineOfRow.Add(line);
                 _lensRows++;
-                _widths.Add(lens.Indent + DiffRowSet.UsageLensCells);
+                _widths.Add(FullFileRow.LensCells(lens));
             }
 
             rowOfLine[i] = lineOfRow.Count;
@@ -464,22 +423,7 @@ internal sealed class EditorRowSet : IDiffRowSource
         return breaks;
     }
 
-    private static int DigitCount(int n)
-    {
-        if (n <= 0) return 1;
-        var d = 0;
-        while (n > 0) { d++; n /= 10; }
-        return d;
-    }
-
-    private void AssertThread()
-    {
-        if (Environment.CurrentManagedThreadId == _thread) return;
-        throw new InvalidOperationException(
-            $"An editable projection belongs to the thread that built it (thread {_thread}); this is " +
-            $"thread {Environment.CurrentManagedThreadId}. An off-thread parse hands its result over " +
-            "through the UI dispatcher.");
-    }
+    private void AssertThread() => _thread.Assert("An editable projection");
 
     /// <summary>One line's width in cells beside the row built from it, if anything has asked for
     /// one yet.</summary>

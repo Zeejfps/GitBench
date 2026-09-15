@@ -11,13 +11,13 @@ namespace GitBench.Features.FileBrowser;
 /// </summary>
 internal sealed class FileBrowserFileOps
 {
-    private readonly IMessageBus? _bus;
+    private readonly IMessageBus _bus;
 
-    public FileBrowserFileOps(Context ctx) => _bus = ctx.Get<IMessageBus>();
+    public FileBrowserFileOps(Context ctx) => _bus = ctx.Require<IMessageBus>();
 
     /// <summary>Asks for a name, and creates it inside <paramref name="directory"/>.</summary>
     public void New(FileBrowserViewModel browser, string directory, NewEntryKind kind) =>
-        _bus?.Broadcast(new ShowDialogMessage(onClose => new NewEntryDialog
+        _bus.Broadcast(new ShowDialogMessage(onClose => new NewEntryDialog
         {
             Parent = directory,
             Kind = kind,
@@ -30,7 +30,7 @@ internal sealed class FileBrowserFileOps
     public void Delete(FileBrowserViewModel browser, FileBrowserRow? row)
     {
         if (!CanDelete(row)) return;
-        _bus?.Broadcast(new ShowDialogMessage(onClose => new DeleteEntryDialog
+        _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteEntryDialog
         {
             Path = row!.FullPath,
             Name = row.Name,

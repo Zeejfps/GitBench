@@ -57,7 +57,7 @@ internal sealed class CommitDetailsView : ContainerView
             bottomFraction: preferences.Current.CommitDetailsSplitFraction)
         {
             BottomVisible = false,
-            FractionChanged = preferences.SetCommitDetailsSplitFraction,
+            FractionChanged = f => preferences.Update(p => p with { CommitDetailsSplitFraction = f }),
         };
         splitter.UseController(input, () => new SplitterController(
             ctx,

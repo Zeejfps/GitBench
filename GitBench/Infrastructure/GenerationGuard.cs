@@ -10,10 +10,17 @@ internal sealed class GenerationGuard
 {
     private int _current;
 
+    public GenerationGuard(bool exclusive = false)
+    {
+        Exclusive = exclusive;
+    }
+
+    /// <summary>An exclusive lane refuses a second op while one is in flight instead of superseding it.</summary>
+    public bool Exclusive { get; }
+
     /// <summary>
-    /// True while an exclusive op started via <c>TryRunBackground</c>/<c>TryRunOutcome</c>
-    /// is in flight on this lane. UI-thread only — the runner sets it before dispatching
-    /// and clears it in the posted continuation, replacing the per-VM boolean guards.
+    /// True while an op started on this lane is in flight. UI-thread only — the runner sets it
+    /// before dispatching and clears it in the posted continuation.
     /// </summary>
     public bool InFlight { get; internal set; }
 

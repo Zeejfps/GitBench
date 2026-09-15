@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Infrastructure;
 
@@ -61,11 +62,17 @@ internal sealed class EditOptions
         return tabs > spaces ? IndentStyle.Tabs : IndentStyle.Spaces;
     }
 
-    private static string? LineCommentOf(string path) =>
-        LanguageRegistry.DetectLanguageId(path) is { } language
-        && LineComments.TryGetValue(language, out var token)
-            ? token
-            : null;
+    private static string? LineCommentOf(string path)
+    {
+        var id = FileLanguage.Detect(path) switch
+        {
+            FileLanguage.TreeSitter(var language) => language.TextMateId(),
+            FileLanguage.TextMate(var textMate) => textMate,
+            FileLanguage.None => null,
+            var other => throw new ArgumentOutOfRangeException(nameof(path), other, null),
+        };
+        return id is not null && LineComments.TryGetValue(id, out var token) ? token : null;
+    }
 
     private static readonly Dictionary<string, string> LineComments = new()
     {

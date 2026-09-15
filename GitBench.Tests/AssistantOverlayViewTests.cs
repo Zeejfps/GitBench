@@ -264,15 +264,16 @@ public sealed class AssistantOverlayViewTests
     public void ToolbarMarkDrawsAtIconSizeCenteredInItsButton()
     {
         const string markId = "assistant-mark";
-        using var fixture = WithMark(markId, out var restore);
-        using (restore)
-        {
-            var drawn = Assert.Single(fixture.Harness.Render().Images);
-            Assert.Equal(markId, drawn.Inputs.ImageId);
-            Assert.Equal(16f, drawn.Inputs.Position.Width, 1);
-            Assert.Equal(16f, drawn.Inputs.Position.Height, 1);
-            AssertCenteredInButton(fixture, drawn.Inputs.Position);
-        }
+        // The real mark is 96px art asked for at 16, and it lands after the toolbar has mounted —
+        // exactly as startup loads it.
+        using var fixture = new AssistantViewFixture(new FakeAssistantBackend(), configureCanvas: c => c.SetImageSize(markId, 96, 96));
+        fixture.Mark.Id.Value = markId;
+
+        var drawn = Assert.Single(fixture.Harness.Render().Images);
+        Assert.Equal(markId, drawn.Inputs.ImageId);
+        Assert.Equal(16f, drawn.Inputs.Position.Width, 1);
+        Assert.Equal(16f, drawn.Inputs.Position.Height, 1);
+        AssertCenteredInButton(fixture, drawn.Inputs.Position);
     }
 
     // The image path is what ships, so the glyph path is the one that rots unnoticed — it only
@@ -280,30 +281,12 @@ public sealed class AssistantOverlayViewTests
     [Fact]
     public void ToolbarMarkFallbackGlyphIsCenteredTheSameWay()
     {
-        var previous = AssistantMark.ImageId.Value;
-        AssistantMark.ImageId.Value = null;
-        try
-        {
-            using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
+        using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
 
-            var canvas = fixture.Harness.Render();
-            var glyph = canvas.Texts.Single(t => t.Inputs.Text == LucideIcons.SquareTerminal);
-            Assert.Empty(canvas.Images);
-            AssertCenteredInButton(fixture, glyph.Inputs.Position);
-        }
-        finally
-        {
-            AssistantMark.ImageId.Value = previous;
-        }
-    }
-
-    private static AssistantViewFixture WithMark(string markId, out IDisposable restore)
-    {
-        var previous = AssistantMark.ImageId.Value;
-        restore = new Restore(() => AssistantMark.ImageId.Value = previous);
-        AssistantMark.ImageId.Value = markId;
-        // The real mark is 96px art asked for at 16.
-        return new AssistantViewFixture(new FakeAssistantBackend(), configureCanvas: c => c.SetImageSize(markId, 96, 96));
+        var canvas = fixture.Harness.Render();
+        var glyph = canvas.Texts.Single(t => t.Inputs.Text == LucideIcons.SquareTerminal);
+        Assert.Empty(canvas.Images);
+        AssertCenteredInButton(fixture, glyph.Inputs.Position);
     }
 
     private static void AssertCenteredInButton(AssistantViewFixture fixture, RectF mark)
@@ -313,13 +296,6 @@ public sealed class AssistantOverlayViewTests
             $"the mark ({mark.Width}x{mark.Height}) spilled out of its button ({button.Width}x{button.Height})");
         Assert.Equal(button.Center.X, mark.Center.X, 1);
         Assert.Equal(button.Center.Y, mark.Center.Y, 1);
-    }
-
-    private sealed class Restore : IDisposable
-    {
-        private readonly Action _undo;
-        public Restore(Action undo) => _undo = undo;
-        public void Dispose() => _undo();
     }
 
     // A backend that answers every turn with enough lines to overflow the panel several times over.

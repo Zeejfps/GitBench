@@ -1,8 +1,6 @@
-using System.Diagnostics;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -12,47 +10,19 @@ namespace GitBench.Tests;
 // user is trapped — they can stage and then never take it back.
 public sealed class GitUnbornHeadTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
-    private readonly string _root;
+    private readonly TempGitRepo _work = TempGitRepo.Init();
     private readonly GitService _git;
     private readonly Repo _repo;
 
     public GitUnbornHeadTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "gitbench-unborn-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
         _git = new GitService(new NullActivityTracker());
-        _repo = new Repo(Guid.NewGuid(), _root, "test");
-
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        _repo = new Repo(Guid.NewGuid(), _work.Path, "test");
     }
 
     public void Dispose()
     {
-        DirectoryTree.Delete(_root);
-    }
-
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
+        _work.Dispose();
     }
 
     private LocalChangesSnapshot Snapshot()
@@ -61,7 +31,7 @@ public sealed class GitUnbornHeadTests : IDisposable
         return Assert.IsType<Fetched<LocalChangesSnapshot>.Ok>(fetched).Value;
     }
 
-    private void Write(string name, string content) => File.WriteAllText(Path.Combine(_root, name), content);
+    private void Write(string name, string content) => File.WriteAllText(Path.Combine(_work.Path, name), content);
 
     [Fact]
     public void Unstage_ReturnsFilesToUntracked_BeforeTheFirstCommit()
@@ -101,6 +71,6 @@ public sealed class GitUnbornHeadTests : IDisposable
 
         Assert.True(_git.Unstage(_repo, new[] { "a.txt" }) is GitOutcome.Success);
 
-        Assert.Equal("precious\n", File.ReadAllText(Path.Combine(_root, "a.txt")));
+        Assert.Equal("precious\n", File.ReadAllText(Path.Combine(_work.Path, "a.txt")));
     }
 }

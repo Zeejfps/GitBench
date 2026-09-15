@@ -25,12 +25,12 @@ internal static class DialogFileRow
     public static View Build(
         Context ctx,
         FileChange display,
-        string path,
         IReadable<IReadOnlySet<string>> checkedPaths,
         Action<InputModifiers> onClick)
     {
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
+        var path = display.Path;
 
         var pathText = new TextView(ctx.Canvas)
         {

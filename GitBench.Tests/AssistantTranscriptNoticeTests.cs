@@ -147,11 +147,4 @@ public sealed class AssistantTranscriptNoticeTests
             _row.Dispose();
         }
     }
-
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
 }

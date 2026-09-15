@@ -31,7 +31,7 @@ public class ServerReadinessTests
 
         harness.Launcher.Last.CompleteHandshake();
 
-        Assert.IsNotType<ServerState.Ready>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsNotType<ServerState.Ready>(harness.StateFor(harness.File("src/main.rs")));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class ServerReadinessTests
 
         harness.Launcher.Last.ReportIndexing(40);
 
-        var indexing = Assert.IsType<ServerState.Indexing>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        var indexing = Assert.IsType<ServerState.Indexing>(harness.StateFor(harness.File("src/main.rs")));
         Assert.Equal(40, indexing.PercentComplete);
     }
 
@@ -57,7 +57,7 @@ public class ServerReadinessTests
 
         harness.Launcher.Last.ReportIndexing();
 
-        var indexing = Assert.IsType<ServerState.Indexing>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        var indexing = Assert.IsType<ServerState.Indexing>(harness.StateFor(harness.File("src/main.rs")));
         Assert.Null(indexing.PercentComplete);
     }
 
@@ -70,7 +70,7 @@ public class ServerReadinessTests
 
         harness.Launcher.Last.BecomeReady();
 
-        Assert.IsType<ServerState.Ready>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsType<ServerState.Ready>(harness.StateFor(harness.File("src/main.rs")));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class ServerReadinessTests
 
         harness.Launcher.Last.ReportIndexing(10);
 
-        Assert.IsType<ServerState.Indexing>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsType<ServerState.Indexing>(harness.StateFor(harness.File("src/main.rs")));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class ServerReadinessTests
         harness.Launcher.Last.ReportIndexing(90);
         harness.Advance(TimeSpan.FromSeconds(15));
 
-        Assert.IsType<ServerState.Indexing>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsType<ServerState.Indexing>(harness.StateFor(harness.File("src/main.rs")));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class ServerReadinessTests
 
         harness.Advance(TimeSpan.FromSeconds(30));
 
-        Assert.IsType<ServerState.Failed>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsType<ServerState.Failed>(harness.StateFor(harness.File("src/main.rs")));
         Assert.False(server.IsRunning);
     }
 
@@ -142,7 +142,7 @@ public class ServerReadinessTests
 
         harness.Advance(TimeSpan.FromSeconds(60));
 
-        Assert.IsType<ServerState.Ready>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsType<ServerState.Ready>(harness.StateFor(harness.File("src/main.rs")));
     }
 
     [Fact]
@@ -154,6 +154,6 @@ public class ServerReadinessTests
         harness.Launcher.Last.CompleteHandshake();
         harness.Launcher.Last.CompleteHandshake();
 
-        Assert.IsType<ServerState.Starting>(harness.Servers.StateFor(harness.File("src/main.rs")));
+        Assert.IsType<ServerState.Starting>(harness.StateFor(harness.File("src/main.rs")));
     }
 }

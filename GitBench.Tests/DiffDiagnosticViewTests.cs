@@ -4,6 +4,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Lsp;
+using GitBench.Platform;
 using GitBench.Theming;
 using Xunit;
 using ZGF.Gui;
@@ -116,6 +117,8 @@ public sealed class DiffDiagnosticViewTests
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(themes);
                 ctx.AddService<ILocalizationService>(loc);
+                ctx.AddService<IClipboard>(new FakeClipboard());
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
 
         buffer = EditorBuffer.TryOpen(

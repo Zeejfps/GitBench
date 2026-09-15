@@ -1,4 +1,5 @@
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -48,6 +49,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
     private readonly IGitRepositoryReader _git;
     private readonly IFileSystemReader _files;
     private readonly ISymbolExtractor _extractor;
+    private readonly ISyntaxHighlighter _highlighter;
     private readonly IMessageBus _bus;
     private readonly IUiDispatcher _dispatcher;
     private readonly IDocumentStore _documents;
@@ -66,6 +68,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         IGitRepositoryReader git,
         IFileSystemReader files,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         IMessageBus bus,
         IUiDispatcher dispatcher,
         IDocumentStore documents)
@@ -74,6 +77,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         _git = git;
         _files = files;
         _extractor = extractor;
+        _highlighter = highlighter;
         _bus = bus;
         _dispatcher = dispatcher;
         _documents = documents;
@@ -116,9 +120,10 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         var browser = new FileBrowserViewModel(
             repo,
             _files,
-            new GitIgnoreOracle(_git, repo),
-            new GitFileCatalog(_git, repo),
+            paths => _git.IsPathIgnored(repo, paths),
+            () => _git.ListWorkingTreeFiles(repo),
             _extractor,
+            _highlighter,
             _dispatcher,
             _registry.GetFileBrowserUi(repoId),
             state => _registry.SetFileBrowserUi(repoId, state),

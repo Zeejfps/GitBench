@@ -158,34 +158,12 @@ public class DiffHunkHeaderTests(CodeIntelFixture fixture)
         var git = new OneFileDiffReader(NewSource, NewSource);
         var diff = DiffOf(Hunk(6, 3, 6, 3, null, Ctx(6, 6, "    {"), Add(7, "        x"), Ctx(7, 8, "    }"))) with { Path = "notes.md" };
 
-        var annotations = DiffAnnotationCoordinator.Compute(fixture.Extractor, git, Repo(), diff, commitSha: null);
+        var annotations = DiffAnnotationCoordinator.Compute(fixture.Extractor, fixture.Colors, git, Repo(), diff, commitSha: null);
 
         Assert.NotNull(annotations);
         Assert.NotNull(annotations.Highlight);
         Assert.Null(annotations.NewSide);
         Assert.Null(annotations.OldSide);
-    }
-
-    [Fact]
-    public void StructureDisabledProducesNoOutlines()
-    {
-        var git = new OneFileDiffReader(NewSource, OldSource);
-        var diff = DiffOf(Hunk(6, 3, 6, 3, null, Ctx(6, 6, "    {"), Add(7, "        x"), Ctx(7, 8, "    }")));
-
-        DiffOptions.StructureEnabled = false;
-        try
-        {
-            Assert.Null(DiffAnnotationCoordinator.ComputeOutlines(fixture.Extractor, git, Repo(), diff, commitSha: null));
-
-            var withColors = DiffAnnotationCoordinator.Compute(fixture.Extractor, git, Repo(), diff, commitSha: null);
-            Assert.NotNull(withColors);
-            Assert.Null(withColors.NewSide);
-            Assert.Null(withColors.OldSide);
-        }
-        finally
-        {
-            DiffOptions.StructureEnabled = true;
-        }
     }
 
     [Fact]

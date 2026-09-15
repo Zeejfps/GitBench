@@ -4,6 +4,7 @@ using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 using GitBench.Features.Commits;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
@@ -46,9 +47,9 @@ internal static class AppServices
         // reads from it, so a binding is decided in one table.
         var keyMap = new KeyMap(preferences.Current.KeyBindings);
         // Lives as long as the app, like the map it follows.
-        _ = keyMap.Version.Subscribe(_ => preferences.SetKeyBindings(keyMap.Overrides));
+        _ = keyMap.Version.Subscribe(_ => preferences.Update(p => p with { KeyBindings = keyMap.Overrides }));
         context.AddService<IKeyMap>(keyMap);
-        context.AddService<IKeyBindingsStore>(keyMap);
+        context.AddService(keyMap);
 
         var profilesPath = AppPaths.AppDataPath("identity-profiles.json");
         context.AddSingleton(_ => new IdentityProfileService(
@@ -62,23 +63,15 @@ internal static class AppServices
 
         // How the Changes tab presents the working tree. Shared: the toolbar toggles it, the pane
         // switches on it, and the commit bar shows staging progress only in the Diff layout.
-        var workingChangesLayout = new State<WorkingChangesLayout>(preferences.Current.WorkingChangesLayout);
-        workingChangesLayout.Changed += preferences.SetWorkingChangesLayout;
-        context.AddService(workingChangesLayout);
+        context.Bind(preferences, p => p.WorkingChangesLayout, (p, v) => p with { WorkingChangesLayout = v });
 
-        var themeMode = new State<ThemeMode>(preferences.Current.Theme);
-        themeMode.Changed += preferences.SetTheme;
-        context.AddService(themeMode);
+        context.Bind(preferences, p => p.Theme, (p, v) => p with { Theme = v });
         context.AddSingleton<IThemeService<ThemeStyles>, ThemeService>();
 
-        var uiScale = new State<UiScale>(preferences.Current.UiScale);
-        uiScale.Changed += preferences.SetUiScale;
-        context.AddService(uiScale);
+        var uiScale = context.Bind(preferences, p => p.UiScale, (p, v) => p with { UiScale = v });
         context.AddService<IUiScale>(new PreferredUiScale(uiScale));
 
-        var locale = new State<Locale>(preferences.Current.Language);
-        locale.Changed += preferences.SetLanguage;
-        context.AddService(locale);
+        context.Bind(preferences, p => p.Language, (p, v) => p with { Language = v });
         context.AddSingleton<ILocalizationService, LocalizationService>();
         // One loader so decoded markdown images are shared across every surface that shows them.
         context.AddSingleton<IMarkdownImageLoader>(ctx => new MarkdownImageLoader(ctx.Require<IUiDispatcher>()));
@@ -86,26 +79,32 @@ internal static class AppServices
         // The one source of truth for the opt-in core.untrackedCache setting: the status-bar
         // settings toggle writes it and GitUntrackedCacheService reads it, so the two can't
         // disagree about the current value.
-        var enableUntrackedCache = new State<bool>(preferences.Current.EnableUntrackedCache);
-        enableUntrackedCache.Changed += preferences.SetEnableUntrackedCache;
-        context.AddService(enableUntrackedCache);
+        context.Bind(preferences, p => p.EnableUntrackedCache, (p, v) => p with { EnableUntrackedCache = v });
 
         var crashLogPath = AppPaths.AppDataPath("crash.log");
-        // Registered under its own type as well as the interface: the document annotator keeps a
-        // parse tree between edits, which is a seam only the parser-backed extractor has.
-        context.AddSingleton(_ =>
-            new TreeSitterSymbolExtractor(reason => CrashLog.Note(crashLogPath, reason)));
-        context.AddSingleton<ISymbolExtractor>(ctx => ctx.Require<TreeSitterSymbolExtractor>());
+        // One grammar set behind both engines, registered under their own types as well as the
+        // interfaces: the document annotator keeps a parse tree between edits, which is a seam only
+        // the parser-backed engines have.
+        context.AddSingleton(_ => new TreeSitterGrammars(reason => CrashLog.Note(crashLogPath, reason)));
+        context.AddSingleton(ctx =>
+            new TreeSitterSymbolExtractor(ctx.Require<TreeSitterGrammars>(), reason => CrashLog.Note(crashLogPath, reason)));
+        context.AddAlias<ISymbolExtractor, TreeSitterSymbolExtractor>();
+        context.AddSingleton(ctx =>
+            new TreeSitterSyntaxHighlighter(ctx.Require<TreeSitterGrammars>(), reason => CrashLog.Note(crashLogPath, reason)));
+        context.AddSingleton<SyntaxHighlighter>();
+        context.AddSingleton<ISyntaxHighlighter>(ctx =>
+            new RoutedSyntaxHighlighter(ctx.Require<TreeSitterSyntaxHighlighter>(), ctx.Require<SyntaxHighlighter>()));
 
         context.AddPlatformServices();
 
         var statePath = AppPaths.AppDataPath("state.json");
-        context.AddSingleton<IRepoRegistry>(_ =>
-            new RepoRegistry(RepoStateStore.Load(statePath), statePath));
+        context.AddSingleton(_ => new RepoRegistry(RepoStateStore.Load(statePath), statePath));
+        context.AddAlias<IRepoRegistry, RepoRegistry>();
+        context.AddAlias<IIdentityOverrides, RepoRegistry>();
         // Defers the all-repos startup sweeps (status / worktree / submodule) behind the active
         // repo's first load so they don't contend with it. Resolved by the stores/services below.
         context.AddSingleton<AppViewModel>();
-        context.AddSingleton<IStartupSweepCoordinator, StartupSweepCoordinator>();
+        context.AddSingleton<StartupSweepCoordinator>();
         // The one throttle every background git read shares, so a many-repo tree can't seek-thrash
         // one disk. Injected into the two stores and the coordinator below; reads only — mutations
         // serialize on GitRepoLocks and never touch it.
@@ -134,30 +133,20 @@ internal static class AppServices
         context.AddService<IGitRawConfigReader>(gitService);
         // Reads config through gitService and back-wires itself into it (its hosted Start) so every
         // git invocation gets the right per-repo name/email/SSH key injected without touching repo
-        // config. Hosted via a factory because its deps need an interface cast the container can't do.
-        context.AddHostedService(ctx => new GitIdentityService(
-            ctx.Require<IGitRawConfigReader>(), ctx.Require<IdentityProfileService>(),
-            ctx.Require<IMessageBus>(), (IIdentityOverrides)ctx.Require<IRepoRegistry>()));
-        context.AddSingleton<IDragController, DragController>();
+        // config.
+        context.AddHostedService<GitIdentityService>();
+        context.AddSingleton<DragController>();
         context.AddSingleton<RepoHoverState>();
         context.AddSingleton<RepoBarCollapseState>();
-        context.AddSingleton(ctx => new RepoNodeFactory(
-            ctx.Require<IRepoRegistry>(),
-            ctx.Require<IRepoStatusStore>(),
-            ctx.Require<IRepoLoadStore>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<IGitRemoteOperations>(),
-            ctx.Require<IGitWorktreeOperations>(),
-            ctx.Get<IPlatformShell>(),
-            ctx.Require<ILocalizationService>(),
-            ctx.Get<IClipboard>(),
-            ctx.Get<IFilePicker>(),
-            ctx.Require<IUiDispatcher>()));
+        context.AddSingleton<RepoNodeFactory>();
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<OperationViewModel>();
         // Shared so the Local Changes file list and the workspace-footer merge bar drive the same
         // staging / commit state from either tab.
         context.AddSingleton<LocalChangesViewModel>();
+        // The pop-out diff windows: one owner for the app, reached directly by every diff pane's
+        // "open in new window", so a pane in a pop-out can open another.
+        context.AddSingleton<DiffWindowsViewModel>();
 
         // The Changes tab's Review layout. Its commit-details VM is its own — opted out of the
         // selection bus so the History pane's commit selection can never drive the working-tree
@@ -171,11 +160,15 @@ internal static class AppServices
                 ctx.Require<IGitConflictOperations>(),
                 ctx.Require<IGitSubmoduleOperations>(),
                 ctx.Require<ISymbolExtractor>(),
+                ctx.Require<ISyntaxHighlighter>(),
                 ctx.Require<IRepoRegistry>(),
                 ctx.Require<IUiDispatcher>(),
                 ctx.Require<IMessageBus>(),
                 ctx.Require<ILocalizationService>(),
                 preferences,
+                ctx.Require<LocalChangesViewModel>(),
+                ctx.Require<DiffWindowsViewModel>(),
+                ctx.Require<IPlatformShell>(),
                 subscribeToSelection: false),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<ILocalizationService>()));
@@ -192,7 +185,7 @@ internal static class AppServices
             ctx.Require<IMessageBus>()));
 
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
-        // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
+        // anchored).
         context.AddSingleton<IReviewStackSource, GitReviewStackSource>();
         // The open review windows, one registry for the app: the windows view reflects it into OS
         // windows and the assistant's review tools point through it at what the reviewer sees.
@@ -201,10 +194,6 @@ internal static class AppServices
         // Review progress (marked-Viewed files) lives for the app session, shared across review
         // windows so closing and reopening a branch's review keeps its progress.
         context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
-
-        // The open review windows, one instance: the ReviewWindowsView reflects it into OS windows
-        // and the assistant's walkthrough tools find the window a narration targets through it.
-        context.AddSingleton<ReviewWindowsViewModel>();
 
         // The terminal pane's two halves: what spawns the shell, and what parses what it writes.
         // Both stateless, and both registered rather than constructed at the pane — this is the only
@@ -219,17 +208,23 @@ internal static class AppServices
         // repositories swaps which shell the pane shows rather than retargeting the one it has.
         // Hosted for the same reason the assistant's store is — it watches the registry, which it
         // can only do once the UI loop exists.
-        context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>();
+        context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>(ctx =>
+        {
+            var ptys = ctx.Require<IPtySessionFactory>();
+            var engines = ctx.Require<ITerminalEngineFactory>();
+            var palette = ctx.Require<ITerminalPalette>();
+            var clipboard = ctx.Require<IClipboard>();
+            return new TerminalSessionStore(
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IUiDispatcher>(),
+                repo => new ShellLaunch(repo.Path, ptys, engines, palette, clipboard));
+        });
 
         context.AddSingleton<IFileSystemReader, FileSystemReader>();
         context.AddHostedService<IDocumentStore, DocumentStore>();
         // What keeps the colouring and the fold chevrons describing the buffer rather than the file
         // it was read from: one parse tree per open document, followed into by each edit.
-        context.AddHostedService(ctx => new DocumentAnnotations(
-            ctx.Require<IDocumentStore>(),
-            ctx.Require<IUiDispatcher>(),
-            Features.Diff.RoutedSyntaxHighlighter.Shared.TreeSitter,
-            ctx.Require<TreeSitterSymbolExtractor>()));
+        context.AddHostedService<DocumentAnnotations>();
         context.AddSingleton<IUnsavedEditsGuard, UnsavedEditsGuard>();
         context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
         // Registered after the browsers and terminals it follows: it points the content panel at
@@ -250,42 +245,21 @@ internal static class AppServices
         // Hosted because it follows the registry, which it can only do once the UI loop exists.
         context.AddHostedService<ILanguageServerStore, LanguageServerStore>();
 
-        // Factory because the snapshot store ingests the active repo's file-list summary into the
-        // status store, an interface cast (IRepoStatusIngest) the container can't do by plain
-        // injection — the same shape GitIdentityService uses above. IRepoStatusIngest is deliberately
-        // not its own registration: the container owns every factory result, so a second delegating
-        // registration would dispose RepoStatusStore twice.
-        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>(ctx => new RepoSnapshotStore(
-            ctx.Require<IRepoRegistry>(),
-            ctx.Require<IGitHistoryReader>(),
-            ctx.Require<IGitStatusReader>(),
-            ctx.Require<IGitBranchOperations>(),
-            ctx.Require<IGitSubmoduleOperations>(),
-            ctx.Require<IMessageBus>(),
-            (IRepoStatusIngest)ctx.Require<IRepoStatusStore>(),
-            ctx.Require<IGitReadGate>(),
-            ctx.Require<IUiDispatcher>()));
+        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>();
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
         context.AddHostedService<IRepoIndexOperationsStore, RepoIndexOperationsStore>();
         // Samples the read gate + the operations store once a frame into the per-repo "loading" flag
         // the RepoBar rows spin on. Registered after both, and hosted so its frame tick starts with
         // the rest of the app rather than on first row build.
-        context.AddHostedService<IRepoLoadStore, RepoLoadStore>();
+        context.AddHostedService<RepoLoadStore>();
         // The head store owns the checkout; the status store composes its pending branch into
-        // RepoStatus and, in return, tells it when a fresh read has landed. Same factory-plus-cast
-        // shape as the ingest wiring above, and for the same reason: the container can't cast, and a
-        // second delegating registration would dispose the store twice.
-        context.AddSingleton<IRepoHeadStore, RepoHeadStore>();
-        context.AddHostedService<IRepoStatusStore, RepoStatusStore>(ctx => new RepoStatusStore(
-            ctx.Require<IRepoOperationsStore>(),
-            ctx.Require<IRepoIndexOperationsStore>(),
-            ctx.Require<IRepoRegistry>(),
-            ctx.Require<IGitStatusReader>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<IGitReadGate>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IRepoHeadStore>(),
-            (IRepoHeadConfirm)ctx.Require<IRepoHeadStore>()));
+        // RepoStatus and, in return, tells it when a fresh read has landed.
+        context.AddSingleton<RepoHeadStore>();
+        context.AddAlias<IRepoHeadStore, RepoHeadStore>();
+        context.AddAlias<IRepoHeadConfirm, RepoHeadStore>();
+        context.AddHostedService<RepoStatusStore>();
+        context.AddAlias<IRepoStatusStore, RepoStatusStore>();
+        context.AddAlias<IRepoStatusIngest, RepoStatusStore>();
         // Pushes the active repo's id into the read gate, which is what makes the gate admit that
         // repo's reads ahead of the startup sweep instead of behind it.
         context.AddHostedService<GitReadPriorityService>();
@@ -294,14 +268,18 @@ internal static class AppServices
         // built by the store rather than registered on its own: it needs a live read of the
         // connection the store resolves off the UI thread, which a plain registration would make
         // circular. Which provider that is survives restarts the way the theme and language do.
-        var assistantSettings = new State<AssistantSettings>(AssistantSettings.From(
-            preferences.Current.AssistantProviderId,
-            preferences.Current.AssistantProviderPreferences
-                .Select(c => (c.ProviderId, c.Model, c.BaseUrl))));
-        assistantSettings.Changed += s => preferences.SetAssistantProvider(
-            s.ProviderId,
-            s.Choices.Select(c => new AssistantProviderPreference(c.Key, c.Value.Model, c.Value.BaseUrl)).ToArray());
-        context.AddService(assistantSettings);
+        context.Bind(
+            preferences,
+            p => AssistantSettings.From(
+                p.AssistantProviderId,
+                p.AssistantProviderPreferences.Select(c => (c.ProviderId, c.Model, c.BaseUrl))),
+            (p, s) => p with
+            {
+                AssistantProviderId = s.ProviderId,
+                AssistantProviderPreferences = s.Choices
+                    .Select(c => new AssistantProviderPreference(c.Key, c.Value.Model, c.Value.BaseUrl))
+                    .ToArray(),
+            });
         context.AddSingleton(ctx => new AssistantCredentials(ctx.Require<ISecretStore>()));
         context.AddHostedService<IAssistantSessionStore, AssistantSessionStore>(ctx => new AssistantSessionStore(
             ctx.Require<IRepoRegistry>(),
@@ -317,8 +295,10 @@ internal static class AppServices
             ctx.Require<ReviewWindowsViewModel>(),
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IDocumentStore>(),
-            connection => new AssistantBackendRouter(AssistantHttp, connection)));
+            connection => new HttpAssistantBackend(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
+        context.AddSingleton<AppIconImage>();
+        context.AddSingleton<AssistantMarkImage>();
         context.AddSingleton<AssistantViewModel>();
 
         // Local agents over MCP. The preference is one value so the server sees enabled, port and
@@ -327,7 +307,7 @@ internal static class AppServices
         // because the server is the app's. The write surface here is the same hop the assistant's
         // session store builds for itself: a record over shared services, not state of its own.
         var agentConnections = new State<AgentConnectionSettings>(AgentConnectionSettings.From(preferences.Current));
-        agentConnections.Changed += s => preferences.SetAgentConnections(s.Enabled, s.Port, s.Token);
+        agentConnections.Changed += s => preferences.Update(p => p.WithAgentConnections(s.Enabled, s.Port, s.Token));
         context.AddService(agentConnections);
         context.AddService(new State<AgentConnectionState>(new AgentConnectionState.Off()));
         context.AddSingleton(ctx => new AssistantWriteSurface(
@@ -349,9 +329,9 @@ internal static class AppServices
             ctx.Require<AssistantWriteSurface>(),
             TimeProvider.System));
 
-        context.AddHostedService<IToastService, ToastService>();
+        context.AddHostedService<ToastService>();
 
-        context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(ctx.Require<IPopupWindowFactory>()));
+        context.AddSingleton(ctx => new PopupTooltipService(ctx.Require<IPopupWindowFactory>()));
 
         context.AddSingleton(ctx => new HoverPopupService(
             ctx.Require<IPopupWindowFactory>(),
@@ -374,5 +354,19 @@ internal static class AppServices
         // (registry, git service, the enable-untracked-cache observable) are all registered above,
         // so plain reflective ctor injection resolves it.
         context.AddHostedService<GitUntrackedCacheService>();
+    }
+
+    // A preference exposed as app-wide observable state: seeded from the stored value, written back
+    // on every change.
+    private static State<T> Bind<T>(
+        this Context context,
+        PreferencesService preferences,
+        Func<Preferences, T> select,
+        Func<Preferences, T, Preferences> apply)
+    {
+        var state = new State<T>(select(preferences.Current));
+        state.Changed += v => preferences.Update(p => apply(p, v));
+        context.AddService(state);
+        return state;
     }
 }

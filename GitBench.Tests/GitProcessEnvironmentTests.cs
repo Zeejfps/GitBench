@@ -9,7 +9,7 @@ namespace GitBench.Tests;
 public sealed class GitProcessEnvironmentTests : IDisposable
 {
     private readonly string _root;
-    private readonly GitProcessRunner _runner = new(new NoopActivityTracker());
+    private readonly GitProcessRunner _runner = new(new NullActivityTracker());
 
     public GitProcessEnvironmentTests()
     {
@@ -38,6 +38,21 @@ public sealed class GitProcessEnvironmentTests : IDisposable
         Assert.Contains(Path.GetDirectoryName(ResolvedGitDir()), seen);
     }
 
+    // A git that never started is a result, not an exception: every read above the runner relies
+    // on that to have nothing left to catch.
+    [Fact]
+    public void AMissingWorkingDirectoryIsAResultNotAnException()
+    {
+        var gone = Path.Combine(_root, "does-not-exist");
+
+        var result = _runner.Run(gone, new[] { "status" });
+
+        Assert.False(result.Started);
+        Assert.False(result.Ok);
+        Assert.StartsWith("Failed to start git", result.FirstLineError("git status"));
+        Assert.StartsWith("Failed to start git", result.BlockError("git status"));
+    }
+
     [Fact]
     public void RepoScopingVariablesNeverReachGit()
     {
@@ -55,12 +70,5 @@ public sealed class GitProcessEnvironmentTests : IDisposable
     public void Dispose()
     {
         DirectoryTree.Delete(_root);
-    }
-
-    private sealed class NoopActivityTracker : IRepoActivityTracker
-    {
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-        private sealed class Scope : IDisposable { public void Dispose() { } }
     }
 }

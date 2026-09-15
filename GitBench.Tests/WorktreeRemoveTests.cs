@@ -12,13 +12,6 @@ namespace GitBench.Tests;
 // failure even though the worktree was gone.
 public sealed class WorktreeRemoveTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
     private readonly string _root;
     private readonly string _repoPath;
     private readonly GitService _git;
@@ -30,9 +23,7 @@ public sealed class WorktreeRemoveTests : IDisposable
         _repoPath = Path.Combine(_root, "primary");
         Directory.CreateDirectory(_repoPath);
 
-        Git(_repoPath, "init");
-        Git(_repoPath, "config", "user.email", "test@example.com");
-        Git(_repoPath, "config", "user.name", "Test");
+        TestGit.Init(_repoPath);
         File.WriteAllText(Path.Combine(_repoPath, "file.txt"), "hello");
         Git(_repoPath, "add", ".");
         Git(_repoPath, "commit", "-m", "init");
@@ -46,22 +37,7 @@ public sealed class WorktreeRemoveTests : IDisposable
         DirectoryTree.Delete(_root);
     }
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        psi.ArgumentList.Add("-c");
-        psi.ArgumentList.Add("commit.gpgsign=false");
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     private static void Junction(string link, string target)
     {

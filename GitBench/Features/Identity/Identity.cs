@@ -82,7 +82,7 @@ public sealed record LocalIdentityConfig(
     private static string? SshCommandFor(IdentityProfile p)
     {
         var path = Trimmed(p.SshKeyPath);
-        return path == null ? null : $"ssh -i \"{ExpandHome(path)}\" -o IdentitiesOnly=yes";
+        return path == null ? null : $"ssh -i \"{IdentityProfileEditing.ExpandHome(path)}\" -o IdentitiesOnly=yes";
     }
 
     private static string? Trimmed(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
@@ -90,9 +90,4 @@ public sealed record LocalIdentityConfig(
     private static bool LooksLikeSshKey(string key)
         => key.StartsWith("ssh-", StringComparison.Ordinal)
             || key.StartsWith('~') || key.Contains('/') || key.Contains('\\');
-
-    private static string ExpandHome(string path)
-        => path[0] == '~' && (path.Length == 1 || path[1] is '/' or '\\')
-            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + path[1..]
-            : path;
 }

@@ -514,14 +514,14 @@ internal sealed class DiffRowPainter
             ZIndex = p.Z + 2,
         });
         DrawMonoText(
-            c, DiffRowSet.FoldChipText, x, p.Bottom, width,
+            c, FullFileRow.FoldChipText, x, p.Bottom, width,
             Styles.LineNumberText, TextAlignment.Start, p.Z + 3);
     }
 
     /// <summary>Where a collapsed fold's pill sits on its row, for drawing it and for clicking it.</summary>
     public (float X, float Width) FoldChipBounds(DiffRow.Line l, float textLeft) => (
         textLeft + DiffText.VisualCells(l.Text.Expanded) * MonoAdvance,
-        DiffText.VisualCells(DiffRowSet.FoldChipText) * MonoAdvance);
+        DiffText.VisualCells(FullFileRow.FoldChipText) * MonoAdvance);
 
     private const float FoldChipInsetY = 1f;
 
@@ -831,7 +831,7 @@ internal sealed class DiffRowPainter
             if (start > col)
                 x = DrawTextRun(c, text, col, start, x, bottom, maxRight, Styles.LineText, z);
             if (end > start)
-                x = DrawTextRun(c, text, start, end, x, bottom, maxRight, SlotColor(span.Slot), z);
+                x = DrawTextRun(c, text, start, end, x, bottom, maxRight, Styles.Syntax.Of(span.Slot, Styles.LineText), z);
             if (end > col) col = end;
         }
         if (col < len)
@@ -851,26 +851,6 @@ internal sealed class DiffRowPainter
             DrawMonoText(c, run, x, bottom, Math.Max(0f, maxRight - x), color, TextAlignment.Start, z);
         return x + w;
     }
-
-    private uint SlotColor(TokenColorSlot slot) => slot switch
-    {
-        TokenColorSlot.Keyword => Styles.Syntax.Keyword,
-        TokenColorSlot.String => Styles.Syntax.String,
-        TokenColorSlot.Comment => Styles.Syntax.Comment,
-        TokenColorSlot.Number => Styles.Syntax.Number,
-        TokenColorSlot.Type => Styles.Syntax.Type,
-        TokenColorSlot.Function => Styles.Syntax.Function,
-        TokenColorSlot.Variable => Styles.Syntax.Variable,
-        TokenColorSlot.Operator => Styles.Syntax.Operator,
-        TokenColorSlot.Punctuation => Styles.Syntax.Punctuation,
-        TokenColorSlot.Constant => Styles.Syntax.Constant,
-        TokenColorSlot.Heading => Styles.Syntax.Heading,
-        TokenColorSlot.Emphasis => Styles.Syntax.Emphasis,
-        TokenColorSlot.Link => Styles.Syntax.Link,
-        TokenColorSlot.Code => Styles.Syntax.Code,
-        TokenColorSlot.Quote => Styles.Syntax.Quote,
-        _ => Styles.LineText,
-    };
 
     private void DrawMonoText(
         ICanvas c, string text, float left, float bottom, float width,

@@ -59,7 +59,7 @@ internal sealed record RepoRailFolderTile : Widget<RailFolderState>
             .Use(_ => showsPreview)
             .Use(_ => isActive)
             .Use(_ => tooltipText)
-            .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered, RepoRailTile.AlwaysEnabled));
+            .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered));
     }
 
     private static IWidget Glyph(RailSectionViewModel vm, uint identity) => new Text

@@ -110,19 +110,13 @@ internal sealed class ImagePreviewSurface : View
         VerticalAlignment = TextAlignment.Center,
     };
 
-    private static int _nextInstance;
-
-    private readonly string _imageId = $"diff-image:{Interlocked.Increment(ref _nextInstance)}";
     private readonly ILocalizationService _loc;
     private readonly List<IconSheetCell> _cells = [];
+    private readonly List<UploadedImage> _frames = [];
 
     private ImagePreview? _preview;
     private bool _labelDepths;
     private ulong _uploadedHash;
-    private int _uploadedFrames;
-    // Captured on draw so the unmount path can release the textures — a detaching view has no
-    // canvas of its own to ask.
-    private ICanvas? _canvas;
 
     private uint _matColor;
     private uint _matBorderColor;
@@ -152,7 +146,6 @@ internal sealed class ImagePreviewSurface : View
 
     protected override void OnDrawSelf(ICanvas c)
     {
-        _canvas = c;
         if (_preview is not { } preview) return;
 
         var uploaded = Upload(c, preview);
@@ -199,7 +192,7 @@ internal sealed class ImagePreviewSurface : View
         c.DrawImage(new DrawImageInputs
         {
             Position = rect,
-            ImageId = FrameId(frameIndex),
+            ImageId = _frames[frameIndex].Id,
             ZIndex = z + 1,
             TintColor = 0xFFFFFFFF,
             Rotation = 0f,
@@ -256,22 +249,20 @@ internal sealed class ImagePreviewSurface : View
             MathF.Round(h));
     }
 
-    private string FrameId(int index) => $"{_imageId}#{index}";
-
     private bool Upload(ICanvas c, ImagePreview preview)
     {
-        if (_uploadedFrames == preview.Frames.Count && _uploadedHash == preview.ContentHash) return true;
+        if (_frames.Count == preview.Frames.Count && _uploadedHash == preview.ContentHash) return true;
 
         Release();
-        for (var i = 0; i < preview.Frames.Count; i++)
+        foreach (var frame in preview.Frames)
         {
-            var frame = preview.Frames[i];
-            if (!c.CreateOrUpdateRgbaImage(FrameId(i), frame.Width, frame.Height, frame.Rgba))
+            var image = new UploadedImage();
+            if (!image.Ensure(c, frame))
             {
                 Release();
                 return false;
             }
-            _uploadedFrames = i + 1;
+            _frames.Add(image);
         }
         _uploadedHash = preview.ContentHash;
         return true;
@@ -279,8 +270,8 @@ internal sealed class ImagePreviewSurface : View
 
     private void Release()
     {
-        for (var i = 0; i < _uploadedFrames; i++) _canvas?.RemoveImage(FrameId(i));
-        _uploadedFrames = 0;
+        foreach (var frame in _frames) frame.Release();
+        _frames.Clear();
     }
 
     private sealed class ReleaseTextureBehavior : IViewBehavior

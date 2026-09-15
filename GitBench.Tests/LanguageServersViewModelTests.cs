@@ -234,18 +234,4 @@ public sealed class LanguageServersViewModelTests : IDisposable
             CancellationToken cancel) =>
             Task.FromResult<GitBench.Lsp.Documents.HoverText?>(null);
     }
-
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string Text { get; private set; } = string.Empty;
-
-        public void SetText(string text) => Text = text;
-
-        public string? GetText() => Text;
-    }
-
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
-    }
 }

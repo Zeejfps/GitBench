@@ -149,19 +149,6 @@ public sealed class RepoLoadStoreTests
         public void Dispose() => Store.Dispose();
     }
 
-    private sealed class ManualTicker : IFrameTicker
-    {
-        private readonly List<Action<float>> _ticks = new();
-
-        public void Add(Action<float> tick) => _ticks.Add(tick);
-        public void Remove(Action<float> tick) => _ticks.Remove(tick);
-
-        public void Tick()
-        {
-            foreach (var tick in _ticks.ToArray()) tick(1f / 60f);
-        }
-    }
-
     private sealed class FakeGate : IGitReadGate
     {
         private readonly ConcurrentDictionary<Guid, bool> _outstanding = new();
@@ -198,6 +185,7 @@ public sealed class RepoLoadStoreTests
         public IReadable<RepoOperations> Active => _active;
         public bool HasUnseenError(Guid repoId) => false;
         public bool IsBusy(Guid repoId) => _busy.Contains(repoId);
+        public event Action<Repo>? PullDiverged { add { } remove { } }
         public void Push(Repo repo, bool force = false) { }
         public void Pull(Repo repo, PullStrategy? strategy = null) { }
         public void Fetch(Repo repo) { }

@@ -29,6 +29,6 @@ public sealed class RepoBarCollapseState
     {
         if (_collapsed.Value == collapsed) return;
         _collapsed.Value = collapsed;
-        _preferences.SetRepoBarCollapsed(collapsed);
+        _preferences.Update(p => p with { RepoBarCollapsed = collapsed });
     }
 }

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using GitBench.App;
 using GitBench.Features.Assistant.Agents;
@@ -13,7 +12,6 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;
@@ -43,11 +41,11 @@ public sealed class AssistantWriteToolsTests : IDisposable
         _other = NewDir("gitbench-assistant-other-");
         _git = new GitService(new NullActivityTracker());
 
-        InitRepo(_root);
-        InitRepo(_other);
+        TestGit.Init(_root);
+        TestGit.Init(_other);
         File.WriteAllText(Path.Combine(_root, "a.txt"), "one\n");
         Git(_root, "add", "a.txt");
-        Git(_root, "-c", "commit.gpgsign=false", "commit", "-m", "seed the tree");
+        Git(_root, "commit", "-m", "seed the tree");
         File.WriteAllText(Path.Combine(_root, "b.txt"), "fresh\n");
         File.AppendAllText(Path.Combine(_root, "a.txt"), "two\n");
 
@@ -68,10 +66,11 @@ public sealed class AssistantWriteToolsTests : IDisposable
             _bus,
             StartedIndexOperationsStore.Create(_registry, _bus, loc, _dispatcher),
             new LocalChangesSelectionStore(),
-            new NoopShell(),
-            new NoopClipboard(),
+            new FakeShell(),
+            new FakeClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
-            new IdleSnapshotStore(),
+            new FakeSnapshotStore(),
+            new NoStatusIngest(),
             loc,
             new NoUnsavedEdits());
 
@@ -294,7 +293,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
     {
         var first = GitOut(_root, "rev-parse", "HEAD").Trim();
         Git(_root, "add", "b.txt");
-        Git(_root, "-c", "commit.gpgsign=false", "commit", "-m", "second");
+        Git(_root, "commit", "-m", "second");
 
         var invocation = Invoke("create_tag", $$"""{"name":"v0.9.0","commit_sha":"{{first}}"}""");
 
@@ -450,60 +449,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
         DirectoryTree.Delete(path);
     }
 
-    private static void InitRepo(string path)
-    {
-        Git(path, "init", "--initial-branch=main");
-        Git(path, "config", "user.email", "test@test");
-        Git(path, "config", "user.name", "test");
-    }
+    private static void Git(string workingDirectory, params string[] args) => TestGit.Run(workingDirectory, args);
 
-    private static void Git(string workingDirectory, params string[] args) => Run(workingDirectory, args);
-
-    private static string GitOut(string workingDirectory, params string[] args) => Run(workingDirectory, args);
-
-    private static string Run(string workingDirectory, string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-        return stdout;
-    }
-
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
-    private sealed class NoopShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
-    private sealed class NoopClipboard : IClipboard
-    {
-        public void SetText(string text) { }
-        public string? GetText() => null;
-    }
-
-    // The commit box's file lists come from the snapshot store; nothing here exercises them.
-    private sealed class IdleSnapshotStore : IRepoSnapshotStore
-    {
-        public IReadable<Fetched<CommitSnapshot>?> Commits { get; } = new State<Fetched<CommitSnapshot>?>(null);
-        public IReadable<Fetched<BranchListing>?> Branches { get; } = new State<Fetched<BranchListing>?>(null);
-        public IReadable<Fetched<LocalChangesData>?> LocalChanges { get; } = new State<Fetched<LocalChangesData>?>(null);
-    }
+    private static string GitOut(string workingDirectory, params string[] args) => TestGit.Run(workingDirectory, args);
 }

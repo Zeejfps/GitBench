@@ -30,7 +30,6 @@ namespace GitBench.Tests;
 [Collection(nameof(CodeIntelCollection))]
 public sealed class DocumentParseTests(CodeIntelFixture fixture)
 {
-    private const string CSharpId = "csharp";
 
     private const string Sample = """
         using System;
@@ -76,12 +75,12 @@ public sealed class DocumentParseTests(CodeIntelFixture fixture)
         var document = TextDocument.FromText(Sample);
         using var parse = Open(document);
 
-        Assert.DoesNotContain("Added", Names(parse.Read().Outline));
+        Assert.DoesNotContain("Added", Names(parse.Read().NewSide));
 
         var end = document.Line(new FileLine(11)).Length;
         Type(document, parse, TextPosition.At(11, end), "\n\n    public int Added() => 1;");
 
-        Assert.Contains("Added", Names(parse.Read().Outline));
+        Assert.Contains("Added", Names(parse.Read().NewSide));
     }
 
     // ---- Equivalence under random edits ----------------------------------------------------
@@ -181,7 +180,7 @@ public sealed class DocumentParseTests(CodeIntelFixture fixture)
         var document = TextDocument.FromText(string.Empty);
         using var parse = Open(document);
 
-        Assert.Null(parse.Read().Outline);
+        Assert.Null(parse.Read().NewSide);
 
         Type(document, parse, TextPosition.At(1, 0), "class A { }");
 
@@ -214,7 +213,7 @@ public sealed class DocumentParseTests(CodeIntelFixture fixture)
         const string reloaded = "internal sealed class Other\n{\n    public int Answer() => 42;\n}\n";
         parse.Reset(reloaded);
 
-        Assert.Contains("Answer", Names(parse.Read().Outline));
+        Assert.Contains("Answer", Names(parse.Read().NewSide));
         AssertMatchesAFreshParse("after the reload", TextDocument.FromText(reloaded), parse);
         Assert.Equal(0, parse.Fallbacks);
     }
@@ -224,7 +223,7 @@ public sealed class DocumentParseTests(CodeIntelFixture fixture)
     private DocumentParse Open(TextDocument document) => Fresh(document.Text);
 
     private DocumentParse Fresh(string text) =>
-        new(fixture.Highlighter, fixture.Symbols, CSharpId, CodeLanguage.CSharp, text);
+        new(fixture.Grammars, fixture.Highlighter, fixture.Symbols, CodeLanguage.CSharp, text);
 
     private static void Type(
         TextDocument document, DocumentParse parse, TextPosition at, string replacement) =>
@@ -244,11 +243,11 @@ public sealed class DocumentParseTests(CodeIntelFixture fixture)
         var actual = parse.Read();
 
         AssertSameSpans(because, expected, actual, document.LineCount);
-        Assert.Equal(Names(expected.Outline), Names(actual.Outline));
+        Assert.Equal(Names(expected.NewSide), Names(actual.NewSide));
     }
 
     private static void AssertSameSpans(
-        string because, EditorAnnotations expected, EditorAnnotations actual, int lineCount)
+        string because, DiffAnnotations expected, DiffAnnotations actual, int lineCount)
     {
         Assert.Equal(expected.Highlight is null, actual.Highlight is null);
         if (expected.Highlight is not { } wanted || actual.Highlight is not { } got) return;

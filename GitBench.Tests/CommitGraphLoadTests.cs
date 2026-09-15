@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -27,11 +26,8 @@ public sealed class CommitGraphLoadTests : IDisposable
         Directory.CreateDirectory(_work);
         Directory.CreateDirectory(_origin);
 
-        RunGit(_origin, "init", "--bare", "-b", "main");
-        Git("init", "-b", "main");
-        Git("config", "user.name", "Test");
-        Git("config", "user.email", "test@example.com");
-        Git("config", "commit.gpgsign", "false");
+        TestGit.Run(_origin, "init", "--bare", "-b", "main");
+        TestGit.Init(_work);
         Git("remote", "add", "origin", _origin.Replace('\\', '/'));
 
         _git = new GitService(new RepoActivityTracker());
@@ -262,7 +258,7 @@ public sealed class CommitGraphLoadTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_work, file), content);
         Git("add", file);
-        RunGit(_work, new Dictionary<string, string>
+        TestGit.Run(_work, new Dictionary<string, string>
         {
             ["GIT_AUTHOR_DATE"] = isoDate,
             ["GIT_COMMITTER_DATE"] = isoDate,
@@ -270,33 +266,7 @@ public sealed class CommitGraphLoadTests : IDisposable
         return Git("rev-parse", "HEAD").Trim();
     }
 
-    private string Git(params string[] args) => RunGit(_work, args);
-
-    private static string RunGit(string cwd, params string[] args) => RunGit(cwd, null, args);
-
-    private static string RunGit(string cwd, IReadOnlyDictionary<string, string>? env, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        if (env != null) foreach (var (k, v) in env) psi.Environment[k] = v;
-
-        using var proc = Process.Start(psi)!;
-        proc.StandardInput.Close();
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-        return stdout;
-    }
+    private string Git(params string[] args) => TestGit.Run(_work, args);
 
     public void Dispose()
     {

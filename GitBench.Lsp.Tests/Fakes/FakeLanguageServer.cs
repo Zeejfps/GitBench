@@ -65,7 +65,7 @@ public sealed class FakeLanguageServer : ILanguageServerProcess
 }
 
 /// <summary>Hands out <see cref="FakeLanguageServer"/>s and remembers what it was asked to launch.</summary>
-public sealed class FakeLauncher : ILanguageServerLauncher
+public sealed class FakeLauncher : ILanguageServerLauncher<FakeLanguageServer>
 {
     readonly List<FakeLanguageServer> _started = [];
     readonly List<ServerLaunchRequest> _requests = [];
@@ -99,17 +99,18 @@ public sealed class FakeLauncher : ILanguageServerLauncher
     public FakeLanguageServer For(string language) =>
         _started.Last(s => s.Language.Value == language);
 
-    public LaunchResult Launch(ServerLaunchRequest request)
+    public LaunchResult<FakeLanguageServer> Launch(ServerLaunchRequest request)
     {
         _requests.Add(request);
 
-        if (_failEverything is { } always) return new LaunchResult.Failed(always);
-        if (_scriptedFailures.Count > 0) return new LaunchResult.Failed(_scriptedFailures.Dequeue());
+        if (_failEverything is { } always) return new LaunchResult<FakeLanguageServer>.Failed(always);
+        if (_scriptedFailures.Count > 0)
+            return new LaunchResult<FakeLanguageServer>.Failed(_scriptedFailures.Dequeue());
 
         var server = new FakeLanguageServer { Request = request };
         Configure?.Invoke(server);
         _started.Add(server);
-        return new LaunchResult.Started(server);
+        return new LaunchResult<FakeLanguageServer>.Started(server);
     }
 }
 

@@ -92,11 +92,11 @@ public sealed class AgentToolMcpSourceTests : IDisposable
         _registry.SetActive(_repo.Id);
 
         var loc = new LocalizationService(new State<Locale>(Locale.En));
-        _windows = new ReviewWindowsViewModel(
+        _windows = TestWindows.Review(
             _bus,
             new EmptyStackSource(),
             _registry,
-            _git, _git, _git, _git, _git,
+            _git,
             new UnparsedFiles(),
             new IdleSnapshotStore(),
             new ReviewProgressStore(),

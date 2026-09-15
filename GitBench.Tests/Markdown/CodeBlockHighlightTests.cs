@@ -3,6 +3,7 @@ using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
+using GitBench.Platform;
 using GitBench.Theming;
 using Xunit;
 using ZGF.Gui;
@@ -26,16 +27,17 @@ public class CodeBlockHighlightTests
 {
     private sealed class CountingHighlighter : ISyntaxHighlighter
     {
+        private readonly SyntaxHighlighter _textMate = new();
         private int _calls;
 
         public int CallThreadId;
         public int Calls => Volatile.Read(ref _calls);
 
-        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, string languageId)
+        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language)
         {
             CallThreadId = Environment.CurrentManagedThreadId;
             Interlocked.Increment(ref _calls);
-            return SyntaxHighlighter.Shared.Highlight(fileText, languageId);
+            return _textMate.Highlight(fileText, language);
         }
     }
 
@@ -63,6 +65,8 @@ public class CodeBlockHighlightTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(mode));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new FakeClipboard());
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 ctx.AddService<ISyntaxHighlighter>(highlighter);
                 ctx.AddService<IUiDispatcher>(dispatcher);
             });

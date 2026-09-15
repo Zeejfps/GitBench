@@ -80,7 +80,7 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
 
     private readonly IDiffSelectionSurface _surface;
     private readonly InputSystem _input;
-    private readonly IClipboard? _clipboard;
+    private readonly IClipboard _clipboard;
     private readonly Features.Editor.EditorController? _editor;
 
     private bool _pointerInside;
@@ -99,7 +99,7 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     public DiffSelectionController(
         IDiffSelectionSurface surface,
         InputSystem input,
-        IClipboard? clipboard,
+        IClipboard clipboard,
         Features.Editor.EditorController? editor = null)
     {
         _surface = surface;
@@ -339,7 +339,7 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     public bool Copy()
     {
         var selection = _surface.Selection;
-        if (!selection.HasRange || _clipboard == null) return false;
+        if (!selection.HasRange) return false;
         if (_surface.RowsOf(selection.Scope) is not { } rows) return false;
 
         var text = DiffSelectionModel.BuildCopyText(

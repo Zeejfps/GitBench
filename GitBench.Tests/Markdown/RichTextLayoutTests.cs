@@ -43,23 +43,6 @@ public class RichTextLayoutTests
     private static List<string> LineTexts(IReadOnlyList<RichTextRun> runs, RichTextLayoutResult result) =>
         result.Lines.Select(l => LineText(runs, l)).ToList();
 
-    // Style-aware synthetic metrics. Bold glyphs are wider (12px vs 8px) and line height follows
-    // FontSize when set (else 16px), so tests can prove the layout measures every slice with its
-    // own run's style rather than a single flattened one.
-    private sealed class StyledMeasurer : ITextMeasurer
-    {
-        public float MeasureTextWidth(ReadOnlySpan<char> text, TextStyle style) => text.Length * AdvanceOf(style);
-
-        public float MeasureTextPrefix(ReadOnlySpan<char> text, int prefixLength, TextStyle style) =>
-            Math.Clamp(prefixLength, 0, text.Length) * AdvanceOf(style);
-
-        public float MeasureTextLineHeight(TextStyle style) =>
-            style.FontSize.IsSet ? style.FontSize.Value : 16f;
-
-        private static float AdvanceOf(TextStyle style) =>
-            style.FontWeight is { IsSet: true, Value: FontWeight.Bold } ? 12f : 8f;
-    }
-
     // ---------- empty / trivial ----------
 
     [Fact]

@@ -1,15 +1,13 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using ZGF.Observable;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
@@ -30,17 +28,18 @@ internal sealed record DiscardChangesDialog : Widget
     {
         var snapshot = LocalChangesProjection.ActiveSnapshot(ctx.Require<IRepoSnapshotStore>(), Repo);
         var vm = new DiscardChangesViewModel(
-            new DiscardChangesRequest(Repo, Paths),
+            Repo,
+            Paths,
             snapshot,
             ctx.Require<IGitWorkingTreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Localization());
+            ctx.Localization(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            ViewModel = vm,
             Title = s.LocalchangesDiscardDialogTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
@@ -51,53 +50,14 @@ internal sealed record DiscardChangesDialog : Widget
             ConfirmKeys = true,
             Body =
             [
+                new DialogBodyText { Value = s.LocalchangesDiscardDialogBody },
                 new Text
                 {
-                    Value = s.LocalchangesDiscardDialogBody,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
-                new Text
-                {
-                    Value = Prop.Bind(vm.FilesHeader),
+                    Value = Prop.Bind<string?>(vm.Files.Header),
                     Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
+                new Grow { Child = new DialogFileList { List = vm.Files, EmptyText = s.LocalchangesDiscardDialogNoChanges } },
             ],
         };
     }
-
-    private static View BuildFileList(Context ctx, DiscardChangesViewModel vm)
-    {
-        var theme = ctx.Theme();
-        var column = new ColumnView { Gap = Spacing.None };
-
-        var files = vm.Files.Value;
-        if (files.Count == 0)
-        {
-            var empty = new TextView(ctx.Canvas)
-            {
-                Text = ctx.Localization().Strings.Value.LocalchangesDiscardDialogNoChanges,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center,
-            };
-            empty.BindTextColor(() => theme.Styles.Value.FileChangesSection.EmptyPlaceholderText);
-            column.Children.Add(empty);
-        }
-        else
-        {
-            for (var i = 0; i < files.Count; i++)
-            {
-                var index = i;
-                var file = files[i];
-                column.Children.Add(DialogFileRow.Build(
-                    ctx, file.Display, file.Path, vm.CheckedPaths,
-                    modifiers => vm.ClickRow(index, modifiers)));
-            }
-        }
-
-        return new DialogScrollList { Content = column }.BuildView(ctx);
-    }
 }
-
-public readonly record struct DiscardChangesRequest(Repo Repo, IReadOnlyList<string> Paths);

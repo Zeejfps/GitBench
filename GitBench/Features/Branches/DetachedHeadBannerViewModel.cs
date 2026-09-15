@@ -109,16 +109,12 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
 
         var repoId = repo.Id;
         var status = _gitStatus;
-        RunBackground<DetachedHeadReport>(
-            () =>
-            {
-                try { return (status.GetDetachedHeadReport(repo), null); }
-                catch { return (DetachedHeadReport.None, null); }
-            },
-            (report, _) =>
+        RunBackground<Fetched<DetachedHeadReport>>(
+            () => status.GetDetachedHeadReport(repo),
+            fetched =>
             {
                 if (_registry.Active.Value?.Id != repoId) return;
-                report ??= DetachedHeadReport.None;
+                var report = (fetched as Fetched<DetachedHeadReport>.Ok)?.Value ?? DetachedHeadReport.None;
                 Update(_ => new DetachedHeadBannerState(report.Kind, report.Branch));
             });
     }

@@ -46,7 +46,6 @@ public sealed class LanguageServerFileTextTests : IDisposable
         RootMarkers: [],
         Environment: new Dictionary<string, string>(),
         InitializationOptionsJson: null,
-        SettingsJson: null,
         RequestTimeout: TimeSpan.FromSeconds(5),
         IdleShutdown: TimeSpan.FromMinutes(5));
 
@@ -164,9 +163,7 @@ public sealed class LanguageServerFileTextTests : IDisposable
 
         Assert.Null(hover);
         Assert.Empty(_server.Opened);
-        Assert.Equal(
-            SkipReason.PreviewTruncated,
-            Assert.IsType<DocumentState.NotSent>(connection.Document).Reason);
+        Assert.IsType<DocumentState.Truncated>(connection.Document);
     }
 
     [Fact]
@@ -181,7 +178,7 @@ public sealed class LanguageServerFileTextTests : IDisposable
 
         Assert.Single(_server.Opened);
         Assert.Equal([DocumentUri.OfFile(_file)], _server.Closed);
-        Assert.IsType<DocumentState.NotSent>(connection.Document);
+        Assert.IsType<DocumentState.Truncated>(connection.Document);
     }
 
     [Fact]

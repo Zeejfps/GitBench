@@ -3,6 +3,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
+using GitBench.Platform;
 using GitBench.Theming;
 using Xunit;
 using ZGF.Gui;
@@ -45,6 +46,8 @@ public class MarkdownWidgetTableTests
                     new ThemeService(new State<ThemeMode>(mode)));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new FakeClipboard());
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
 
     private static ThemeStyles Dark => ThemeStyles.Dark;

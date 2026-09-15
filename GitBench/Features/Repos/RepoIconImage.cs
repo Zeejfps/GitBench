@@ -47,12 +47,8 @@ internal sealed record RepoIconImage : Widget
 
     private sealed class RepoIconImageSurface : View
     {
-        private static int _nextId;
-
         private readonly ImageFrame _frame;
-        private readonly string _imageId = $"repo-icon:{Interlocked.Increment(ref _nextId)}";
-        private ICanvas? _canvas;
-        private bool _uploaded;
+        private readonly UploadedImage _image = new();
 
         public RepoIconImageSurface(ImageFrame frame)
         {
@@ -62,10 +58,7 @@ internal sealed record RepoIconImage : Widget
 
         protected override void OnDrawSelf(ICanvas canvas)
         {
-            _canvas = canvas;
-            if (!_uploaded)
-                _uploaded = canvas.CreateOrUpdateRgbaImage(_imageId, _frame.Width, _frame.Height, _frame.Rgba);
-            if (!_uploaded) return;
+            if (!_image.Ensure(canvas, _frame)) return;
 
             var bounds = Position;
             var scale = MathF.Min(bounds.Width / _frame.Width, bounds.Height / _frame.Height);
@@ -80,23 +73,17 @@ internal sealed record RepoIconImage : Widget
             canvas.DrawImage(new DrawImageInputs
             {
                 Position = rect,
-                ImageId = _imageId,
+                ImageId = _image.Id,
                 ZIndex = GetDrawZIndex(),
                 TintColor = 0xFFFFFFFF,
                 Rotation = 0f,
             });
         }
 
-        private void Release()
-        {
-            if (_uploaded) _canvas?.RemoveImage(_imageId);
-            _uploaded = false;
-        }
-
         private sealed class ReleaseTextureBehavior : IViewBehavior
         {
             public void Attach(View view) { }
-            public void Detach(View view) => ((RepoIconImageSurface)view).Release();
+            public void Detach(View view) => ((RepoIconImageSurface)view)._image.Release();
         }
     }
 }

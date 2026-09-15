@@ -36,34 +36,20 @@ namespace GitBench.Tests.Markdown;
 //   click writes CodeBlock.Text to IClipboard.
 // - TableBlock is a Step 6 placeholder: a document containing a table renders its other blocks
 //   and never throws; what (if anything) the table itself draws is deliberately NOT pinned here.
-public class MarkdownWidgetTests
+[Collection(nameof(CodeIntelCollection))]
+public class MarkdownWidgetTests(CodeIntelFixture fixture)
 {
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public readonly List<string> OpenedUrls = new();
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) => OpenedUrls.Add(url);
-    }
 
     private static MarkdownDocument Parse(string markdown) => new BasicMarkdownParser().Parse(markdown);
 
-    private static (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell) Create(
+    private (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell) Create(
         string markdown, int width = 800, int height = 600, ThemeMode mode = ThemeMode.Dark)
     {
         var (harness, clipboard, shell, _) = CreateWithDispatcher(markdown, width, height, mode);
         return (harness, clipboard, shell);
     }
 
-    private static (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell, QueuedDispatcher Dispatcher)
+    private (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell, QueuedDispatcher Dispatcher)
         CreateWithDispatcher(
             string markdown, int width = 800, int height = 600, ThemeMode mode = ThemeMode.Dark)
     {
@@ -82,6 +68,7 @@ public class MarkdownWidgetTests
                 ctx.AddService<IClipboard>(clipboard);
                 ctx.AddService<IPlatformShell>(shell);
                 ctx.AddService<IUiDispatcher>(dispatcher);
+                ctx.AddService<ISyntaxHighlighter>(fixture.Colors);
             });
         return (harness, clipboard, shell, dispatcher);
     }
@@ -623,7 +610,7 @@ public class MarkdownWidgetTests
         Assert.Equal(narrow, wide, 3);
     }
 
-    private static float CodeBlockBoxHeight(string markdown)
+    private float CodeBlockBoxHeight(string markdown)
     {
         var (h, _, _) = Create(markdown);
         using (h)

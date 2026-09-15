@@ -51,7 +51,7 @@ internal static class DialogFrame
                 {
                     Grow = 1,
                     Shrink = 1,
-                    Child = new DialogScrollRegion { Content = new Raw { View = body } }.BuildView(ctx),
+                    Child = new ScrollRegion { Content = new Raw { View = body }, StretchContent = true }.BuildView(ctx),
                 },
             },
         };
@@ -151,28 +151,6 @@ internal static class DialogFrame
             view.SelectionRectColor = s.TextInput.Selection;
             view.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        return view;
-    }
-
-    public static RectView WrapInput(Context ctx, TextInputView input)
-    {
-        var view = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(ControlBorderRadius),
-            Height = Sizes.ControlHeight,
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs },
-                    Children = { input },
-                },
-            },
-        };
-        var theme = ctx.Theme();
-        view.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
-        view.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
         return view;
     }
 

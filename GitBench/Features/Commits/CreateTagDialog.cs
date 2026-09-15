@@ -1,6 +1,8 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Notifications;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -27,88 +29,82 @@ internal sealed record CreateTagDialog : Widget
     public required string Summary { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        var vm = new CreateTagDialogViewModel(
-            new CreateTagRequest(Repo, Sha),
-            ctx.Require<IGitTagOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<ILocalizationService>());
+        var repo = Repo;
+        var sha = Sha;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitTagOperations>();
+        var bus = ctx.Require<IMessageBus>();
+        var loc = ctx.Require<ILocalizationService>();
+        var s = loc.Strings.Value;
 
-        var s = ctx.Localization().Strings.Value;
+        var name = new State<string>(string.Empty);
+        var message = new State<string>(string.Empty);
+        var pushToAllRemotes = new State<bool>(true);
 
-        var messageField = new GrowingDescriptionField(ctx, 72f, 200f) { PlaceholderText = s.CommitsCreateTagMessagePlaceholder };
-        messageField.BindTwoWay(vm.Message, vm.SetMessage);
-
-        var shell = new DialogShell(ctx, s.CommitsCreateTagTitle, OnClose)
+        // Validate the trimmed value: Create trims before handing the name to git, so a
+        // surrounding space shouldn't read as an error the user can't see the cause of.
+        var nameStatus = new Derived<FieldStatus?>(() =>
         {
+            var strings = loc.Strings.Value;
+            return RefNameRules.Validate(name.Value.Trim(), strings, strings.RefnameNounTag);
+        });
+        var gate = new Derived<bool>(() =>
+            name.Value.Trim().Length > 0 && RefNameRules.IsValid(name.Value.Trim()));
+
+        var create = AsyncCommand.ForOutcome(
+            ctx.Require<IUiDispatcher>(),
+            work: () => gitService.CreateTag(repo, name.Value.Trim(), message.Value, sha, pushToAllRemotes.Value),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                bus.Broadcast(new ShowToastMessage(ToastIntent.Success(loc.Strings.Value.ToastTagCreated)));
+                onClose();
+            },
+            gate: gate);
+
+        // The message field keeps its own multi-line controller so Enter inserts a newline there.
+        var messageField = new GrowingDescriptionField(ctx, 72f, 200f) { PlaceholderText = s.CommitsCreateTagMessagePlaceholder };
+        messageField.BindTwoWay(message, v => message.Value = v);
+
+        return new Dialog
+        {
+            Title = s.CommitsCreateTagTitle,
+            OnClose = onClose,
             Width = DialogFrame.WidthWide,
             Action = (s.CommonCreate, DialogButtonRole.Primary),
+            Command = create,
+            // Reflect the toggle in the primary button's label, like Fork ("Create and Push").
+            BindActionLabel = new Derived<string>(() => pushToAllRemotes.Value ? s.CommitsCreateTagPushAction : s.CommonCreate),
+            Body =
+            [
+                new DialogBodyText { Value = s.CommitsCreateTagDesc },
+                new LabeledRow { Label = s.CommitsCreateTagLocationLabel, Value = CommitValue(ctx, ShortSha, Summary) },
+                new LabeledInput
+                {
+                    Label = s.CommitsCreateTagNameLabel,
+                    Value = name,
+                    Placeholder = s.CommitsCreateTagNamePlaceholder,
+                    Status = nameStatus,
+                },
+                new Column
+                {
+                    Gap = Spacing.Xs,
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Children =
+                    [
+                        new Text
+                        {
+                            Value = s.CommonMessage,
+                            Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
+                        },
+                        new Raw { View = messageField },
+                    ],
+                },
+                new CheckboxWidget { Label = s.CommitsCreateTagPushCheckbox, Checked = pushToAllRemotes, Height = Sizes.RowHeight }.WithController<KbmController>(),
+            ],
         };
-
-        IWidget[] body =
-        [
-            new Text
-            {
-                Value = s.CommitsCreateTagDesc,
-                Wrap = TextWrap.Wrap,
-                Color = Theme.Color(t => t.DialogBody.BodyText),
-            },
-            new LabeledRow { Label = s.CommitsCreateTagLocationLabel, Value = CommitValue(ctx, ShortSha, Summary) },
-            // Each label sits tight against its field (small intra-group gap); the column's
-            // larger Gap separates one section from the next so labels read as attached to
-            // their inputs rather than floating midway between them.
-            new LabeledInput
-            {
-                Label = s.CommitsCreateTagNameLabel,
-                Value = vm.Name,
-                Placeholder = s.CommitsCreateTagNamePlaceholder,
-                Status = vm.NameStatus,
-            },
-            new Column
-            {
-                Gap = Spacing.Xs,
-                CrossAxis = CrossAxisAlignment.Stretch,
-                Children =
-                [
-                    new Text
-                    {
-                        Value = s.CommonMessage,
-                        Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
-                    },
-                    new Raw { View = messageField },
-                ],
-            },
-            new CheckboxWidget { Label = s.CommitsCreateTagPushCheckbox, Checked = vm.PushToAllRemotes, Height = Sizes.RowHeight }.WithController<KbmController>(),
-        ];
-
-        var inputs = new DialogInputRegistry();
-        var bodyScope = new Context(ctx);
-        bodyScope.AddService(inputs);
-        foreach (var widget in body)
-            shell.Body.Add(widget.BuildView(bodyScope));
-
-        var root = new ContainerView();
-        root.Children.Add(shell.View);
-
-        shell.BindCommand(vm.Create);
-
-        // Submit-on-enter / cancel-on-esc lives on the name input, not the dialog — see
-        // CreateBranchDialog: the input controller consumes left-press inside its own view,
-        // so attaching to the outer dialog would swallow clicks meant for the buttons. The
-        // message field keeps its own multi-line controller so Enter inserts a newline there.
-        shell.SubmitFrom(inputs.Entries.Select(e => e.Input).ToArray());
-
-        // Reflect the toggle in the primary button's label, like Fork ("Create and Push").
-        root.Bind(vm.PushToAllRemotes, push => shell.SetActionLabel(push ? s.CommitsCreateTagPushAction : s.CommonCreate));
-
-        root.UseViewModel(() => vm, v =>
-        {
-            v.CloseRequested += OnClose;
-            shell.BeginEditing();
-        });
-        return root;
     }
 
     private static IWidget CommitValue(Context ctx, string shortSha, string summary)

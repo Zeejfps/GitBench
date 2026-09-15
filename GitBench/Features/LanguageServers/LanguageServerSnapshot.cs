@@ -31,8 +31,6 @@ internal sealed record LanguageServerSnapshot(
     public override int GetHashCode() =>
         HashCode.Combine(Config, Servers.Count, Problems.Count, Suggestions.Count, ConfigFileExists);
 
-    public bool Handles(string absolutePath) => Config.ServerFor(absolutePath) is not null;
-
     public ServerState StateFor(string absolutePath) =>
         Config.ServerFor(absolutePath) is { } entry
             ? StateFor(entry.Language)

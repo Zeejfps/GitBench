@@ -103,13 +103,12 @@ public class DiffPreviewLoaderTests(CodeIntelFixture fixture)
     private DiffRenderState Load(DiffViewMode mode, StubDiffReader? git = null)
     {
         var loader = new DiffPreviewLoader(
-            git ?? new StubDiffReader(NewSource, OldSource, DiffOf()), new NoConflicts(), fixture.Extractor);
+            git ?? new StubDiffReader(NewSource, OldSource, DiffOf()), new NoConflicts(), fixture.Extractor, fixture.Colors);
         return loader.Load(new DiffPreviewRequest(
             new Repo(Guid.NewGuid(), "/repo", "repo"),
             new DiffTarget("AuthService.cs", DiffSide.Unstaged),
             mode,
             Preview: false,
-            BinaryText: "binary",
             NoCurrentVersionText: "no current version"));
     }
 
@@ -151,22 +150,5 @@ public class DiffPreviewLoaderTests(CodeIntelFixture fixture)
 
         public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null)
             => null;
-    }
-
-    private sealed class NoConflicts : IGitConflictOperations
-    {
-        public ConflictContext? GetConflictContext(Repo repo, string path) => null;
-
-        public GitOutcome TakeOurs(Repo repo, string path) => throw new NotSupportedException();
-
-        public GitOutcome TakeTheirs(Repo repo, string path) => throw new NotSupportedException();
-
-        public GitOutcome TakeBoth(Repo repo, string path) => throw new NotSupportedException();
-
-        public GitOutcome MarkResolved(Repo repo, string path) => throw new NotSupportedException();
-
-        public IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo) => throw new NotSupportedException();
-
-        public ConflictStages? GetConflictStages(Repo repo, string path) => throw new NotSupportedException();
     }
 }

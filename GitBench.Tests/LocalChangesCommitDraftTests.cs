@@ -8,7 +8,6 @@ using GitBench.Features.Submodules;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;
@@ -48,9 +47,9 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
         _vm = new LocalChangesViewModel(
             _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), bus,
             StartedIndexOperationsStore.Create(_registry, bus, _loc, _dispatcher),
-            new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
+            new LocalChangesSelectionStore(), new FakeShell(), new FakeClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_dir.Path, "prefs.json")),
-            _store, _loc, new NoUnsavedEdits());
+            _store, new NoStatusIngest(), _loc, new NoUnsavedEdits());
 
         Push();
     }
@@ -157,28 +156,6 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
         Assert.Equal("Merge branch 'topic' into main", _vm.Title.Value);
     }
 
-    private sealed class FakeSnapshotStore : IRepoSnapshotStore
-    {
-        public State<Fetched<LocalChangesData>?> LocalState { get; } = new(null);
-        public IReadable<Fetched<CommitSnapshot>?> Commits { get; } = new State<Fetched<CommitSnapshot>?>(null);
-        public IReadable<Fetched<BranchListing>?> Branches { get; } = new State<Fetched<BranchListing>?>(null);
-        public IReadable<Fetched<LocalChangesData>?> LocalChanges => LocalState;
-    }
-
-    private sealed class NoopShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
-    private sealed class NoopClipboard : IClipboard
-    {
-        public void SetText(string text) { }
-        public string? GetText() => null;
-    }
-
     private void Activate(Guid repoId, string? mergeMessage = null)
     {
         _registry.SetActive(repoId);
@@ -198,12 +175,10 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
     {
         var path = Path.Combine(_dir.Path, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "--initial-branch=main");
-        Git(path, "config", "user.email", "test@test");
-        Git(path, "config", "user.name", "test");
+        TestGit.Init(path);
         File.WriteAllText(Path.Combine(path, "a.txt"), "one\n");
         Git(path, "add", "a.txt");
-        Git(path, "-c", "commit.gpgsign=false", "commit", "-m", message);
+        Git(path, "commit", "-m", message);
         return path;
     }
 
@@ -219,21 +194,7 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
         throw new TimeoutException($"Timed out waiting for {what}.");
     }
 
-    private static void Git(string workingDirectory, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
+    private static string Git(string workingDirectory, params string[] args) => TestGit.Run(workingDirectory, args);
 
     public void Dispose()
     {

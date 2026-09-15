@@ -22,13 +22,6 @@ public class DiffSelectionViewTests
     private const float Advance = 8f;
     private const float Top = 600f;
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
     // Two hunks nine lines into the file, three hidden lines between them. Rows:
     //   [0] top bar (gap 0, up expander)   [5] middle bar (gap 1, 3 hidden)
     //   [1] context "var alpha = 1;"       [6] context "int x = 0;"

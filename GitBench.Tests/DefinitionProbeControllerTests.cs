@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
 using GitBench.Input;
@@ -243,7 +244,6 @@ public sealed class DefinitionProbeControllerTests
 
         Assert.Equal(8, Assert.Single(fx.Source.Asked).Line.Value);
         Assert.Single(fx.Navigator.Went);
-
     }
 
     [Fact]
@@ -610,9 +610,9 @@ public sealed class DefinitionProbeControllerTests
 
         public FileSpan? Link => Shown.Count == 0 ? null : Shown[^1];
 
-        public FilePositionHit? HitTestFilePosition(PointF point) =>
+        public TextPosition? HitTestFilePosition(PointF point) =>
             fixture.Positions.TryGetValue((point.X, point.Y), out var at)
-                ? new FilePositionHit(new FileLine(at.Line), new RawColumn(at.Column))
+                ? new TextPosition(new FileLine(at.Line), new RawColumn(at.Column))
                 : null;
 
         public FileSpan? HitTestIdentifier(PointF point) =>
@@ -658,17 +658,5 @@ public sealed class DefinitionProbeControllerTests
 
             return new DefinitionReply(Targets, Origin);
         }
-    }
-
-    private sealed class FakeNavigator : IFileNavigator
-    {
-        public List<(string Path, int Line)> Went { get; } = [];
-
-        public void NavigateTo(string absolutePath, int line) => Went.Add((absolutePath, line));
-    }
-
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
     }
 }

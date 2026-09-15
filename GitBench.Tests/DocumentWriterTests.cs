@@ -154,7 +154,7 @@ public class DocumentWriterTests : IDisposable
     }
 
     private static FilePreview.Text Load(string path) => Assert.IsType<FilePreview.Text>(
-        FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+        FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
     private static FileEncoding Reversible(FilePreview.Text preview) =>
         Assert.IsType<FileWriteBack.Reversible>(preview.WriteBack).Encoding;

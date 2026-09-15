@@ -2,7 +2,6 @@ using GitBench.Controls;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Repos;
 using GitBench.Localization;
-using GitBench.Messages;
 
 namespace GitBench.Features.Diff;
 
@@ -21,13 +20,16 @@ internal static class DiffAssistantMenu
     private const string BreakageAsk = "What could break here?";
     private const string FixAsk = "Suggest a fix for this.";
 
+    // ask receives the preset agent to run one-shot — null for the free-form case, where the
+    // overlay opens with the quote in the composer — and the composed prompt: the selection quoted
+    // with its path, line range and which side of the diff it is, worded here because this is where
+    // the labels are localized and the rows are still in hand.
     public static IReadOnlyList<RepoBarContextMenu.Item> Items(
         Strings strings,
-        IMessageBus bus,
-        DiffSelectionQuote quote)
+        DiffSelectionQuote quote,
+        Action<string?, string> ask)
     {
-        void Ask(string? agent, string? question) =>
-            bus.Broadcast(new AskAssistantAboutSelectionMessage(agent, quote.ToPrompt(question)));
+        void Ask(string? agent, string? question) => ask(agent, quote.ToPrompt(question));
 
         return
         [

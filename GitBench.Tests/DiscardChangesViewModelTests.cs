@@ -35,15 +35,15 @@ public sealed class DiscardChangesViewModelTests
             GitStatusSummary.Unknown);
 
         var vm = new DiscardChangesViewModel(
-            new DiscardChangesRequest(Repo, Array.Empty<string>()),
-            snapshot, git, dispatcher, new MessageBus(), loc);
+            Repo, Array.Empty<string>(),
+            snapshot, git, dispatcher, new MessageBus(), loc, () => { });
 
         // No read fired (ThrowOnReads would have thrown; the counters stay zero).
         Assert.Equal(0, git.GetLocalChangesCalls);
         Assert.Equal(0, git.GetHeadCommitMessageCalls);
 
         // Discard lists only the Unstaged side, sorted, ignoring Staged.
-        Assert.Equal(new[] { "a.txt", "b.txt" }, vm.Files.Value.Select(r => r.Path).ToArray());
+        Assert.Equal(new[] { "a.txt", "b.txt" }, vm.Files.Files.Select(r => r.Path).ToArray());
     }
 
     [Fact]
@@ -52,11 +52,11 @@ public sealed class DiscardChangesViewModelTests
         var (git, loc, dispatcher) = Env();
 
         var vm = new DiscardChangesViewModel(
-            new DiscardChangesRequest(Repo, Array.Empty<string>()),
-            LocalChangesSnapshot.Empty(Repo.Id), git, dispatcher, new MessageBus(), loc);
+            Repo, Array.Empty<string>(),
+            LocalChangesSnapshot.Empty(Repo.Id), git, dispatcher, new MessageBus(), loc, () => { });
 
         Assert.Equal(0, git.GetLocalChangesCalls);
-        Assert.Empty(vm.Files.Value);
-        Assert.Equal(loc.Strings.Value.LocalchangesFilesHeaderEmpty, vm.FilesHeader.Value);
+        Assert.Empty(vm.Files.Files);
+        Assert.Equal(loc.Strings.Value.LocalchangesFilesHeaderEmpty, vm.Files.Header.Value);
     }
 }

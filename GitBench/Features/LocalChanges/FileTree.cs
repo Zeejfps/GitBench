@@ -7,64 +7,59 @@ namespace GitBench.Features.LocalChanges;
 
 public enum FileViewMode { Flat, Tree }
 
-internal enum FileRowKind { Folder, File }
-
 /// <summary>
-/// One rendered row of a local-changes file list — either a directory <see cref="FileRowKind.Folder"/>
-/// node or a <see cref="FileRowKind.File"/> leaf. Produced by <see cref="FileTreeBuilder"/> from the
-/// flat <see cref="FileChange"/> list plus the view mode and the collapsed-folder set; the panel renders
+/// One rendered row of a local-changes file list — a directory <see cref="Folder"/> node or a
+/// <see cref="File"/> leaf. Produced by <see cref="FileTreeBuilder"/> from the flat
+/// <see cref="FileChange"/> list plus the view mode and the collapsed-folder set; the panel renders
 /// these and the view model navigates/selects against the same sequence so the two never diverge.
 ///
 /// <see cref="Files"/> is the set of descendant file paths a row operates on: a single-element list for
 /// a file row, every leaf beneath a folder row. That makes "stage/discard this folder" and folder
 /// selection a path-list operation the existing git ops already understand.
 /// </summary>
-internal sealed class FileRow
+internal abstract class FileRow
 {
-    private FileRow(
-        FileRowKind kind,
-        string displayName,
-        float indent,
-        bool isOpen,
-        string fullPath,
-        DiffSide side,
-        FileChange? file,
-        IReadOnlyList<string> files,
-        TreeGuides guides)
+    private FileRow(string displayName, float indent, string fullPath, DiffSide side, IReadOnlyList<string> files, TreeGuides guides)
     {
-        Kind = kind;
         DisplayName = displayName;
         Indent = indent;
-        IsOpen = isOpen;
         FullPath = fullPath;
         Side = side;
-        File = file;
         Files = files;
         Guides = guides;
     }
 
-    public FileRowKind Kind { get; }
     public string DisplayName { get; }
     public float Indent { get; }
-    public bool IsOpen { get; }
     public string FullPath { get; }
     public DiffSide Side { get; }
-    public FileChange? File { get; }
     public IReadOnlyList<string> Files { get; }
 
     // The ancestry connectors drawn behind the row in tree mode (trunks + the elbow into it).
     // Empty for flat mode and top-level rows — they are the tree's roots.
     public TreeGuides Guides { get; }
 
-    public FileRowRef Ref => new(Side, FullPath, Kind == FileRowKind.Folder);
+    public FileRowRef Ref => new(Side, FullPath, this is Folder);
 
-    public static FileRow ForFile(FileChange file, string displayName, float indent, DiffSide side, TreeGuides guides = default)
-        => new(FileRowKind.File, displayName, indent, isOpen: false, file.Path, side, file, new[] { file.Path }, guides);
+    public sealed class File : FileRow
+    {
+        public FileChange Change { get; }
 
-    public static FileRow ForFolder(
-        string displayName, string fullPath, float indent, bool isOpen, IReadOnlyList<string> files, DiffSide side,
-        TreeGuides guides = default)
-        => new(FileRowKind.Folder, displayName, indent, isOpen, fullPath, side, file: null, files, guides);
+        public File(FileChange change, string displayName, float indent, DiffSide side, TreeGuides guides = default)
+            : base(displayName, indent, change.Path, side, [change.Path], guides)
+            => Change = change;
+    }
+
+    public sealed class Folder : FileRow
+    {
+        public bool IsOpen { get; }
+
+        public Folder(
+            string displayName, string fullPath, float indent, bool isOpen, IReadOnlyList<string> files, DiffSide side,
+            TreeGuides guides = default)
+            : base(displayName, indent, fullPath, side, files, guides)
+            => IsOpen = isOpen;
+    }
 }
 
 /// <summary>
@@ -76,7 +71,7 @@ internal readonly record struct FileRowRef(DiffSide Side, string FullPath, bool 
 
 /// <summary>
 /// Pure flattening of a <see cref="FileChange"/> list plus (view-mode, collapsed-folders) into the linear
-/// <see cref="FileRow"/> sequence a <c>LocalChangesPanel</c> renders. Flat mode emits one file row per
+/// <see cref="FileRow"/> sequence a <see cref="FileRowList"/> renders. Flat mode emits one file row per
 /// file; tree mode builds a <see cref="PathTree"/> over the file paths (with single-child folder
 /// compaction, e.g. <c>Assets/Scripts/UI</c>) and emits a row per node, hiding rows under collapsed
 /// folders. No dependency on layout pixels or the view tree, so both the panel (render) and the view
@@ -103,7 +98,7 @@ internal static class FileTreeBuilder
         {
             var flat = new List<FileRow>(files.Count);
             foreach (var f in files)
-                flat.Add(FileRow.ForFile(f, FileChangeFormatting.FormatPath(f), 0f, side));
+                flat.Add(new FileRow.File(f, FileChangeFormatting.FormatPath(f), 0f, side));
             return flat;
         }
 
@@ -132,14 +127,14 @@ internal static class FileTreeBuilder
 
             if (node.Leaf is { } file)
             {
-                rows.Add(FileRow.ForFile(file, FileChangeFormatting.FormatLeaf(file), indent, side, guides));
+                rows.Add(new FileRow.File(file, FileChangeFormatting.FormatLeaf(file), indent, side, guides));
                 continue;
             }
 
             var open = !collapsed.Contains(node.FullPath);
             var leaves = new List<string>();
             CollectLeaves(node, leaves);
-            rows.Add(FileRow.ForFolder(node.Segment, node.FullPath, indent, open, leaves, side, guides));
+            rows.Add(new FileRow.Folder(node.Segment, node.FullPath, indent, open, leaves, side, guides));
             if (open)
             {
                 // The folder's children inherit its trunk at its own column — a passthrough while the

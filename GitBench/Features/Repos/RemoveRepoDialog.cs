@@ -45,12 +45,7 @@ internal sealed record RemoveRepoDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.ReposRepoRemoveBody(Repo.DisplayName, AppIdentity.DisplayName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.ReposRepoRemoveBody(Repo.DisplayName, AppIdentity.DisplayName) },
                 .. endsAShell
                     ?
                     [

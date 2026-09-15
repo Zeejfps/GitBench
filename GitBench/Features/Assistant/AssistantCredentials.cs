@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GitBench.Features.Assistant.Backend;
 using ZGF.Gui.Desktop;
 
@@ -85,10 +86,12 @@ internal sealed class AssistantCredentials
 
     public string? SavedFor(AssistantProvider provider) => Normalize(_secrets.Get(provider.SecretName));
 
-    public string? FromEnvironment(AssistantProvider provider) =>
-        provider.EnvironmentVariable is { } variable
-            ? Normalize(Environment.GetEnvironmentVariable(variable))
-            : null;
+    public string? FromEnvironment(AssistantProvider provider) => provider.Hosting switch
+    {
+        AssistantHosting.Hosted hosted => Normalize(Environment.GetEnvironmentVariable(hosted.EnvironmentVariable)),
+        AssistantHosting.SelfHosted => null,
+        _ => throw new UnreachableException(),
+    };
 
     public AssistantKeySource SourceFor(AssistantProvider provider)
     {

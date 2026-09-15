@@ -7,13 +7,7 @@ internal readonly record struct LocalChangesState(
     string Title,
     string Description,
     EditorMode Editor,
-    bool HasRepo,
-    bool IsLoading,
-    string? LoadError,
-    // Full git error block behind LoadError, surfaced in the scrollable OperationErrorDialog
-    // when the user clicks "Show full error" on the placeholder. Null when LoadError is null
-    // or carries no extra detail.
-    string? LoadErrorDetail,
+    LocalChangesLoad Load,
     IReadOnlyList<FileChange> Unstaged,
     IReadOnlyList<FileChange> Staged,
     Selection Selection,
@@ -46,10 +40,7 @@ internal readonly record struct LocalChangesState(
         Title: string.Empty,
         Description: string.Empty,
         Editor: EditorMode.Idle,
-        HasRepo: false,
-        IsLoading: false,
-        LoadError: null,
-        LoadErrorDetail: null,
+        Load: new LocalChangesLoad.NoRepo(),
         Unstaged: [],
         Staged: [],
         Selection: Selection.Empty,
@@ -63,19 +54,21 @@ internal readonly record struct LocalChangesState(
     // Placeholder is derived, not settable. Loading never tears the panels down when
     // there is data on screen — that's reserved for "nothing to render at all"
     // (no repo, hard load error, or a cold start with empty lists while loading).
-    // Splitting lifecycle (IsLoading / LoadError / HasRepo) from data (Staged / Unstaged)
-    // makes the "Loading shown while data exists" state unrepresentable.
-    public string? Placeholder =>
-        !HasRepo ? OpenRepoPlaceholder :
-        LoadError != null ? LoadError :
-        IsColdLoad ? LoadingPlaceholder :
-        null;
+    // Splitting lifecycle (Load) from data (Staged / Unstaged) makes the "Loading shown while
+    // data exists" state unrepresentable.
+    public string? Placeholder => Load switch
+    {
+        LocalChangesLoad.NoRepo => OpenRepoPlaceholder,
+        LocalChangesLoad.Failed failed => failed.Message,
+        LocalChangesLoad.Loading when IsColdLoad => LoadingPlaceholder,
+        _ => null,
+    };
 
     // A load with nothing on screen to keep — a repo switch, or a first load. The surfaces stand in
     // a placeholder / skeleton for it; a refresh that still has lists up revalidates in place
     // instead, so the user never watches content they are reading get torn down.
     public bool IsColdLoad =>
-        HasRepo && LoadError == null && IsLoading && Staged.Count == 0 && Unstaged.Count == 0;
+        Load is LocalChangesLoad.Loading && Staged.Count == 0 && Unstaged.Count == 0;
 
     // Unmerged paths surface as conflicted entries in the unstaged list; committing while any
     // remain would be rejected by git, so the button stays disabled until they're resolved.
@@ -94,4 +87,21 @@ internal readonly record struct LocalChangesState(
     // a merge, still require staged content (or amend).
     public bool CommitEnabled =>
         !CommitBusy && !HasConflicts && !string.IsNullOrWhiteSpace(Title) && (Amend || IsMerging || Staged.Count > 0);
+}
+
+// Where the active repo's status load stands. Independent of the lists, which a refresh keeps on
+// screen while it revalidates.
+internal abstract record LocalChangesLoad
+{
+    private LocalChangesLoad() { }
+
+    public sealed record NoRepo : LocalChangesLoad;
+
+    public sealed record Loading : LocalChangesLoad;
+
+    // Detail is the full git error block behind the one-line Message, surfaced in the scrollable
+    // OperationErrorDialog when the user clicks "Show full error" on the placeholder.
+    public sealed record Failed(string Message, string Detail) : LocalChangesLoad;
+
+    public sealed record Ready : LocalChangesLoad;
 }

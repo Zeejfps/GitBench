@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Input;
+using GitBench.Lsp;
 using GitBench.Lsp.Documents;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -26,15 +27,14 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     // Back and forward walk the whole content panel, not only the files this controller jumps
     // between, so they are asked of the panel rather than of the browser.
     private readonly IContentNavigator _history;
-    private readonly IUiDispatcher _dispatcher;
     private readonly Func<(string Root, string Path)?> _document;
     private readonly Func<InputModifiers> _modifiers;
-    private readonly Func<TimeSpan, CancellationToken, Task> _dwell;
     private readonly IUsagesPresenter? _usages;
     private readonly IKeyMap _keys;
 
-    private CancellationTokenSource? _pending;
-    private CancellationTokenSource? _probing;
+    // Two slots: the link probe is withdrawn whenever the pointer leaves the word, a jump is not.
+    private readonly ProbeSlot _jump;
+    private readonly ProbeSlot _link;
     private PointF _pointer;
     private bool _pointerInside;
 
@@ -61,12 +61,12 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         _servers = servers;
         _navigator = navigator;
         _history = history;
-        _dispatcher = dispatcher;
         _document = document;
         _modifiers = modifiers;
-        _dwell = dwell ?? Task.Delay;
         _usages = usages;
         _keys = keys ?? KeyMap.Defaults;
+        _jump = new ProbeSlot(dispatcher, dwell);
+        _link = new ProbeSlot(dispatcher, dwell);
     }
 
     public override void OnMouseMoved(ref MouseMoveEvent e) => MovedTo(e.Mouse.Point);
@@ -142,43 +142,22 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
 
     private void Probe(string path, FileSpan word)
     {
-        var cancel = new CancellationTokenSource();
-        _probing = cancel;
         _asking = (path, word);
-        var token = cancel.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
+        _link.Ask(
+            TimeSpan.FromMilliseconds(DwellMs),
+            // At the word's first column, never the caret position the pointer rounds to: a
+            // server asked at the column past a word answers about the whitespace there.
+            token => _servers.DefineAsync(path, word.Line, word.Start, token),
+            reply =>
             {
-                await _dwell(TimeSpan.FromMilliseconds(DwellMs), token).ConfigureAwait(false);
-                // At the word's first column, never the caret position the pointer rounds to: a
-                // server asked at the column past a word answers about the whitespace there.
-                var reply = await _servers
-                    .DefineAsync(path, word.Line, word.Start, token)
-                    .ConfigureAwait(false);
-                if (token.IsCancellationRequested) return;
                 var probed = reply.Targets.Count == 0
                     ? Probed.Nowhere
                     : new Probed.Reachable(ResolvedSpan(reply.Origin, word), reply.Targets[0]);
-
-                _dispatcher.Post(() =>
-                {
-                    if (token.IsCancellationRequested) return;
-                    _asking = null;
-                    _answered = (path, word, probed);
-                    if (WordUnderPointer() == (path, word))
-                        _surface.ShowDefinitionLink(LinkOf(probed));
-                });
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[LanguageServers] definition link probe failed: {ex.Message}");
-            }
-        }, token);
+                _asking = null;
+                _answered = (path, word, probed);
+                if (WordUnderPointer() == (path, word))
+                    _surface.ShowDefinitionLink(LinkOf(probed));
+            });
     }
 
     /// <summary>
@@ -212,9 +191,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
 
     private void StopProbing()
     {
-        _probing?.Cancel();
-        _probing?.Dispose();
-        _probing = null;
+        _link.Cancel();
         _asking = null;
     }
 
@@ -315,37 +292,15 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         if (!_servers.CanDefine(document.Path)) return false;
         if (PositionToAsk(point) is not { } at) return false;
 
-        Cancel();
-        var cancel = new CancellationTokenSource();
-        _pending = cancel;
-        var token = cancel.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
+        _jump.Ask(
+            TimeSpan.Zero,
+            token => _servers.DefineAsync(document.Path, at.Line, at.Column, token),
+            reply =>
             {
-                var reply = await _servers
-                    .DefineAsync(document.Path, at.Line, at.Column, token)
-                    .ConfigureAwait(false);
-                if (reply.Targets.Count == 0 || token.IsCancellationRequested) return;
-
-                var (path, line) = Destination(document.Root, reply.Targets[0]);
-
-                _dispatcher.Post(() =>
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (_document() is not { } still || still.Path != document.Path) return;
-                    _navigator.NavigateTo(path, line);
-                });
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[LanguageServers] go to definition failed: {ex.Message}");
-            }
-        }, token);
+                if (reply.Targets.Count == 0) return;
+                if (_document() is not { } still || still.Path != document.Path) return;
+                GoTo(document.Root, reply.Targets[0]);
+            });
 
         return true;
     }
@@ -371,16 +326,9 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
             _ => throw new NotSupportedException($"unhandled definition target {target.GetType().Name}"),
         };
 
-    private void Cancel()
-    {
-        _pending?.Cancel();
-        _pending?.Dispose();
-        _pending = null;
-    }
-
     public void Dispose()
     {
-        Cancel();
+        _jump.Cancel();
         StopProbing();
         _surface.ShowDefinitionLink(null);
     }

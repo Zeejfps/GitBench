@@ -121,6 +121,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private bool _deferStoreReloadUntilWorkingTreeChange;
 
     private readonly IUnsavedEditsGuard _unsavedEdits;
+    private readonly IRepoStatusIngest _status;
 
     public LocalChangesViewModel(
         IRepoRegistry registry,
@@ -138,11 +139,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         IClipboard clipboard,
         PreferencesService preferences,
         IRepoSnapshotStore store,
+        IRepoStatusIngest status,
         ILocalizationService loc,
         IUnsavedEditsGuard unsavedEdits)
         : base(dispatcher, LocalChangesState.Initial)
     {
         _registry = registry;
+        _status = status;
         _unsavedEdits = unsavedEdits;
         _gitStatus = gitStatus;
         _gitWorkingTree = gitWorkingTree;
@@ -164,7 +167,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         // and the view reads LoadErrorDetail imperatively from inside its Placeholder bind —
         // declared the other way round it would read the pre-update (stale) detail and never
         // attach the error-action buttons.
-        LoadErrorDetail = Slice(s => s.LoadErrorDetail);
+        LoadErrorDetail = Slice(s => (s.Load as LocalChangesLoad.Failed)?.Detail);
         Placeholder = Slice(s => s.Placeholder);
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
@@ -211,7 +214,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         Subscriptions.Add(_indexOps.Active.Subscribe(ops =>
             Update(s => s with { PendingPaths = ops.PendingPaths })));
         Subscriptions.Add(store.LocalChanges.Subscribe(OnStoreLocalChanges));
-        Subscriptions.Add(_bus.SubscribeScoped<HunkAppliedOptimisticMessage>(OnHunkAppliedOptimistic));
         Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
         Subscriptions.Add(Selection.Subscribe(sel =>
             _selectionStore.UnstagedPaths.Value = sel.PathsOn(DiffSide.Unstaged)));
@@ -257,10 +259,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         else _drafts[repoId] = draft;
     }
 
-    private void OnHunkAppliedOptimistic(HunkAppliedOptimisticMessage msg)
+    // Called by DiffViewModel right before git apply runs, so the file lists paint the expected end
+    // state without waiting on the eventual `git status` reload. The reload still runs and
+    // reconciles.
+    public void ApplyHunkOptimistic(Guid repoId, string path, DiffSide fromSide, DiffSide? toSide, bool isLastHunk)
     {
         var active = _registry.Active.Value;
-        if (active == null || active.Id != msg.RepoId) return;
+        if (active == null || active.Id != repoId) return;
 
         _deferStoreReloadUntilWorkingTreeChange = true;
 
@@ -269,24 +274,24 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             var unstaged = s.Unstaged;
             var staged = s.Staged;
 
-            FileChange? entry = msg.FromSide == DiffSide.Unstaged
-                ? FindByPath(unstaged, msg.Path)
-                : FindByPath(staged, msg.Path);
+            FileChange? entry = fromSide == DiffSide.Unstaged
+                ? FindByPath(unstaged, path)
+                : FindByPath(staged, path);
             if (entry == null) return s;
 
-            if (msg.IsLastHunk)
+            if (isLastHunk)
             {
-                if (msg.FromSide == DiffSide.Unstaged)
-                    unstaged = RemoveByPath(unstaged, msg.Path);
-                else if (msg.FromSide == DiffSide.Staged)
-                    staged = RemoveByPath(staged, msg.Path);
+                if (fromSide == DiffSide.Unstaged)
+                    unstaged = RemoveByPath(unstaged, path);
+                else if (fromSide == DiffSide.Staged)
+                    staged = RemoveByPath(staged, path);
             }
 
-            if (msg.ToSide is DiffSide to)
+            if (toSide is DiffSide to)
             {
-                if (to == DiffSide.Unstaged && FindByPath(unstaged, msg.Path) == null)
+                if (to == DiffSide.Unstaged && FindByPath(unstaged, path) == null)
                     unstaged = InsertSorted(unstaged, entry);
-                else if (to == DiffSide.Staged && FindByPath(staged, msg.Path) == null)
+                else if (to == DiffSide.Staged && FindByPath(staged, path) == null)
                     staged = InsertSorted(staged, entry);
             }
 
@@ -294,8 +299,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             // shifting the selection to the destination side — same behavior as the
             // full-file stage/unstage flow when a pending index move lands.
             Selection selection;
-            if (msg.IsLastHunk && msg.ToSide is DiffSide moved)
-                selection = LocalChanges.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
+            if (isLastHunk && toSide is DiffSide moved)
+                selection = LocalChanges.Selection.FromPaths(new[] { path }, moved, unstaged, staged);
             else
                 selection = LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, unstaged, staged);
 
@@ -336,9 +341,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // shows the one-line headline inline — this is the on-demand path to the whole block.
     public void ShowLoadError()
     {
-        var detail = State.Value.LoadErrorDetail;
-        if (string.IsNullOrEmpty(detail)) return;
-        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, detail));
+        if (State.Value.Load is not LocalChangesLoad.Failed failed) return;
+        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, failed.Detail));
     }
 
     // Explicit retry after a failed status load: re-kicks every slice of the active repo (plus the
@@ -512,7 +516,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             var allRows = FileTreeBuilder.BuildRows(files, side, FileViewMode.Tree, EmptyCollapsed);
             var folders = new HashSet<string>();
             foreach (var row in allRows)
-                if (row.Kind == FileRowKind.Folder) folders.Add(row.FullPath);
+                if (row is FileRow.Folder) folders.Add(row.FullPath);
             if (folders.Count == 0) return s;
             return side == DiffSide.Unstaged
                 ? s with { UnstagedCollapsed = folders }
@@ -548,7 +552,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private void DoToggleViewMode()
     {
         var next = State.Value.ViewMode == FileViewMode.Flat ? FileViewMode.Tree : FileViewMode.Flat;
-        _preferences.SetFileViewMode(next);
+        _preferences.Update(p => p with { FileViewMode = next });
         Update(s =>
         {
             // Collapse the selection down to its file leaves as individual file rows: a
@@ -575,7 +579,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            if (row.FullPath == r.FullPath && (row.Kind == FileRowKind.Folder) == r.IsFolder)
+            if (row.FullPath == r.FullPath && (row is FileRow.Folder) == r.IsFolder)
                 return i;
         }
         return -1;
@@ -743,9 +747,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             Init: init,
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
-        var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
         RunMutation(
-            MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(primaryId),
+            MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(repo.PrimaryId),
             work: () => _gitSubmodules.UpdateSubmodules(repo, req),
             onResult: outcome => ReportFailure(outcome, s => s.LocalchangesErrorSubmoduleUpdateFailed));
     }
@@ -892,8 +895,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
                 // Same reasoning for the ahead count the push button reads: on the active repo it
                 // only refreshes when that reload's `git status` lands, so the button would sit
-                // disabled behind an emptied panel. Amend is left to the reload — see the message.
-                if (!amend) _bus.Broadcast(new LocalCommitOptimisticMessage(repo.Id));
+                // disabled behind an emptied panel. Amend is left to the reload.
+                if (!amend) _status.NoteLocalCommit(repo.Id);
 
                 // After a successful commit the editor is cleared regardless of mode.
                 // When amending we also drop the session — bypassing SetAmend(false)'s
@@ -942,19 +945,18 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             return;
         }
 
-        if (fetched == null)
+        switch (fetched)
         {
-            ApplyLoadingState(isCrossRepoSwitch);
-            return;
+            case null:
+                ApplyLoadingState(isCrossRepoSwitch);
+                break;
+            case Fetched<LocalChangesData>.Failed failed:
+                ApplyLoadFailure(failed);
+                break;
+            case Fetched<LocalChangesData>.Ok ok:
+                ApplyLoadedData(ok.Value, active, isCrossRepoSwitch);
+                break;
         }
-
-        if (fetched is Fetched<LocalChangesData>.Failed failed)
-        {
-            ApplyLoadFailure(failed);
-            return;
-        }
-
-        ApplyLoadedData(((Fetched<LocalChangesData>.Ok)fetched).Value, active, isCrossRepoSwitch);
     }
 
     private void ApplyNoRepoState()
@@ -964,10 +966,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         _renderedRepoId = null;
         Update(s => s with
         {
-            HasRepo = false,
-            IsLoading = false,
-            LoadError = null,
-            LoadErrorDetail = null,
+            Load = new LocalChangesLoad.NoRepo(),
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
@@ -982,10 +981,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     {
         Update(s => s with
         {
-            HasRepo = true,
-            IsLoading = true,
-            LoadError = null,
-            LoadErrorDetail = null,
+            Load = new LocalChangesLoad.Loading(),
             Staged = isCrossRepoSwitch ? Empty : s.Staged,
             Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
             Selection = isCrossRepoSwitch ? LocalChanges.Selection.Empty : s.Selection,
@@ -997,10 +993,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         _stagedFromIndex = Empty;
         Update(s => s with
         {
-            HasRepo = true,
-            IsLoading = false,
-            LoadError = failed.Message,
-            LoadErrorDetail = failed.Detail ?? failed.Message,
+            Load = new LocalChangesLoad.Failed(failed.Message, failed.Detail ?? failed.Message),
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
@@ -1016,8 +1009,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         // applying (ApplySnapshot's reload-style path would otherwise try to carry it forward).
         if (isCrossRepoSwitch && State.Value.Selection.Count > 0)
             Update(s => s with { Selection = LocalChanges.Selection.Empty });
-
-        Update(s => s.HasRepo ? s : s with { HasRepo = true });
 
         HandleMergeState(data.MergeMessage, isCrossRepoSwitch);
 
@@ -1046,12 +1037,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // active repo* and *still Amending* so a repo switch or toggling amend off mid-flight no-ops.
     private void RefreshAmendStaged(Repo repo)
     {
-        RunBackground<IReadOnlyList<FileChange>>(
-            work: () => (_gitStatus.GetAmendStagedFiles(repo), null),
-            onResult: (stagedFiles, _) =>
+        RunBackground<Fetched<IReadOnlyList<FileChange>>>(
+            work: () => new Fetched<IReadOnlyList<FileChange>>.Ok(_gitStatus.GetAmendStagedFiles(repo)),
+            onResult: fetched =>
             {
                 if (_registry.Active.Value?.Id != repo.Id) return;
-                if (State.Value.Editor is not EditorMode.Amending amending || stagedFiles == null) return;
+                if (State.Value.Editor is not EditorMode.Amending amending) return;
+                if (fetched is not Fetched<IReadOnlyList<FileChange>>.Ok { Value: var stagedFiles }) return;
                 amending.Session.UpdateStagedFiles(stagedFiles);
                 Update(s =>
                 {
@@ -1149,9 +1141,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             var staged = ComputeDisplayedStaged(s.Editor);
             return s with
             {
-                IsLoading = false,
-                LoadError = null,
-                LoadErrorDetail = null,
+                Load = new LocalChangesLoad.Ready(),
                 Unstaged = snap.Unstaged,
                 Staged = staged,
                 Selection = selectionFor(s, staged),

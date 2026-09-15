@@ -376,9 +376,10 @@ public class FileBrowserNavigationTests(CodeIntelFixture fixture) : IDisposable
     private FileBrowserViewModel Browser() => new(
         new Repo(Guid.NewGuid(), _dir.Path, "repo"),
         new FileSystemReader(),
-        NoIgnoreOracle.Instance,
-        EmptyFileCatalog.Instance,
+        FileBrowserFakes.NoIgnore,
+        FileBrowserFakes.EmptyCatalog,
         fixture.Extractor,
+        fixture.Colors,
         _dispatcher,
         new FileBrowserUiState(),
         _persisted.Add,

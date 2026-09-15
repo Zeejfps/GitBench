@@ -27,13 +27,14 @@ internal enum CodeLanguage
 /// </summary>
 /// <remarks>
 /// <para>
-/// One table rather than three parallel switches: a language is a grammar name, a set of
-/// extensions and the node types that decorate a declaration without starting it, and keeping
-/// those together is what stops a new language being added to two of the three.
+/// One table rather than parallel switches: a language is a grammar name, the TextMate id that
+/// colors the same files when the parser declines one, a set of extensions and the node types that
+/// decorate a declaration without starting it, and keeping those together is what stops a new
+/// language being added to some of them.
 /// </para>
 /// <para>
-/// Deliberately not <c>LanguageRegistry</c>'s id, which names a TextMate grammar and has some
-/// sixty members. One type per vocabulary.
+/// Deliberately not <c>LanguageRegistry</c>'s id as the key, which names a TextMate grammar and
+/// has some sixty members. One type per vocabulary.
 /// </para>
 /// </remarks>
 internal static class CodeLanguages
@@ -51,30 +52,30 @@ internal static class CodeLanguages
 
     private static readonly Entry[] Table =
     [
-        new(CodeLanguage.CSharp, "c_sharp", [".cs"], Attributes),
+        new(CodeLanguage.CSharp, "c_sharp", "csharp", [".cs"], Attributes),
         // TSX is its own grammar, not a flag on TypeScript's: JSX syntax is ambiguous with type
         // assertions, so the same bytes parse two ways and only the extension says which.
-        new(CodeLanguage.TypeScript, "typescript", [".ts", ".mts", ".cts"], Decorators),
-        new(CodeLanguage.Tsx, "tsx", [".tsx"], Decorators),
+        new(CodeLanguage.TypeScript, "typescript", "typescript", [".ts", ".mts", ".cts"], Decorators),
+        new(CodeLanguage.Tsx, "tsx", "typescriptreact", [".tsx"], Decorators),
         // JSX needs no grammar of its own — tree-sitter-javascript parses it inline.
-        new(CodeLanguage.JavaScript, "javascript", [".js", ".mjs", ".cjs", ".jsx"], Decorators),
-        new(CodeLanguage.Json, "json", [".json"], None),
-        new(CodeLanguage.Css, "css", [".css"], None),
-        new(CodeLanguage.Html, "html", [".html", ".htm"], None),
-        new(CodeLanguage.Markdown, "markdown", [".md", ".markdown"], None),
-        new(CodeLanguage.Yaml, "yaml", [".yaml", ".yml"], None),
-        new(CodeLanguage.Python, "python", [".py", ".pyi"], Decorators),
-        new(CodeLanguage.Go, "go", [".go"], None),
-        new(CodeLanguage.Rust, "rust", [".rs"], AttributeItems),
-        new(CodeLanguage.Java, "java", [".java"], Annotations),
-        new(CodeLanguage.Bash, "bash", [".sh", ".bash"], None),
+        new(CodeLanguage.JavaScript, "javascript", "javascript", [".js", ".mjs", ".cjs", ".jsx"], Decorators),
+        new(CodeLanguage.Json, "json", "json", [".json"], None),
+        new(CodeLanguage.Css, "css", "css", [".css"], None),
+        new(CodeLanguage.Html, "html", "html", [".html", ".htm"], None),
+        new(CodeLanguage.Markdown, "markdown", "markdown", [".md", ".markdown"], None),
+        new(CodeLanguage.Yaml, "yaml", "yaml", [".yaml", ".yml"], None),
+        new(CodeLanguage.Python, "python", "python", [".py", ".pyi"], Decorators),
+        new(CodeLanguage.Go, "go", "go", [".go"], None),
+        new(CodeLanguage.Rust, "rust", "rust", [".rs"], AttributeItems),
+        new(CodeLanguage.Java, "java", "java", [".java"], Annotations),
+        new(CodeLanguage.Bash, "bash", "shellscript", [".sh", ".bash"], None),
         // Only C ships, so a .h is unambiguous here in a way it is not in general.
-        new(CodeLanguage.C, "c", [".c", ".h"], None),
-        new(CodeLanguage.Toml, "toml", [".toml"], None),
-        new(CodeLanguage.Svelte, "svelte", [".svelte"], None),
+        new(CodeLanguage.C, "c", "c", [".c", ".h"], None),
+        new(CodeLanguage.Toml, "toml", "toml", [".toml"], None),
+        new(CodeLanguage.Svelte, "svelte", "svelte", [".svelte"], None),
         // No file is written in it: Markdown's block grammar leaves every span of inline syntax as
         // one node, and this is what gets injected into those.
-        new(CodeLanguage.MarkdownInline, "markdown_inline", [], None, InjectedOnly: true),
+        new(CodeLanguage.MarkdownInline, "markdown_inline", "markdown", [], None, InjectedOnly: true),
     ];
 
     private static readonly (string Alias, CodeLanguage Language)[] Aliases =
@@ -132,6 +133,9 @@ internal static class CodeLanguages
     /// <summary>The <c>tree_sitter_&lt;name&gt;</c> the bundled library exports for it.</summary>
     public static string GrammarName(this CodeLanguage language) => Of(language).GrammarName;
 
+    /// <summary>The TextMate grammar that colors the same language, for when the parser declines a file.</summary>
+    public static string TextMateId(this CodeLanguage language) => Of(language).TextMateId;
+
     public static string QueryResourceName(this CodeLanguage language) => $"{language.GrammarName()}.scm";
 
     /// <summary>
@@ -188,6 +192,7 @@ internal static class CodeLanguages
     private sealed record Entry(
         CodeLanguage Language,
         string GrammarName,
+        string TextMateId,
         string[] Extensions,
         string[] LeadingDecorations,
         bool InjectedOnly = false);

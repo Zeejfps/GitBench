@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
@@ -84,10 +83,9 @@ public sealed class DocumentSaveConflictTests : IDisposable
         var path = Path.Combine(_merge.Path, "a.txt");
         Save(conflicts, path, "one\nmine and theirs\nthree\n");
 
-        var vm = new MarkResolvedDialogViewModel(
-            _merge.Repo, "a.txt", conflicts, _dispatcher, _bus, _loc);
         var closed = false;
-        vm.CloseRequested += () => closed = true;
+        var vm = new MarkResolvedDialogViewModel(
+            _merge.Repo, "a.txt", conflicts, _dispatcher, _bus, _loc, () => closed = true);
 
         vm.MarkResolved.Execute();
         Settle(() => !vm.MarkResolved.IsRunning.Value);
@@ -107,7 +105,7 @@ public sealed class DocumentSaveConflictTests : IDisposable
     private static (TextDocument Document, FileEncoding Encoding) Read(string path)
     {
         var preview = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
         return (
             TextDocument.FromText(preview.Lines.Text),
             Assert.IsType<FileWriteBack.Reversible>(preview.WriteBack).Encoding);
@@ -170,17 +168,5 @@ public sealed class DocumentSaveConflictTests : IDisposable
 
         public ConflictStages? GetConflictStages(Repo repo, string path) =>
             inner.GetConflictStages(repo, path);
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

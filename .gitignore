@@ -11,3 +11,4 @@ databricks_mcp.log
 # Lua spike artefacts
 spikes/lua-aot/native/
 spikes/lua-aot/.lua-src/
+__pycache__/

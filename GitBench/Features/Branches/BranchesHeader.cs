@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -22,10 +23,26 @@ internal sealed record BranchesHeader : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = ctx.Require<BranchesHeaderViewModel>();
         var theme = ctx.Theme();
         var pane = ctx.Require<State<SidebarPane>>();
         var browsers = ctx.Require<IFileBrowserStore>();
+        var status = ctx.Require<IRepoStatusStore>().Active;
+        var strings = ctx.Require<ILocalizationService>().Strings;
+        var spinner = new SpinnerAnimation(ctx.Require<IFrameTicker>());
+
+        // A pending name wins: this header is the most prominent claim in the app about which branch
+        // you're on, so during a switch it names the destination and says it's still moving rather
+        // than confidently showing the branch you just left.
+        var isSwitching = new Derived<bool>(() => status.Value.IsHeadInMotion);
+        var isDetached = new Derived<bool>(() => !status.Value.IsHeadInMotion && status.Value.IsDetached);
+        var branchName = new Derived<string?>(() => status.Value.PendingBranchName
+            ?? (status.Value.IsDetached ? strings.Value.BranchesHeaderDetached : status.Value.CurrentBranchName));
+        var owned = new SubscriptionGroup();
+        owned.Add(status.Subscribe(s => { if (s.IsHeadInMotion) spinner.Start(); else spinner.Stop(); }));
+        owned.Add(spinner);
+        owned.Add(isSwitching);
+        owned.Add(isDetached);
+        owned.Add(branchName);
 
         bool OnFiles() => pane.Value == SidebarPane.Files;
 
@@ -50,10 +67,10 @@ internal sealed record BranchesHeader : Widget
                             [
                                 new BranchLabel
                                 {
-                                    BranchName = vm.BranchName,
-                                    IsDetached = vm.IsDetached,
-                                    IsSwitching = vm.IsSwitching,
-                                    SwitchRotation = vm.SwitchRotation,
+                                    BranchName = branchName,
+                                    IsDetached = isDetached,
+                                    IsSwitching = isSwitching,
+                                    SwitchRotation = spinner.Rotation,
                                 },
                                 new Spacer(),
                                 new LocalChangesHeaderActionButton
@@ -92,7 +109,7 @@ internal sealed record BranchesHeader : Widget
                     ],
                 },
             ],
-        }.BindVm(vm);
+        }.Use(_ => owned);
     }
 }
 
@@ -122,7 +139,7 @@ internal sealed record BranchLabel : Widget
                 [
                     new Text
                     {
-                        Value = Prop.Bind(() => IsSwitching.Value ? LucideIcons.Loader : LucideIcons.Branch),
+                        Value = Prop.Bind<string?>(() => IsSwitching.Value ? LucideIcons.Loader : LucideIcons.Branch),
                         FontFamily = LucideIcons.FontFamily,
                         FontSize = FontSize.Heading,
                         VAlign = TextAlignment.Center,

@@ -68,7 +68,7 @@ internal sealed record RepoRail : Widget
                                 {
                                     Child = new KbmInput
                                     {
-                                        Controller = _ => new RailWheelController(pane),
+                                        Controller = _ => WheelScrollController.For(pane),
                                         Child = new Raw { View = pane },
                                     },
                                 },
@@ -127,17 +127,6 @@ internal sealed record RepoRail : Widget
         ],
     };
 
-    // Consumes the wheel only when the pane actually moved, letting edge scrolls bubble out.
-    private sealed class RailWheelController(VerticalScrollPane pane) : KeyboardMouseController
-    {
-        public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
-        {
-            if (e.Phase != EventPhase.Bubbling) return;
-            if (pane.Scroll(e.DeltaY * -Scrolling.WheelStep))
-                e.Consume();
-        }
-    }
-
     // Mirrors the expanded bar's header strip so the chrome lines up across the swap.
     private static IWidget BuildHeader(Context ctx, RepoBarCollapseState collapse) => new Box
     {
@@ -174,7 +163,7 @@ internal sealed record RepoRail : Widget
 // wrapping the folder tile and, while the group is expanded, its repo tiles beneath.
 internal sealed record RailSection : Widget
 {
-    internal const int Width = RepoRailTile.TileSize + 2 * RepoRailTile.RingInset;
+    internal const int SectionWidth = RepoRailTile.TileSize + 2 * RepoRailTile.RingInset;
 
     protected override IWidget Build(Context ctx)
     {
@@ -182,7 +171,7 @@ internal sealed record RailSection : Widget
         var identity = RepoRailTile.IdentityColor(vm.Group.Id);
         return new Box
         {
-            Width = Width,
+            Width = SectionWidth,
             BorderRadius = BorderRadiusStyle.All(Radius.Lg + RepoRailTile.RingInset),
             Background = Theme.Color(s => s.RepoBar.FolderTint(identity)),
             Children =

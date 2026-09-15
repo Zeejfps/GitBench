@@ -45,7 +45,7 @@ internal sealed class FileBrowserTree
     private static readonly IReadOnlySet<string> NoIgnored = new HashSet<string>(StringComparer.Ordinal);
 
     private readonly IFileSystemReader _files;
-    private readonly IIgnoreOracle _ignore;
+    private readonly Func<IReadOnlyList<string>, IReadOnlySet<string>> _ignored;
     private readonly int _maxDepth;
     private readonly Func<string, CancellationToken, FileOutline?>? _outline;
     private readonly Dictionary<string, Cached> _cache = new(PathKey.Comparer);
@@ -57,13 +57,13 @@ internal sealed class FileBrowserTree
 
     public FileBrowserTree(
         IFileSystemReader files,
-        IIgnoreOracle ignore,
+        Func<IReadOnlyList<string>, IReadOnlySet<string>> ignored,
         string rootPath,
         Func<string, CancellationToken, FileOutline?>? outline = null,
         int maxDepth = DefaultMaxDepth)
     {
         _files = files;
-        _ignore = ignore;
+        _ignored = ignored;
         _outline = outline;
         _maxDepth = Math.Max(1, maxDepth);
         RootPath = PathKey.Normalize(rootPath);
@@ -350,7 +350,7 @@ internal sealed class FileBrowserTree
             foreach (var entry in listed.Entries)
                 if (!IsGitDirectory(entry.Name))
                     paths.Add(Relative(directory, entry));
-            if (paths.Count > 0) ignored = _ignore.Ignored(paths);
+            if (paths.Count > 0) ignored = _ignored(paths);
         }
 
         var cached = new Cached(listing, ignored);

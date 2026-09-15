@@ -58,6 +58,8 @@ internal sealed class Selection
     /// <summary>True when the given row is itself selected (drives row highlight).</summary>
     public bool ContainsRow(FileRowRef row) => _rowSet.Contains(row);
 
+    public IReadOnlySet<FileRowRef> RowSet => _rowSet;
+
     /// <summary>True when the given file leaf is in the resolved selection.</summary>
     public bool Contains(string path, DiffSide side)
         => _itemSet.Contains(new DiffTarget(path, side));

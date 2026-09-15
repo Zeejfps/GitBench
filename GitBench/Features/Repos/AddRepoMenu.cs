@@ -23,11 +23,11 @@ internal static class AddRepoMenu
     public static void OpenFromFolder(Context ctx, Guid? groupId = null)
     {
         var s = ctx.Localization().Strings.Value;
-        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerOpenRepository, null, path =>
+        ctx.Require<IFilePicker>().PickFolder(s.ReposPickerOpenRepository, null, path =>
         {
-            if (ctx.Get<IRepoRegistry>()?.Open(path, groupId) == OpenRepoOutcome.NotAGitRepo)
+            if (ctx.Require<IRepoRegistry>().Open(path, groupId) == OpenRepoOutcome.NotAGitRepo)
             {
-                ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
+                ctx.Require<IMessageBus>().Broadcast(new ShowOperationErrorMessage(
                     s.ReposErrorNotAGitRepoTitle,
                     s.ReposErrorNotAGitRepoMessage(path)));
             }
@@ -39,20 +39,20 @@ internal static class AddRepoMenu
     public static void InitNewRepo(Context ctx, Guid? groupId = null)
     {
         var s = ctx.Localization().Strings.Value;
-        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerNewRepository, null, path =>
+        ctx.Require<IFilePicker>().PickFolder(s.ReposPickerNewRepository, null, path =>
         {
-            if (ctx.Get<IGitRepositoryLifecycle>()?.Init(path) is GitOutcome.Failed failed)
+            if (ctx.Require<IGitRepositoryLifecycle>().Init(path) is GitOutcome.Failed failed)
             {
-                ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
+                ctx.Require<IMessageBus>().Broadcast(new ShowOperationErrorMessage(
                     s.ReposErrorInitFailedTitle, failed.Message));
                 return;
             }
 
-            ctx.Get<IRepoRegistry>()?.Open(path, groupId);
+            ctx.Require<IRepoRegistry>().Open(path, groupId);
         });
     }
 
     public static void ShowCloneDialog(Context ctx, Guid? groupId = null)
-        => ctx.Get<IMessageBus>()?.Broadcast(
+        => ctx.Require<IMessageBus>().Broadcast(
             new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose, TargetGroupId = groupId }));
 }

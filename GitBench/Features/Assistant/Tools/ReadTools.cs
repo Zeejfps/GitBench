@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using GitBench.Features.Branches;
@@ -292,35 +293,39 @@ internal sealed class GetDiffTool : IAssistantTool
 
     public bool IsWrite => false;
 
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        var resolved = RepoFileGuard.ResolveForDiff(_git, _repo, ToolJson.String(args, "path"));
-        if (resolved.Refusal is { } refusal)
-            return Task.FromResult(ToolInvocation.Error(refusal));
+    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct) =>
+        Task.FromResult(RepoFileGuard.ResolveForDiff(_git, _repo, ToolJson.String(args, "path")) switch
+        {
+            RepoFileResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            RepoFileResolution.Allowed allowed => Diff(allowed.RelativePath, args),
+            _ => throw new UnreachableException(),
+        });
 
+    private ToolInvocation Diff(string path, JsonElement args)
+    {
         var sideName = ToolJson.String(args, "side");
         if (!TryParseSide(sideName, out var side))
-            return Task.FromResult(ToolInvocation.Error(
-                $"Argument 'side' must be one of unstaged, staged, commit, range, working_tree (got '{sideName}')."));
+            return ToolInvocation.Error(
+                $"Argument 'side' must be one of unstaged, staged, commit, range, working_tree (got '{sideName}').");
 
         var commitSha = ToolJson.String(args, "commit_sha");
         var baseSha = ToolJson.String(args, "base_sha");
         // A sha reaches git as a positional argument, so one starting with '-' would be read as a
         // diff option rather than a revision.
         if (LooksLikeOption(commitSha) || LooksLikeOption(baseSha))
-            return Task.FromResult(ToolInvocation.Error("A commit sha may not begin with '-'."));
+            return ToolInvocation.Error("A commit sha may not begin with '-'.");
         if (side is DiffSide.Commit or DiffSide.Range && string.IsNullOrWhiteSpace(commitSha))
-            return Task.FromResult(ToolInvocation.Error($"Argument 'commit_sha' is required for side '{sideName}'."));
+            return ToolInvocation.Error($"Argument 'commit_sha' is required for side '{sideName}'.");
         if (side == DiffSide.Range && string.IsNullOrWhiteSpace(baseSha))
-            return Task.FromResult(ToolInvocation.Error("Argument 'base_sha' is required for side 'range'."));
+            return ToolInvocation.Error("Argument 'base_sha' is required for side 'range'.");
 
-        var diff = _git.GetDiff(_repo, resolved.RelativePath!, side, commitSha, baseSha);
+        var diff = _git.GetDiff(_repo, path, side, commitSha, baseSha);
         if (diff.ErrorMessage is { Length: > 0 } error)
-            return Task.FromResult(ToolInvocation.Error(error));
+            return ToolInvocation.Error(error);
 
         var annotations = DiffAnnotationCoordinator.ComputeOutlines(_extractor, _git, _repo, diff, commitSha, baseSha);
         var json = ToolJson.Write(writer => ReadTools.WriteDiffBody(writer, diff, annotations));
-        return Task.FromResult(ToolInvocation.Ok(json));
+        return ToolInvocation.Ok(json);
     }
 
     private static bool LooksLikeOption(string? sha) => sha?.TrimStart().StartsWith('-') == true;

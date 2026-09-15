@@ -1,4 +1,5 @@
 using GitBench.Features.Repos;
+using GitBench.Infrastructure;
 using GitBench.Git;
 using GitBench.Messages;
 using ZGF.Gui;
@@ -23,7 +24,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     private readonly IGitWorktreeOperations _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
-    private readonly IStartupSweepCoordinator _sweep;
+    private readonly StartupSweepCoordinator _sweep;
     private IDisposable? _reposSub;
     private IDisposable? _activeSub;
     private IDisposable? _worktreesChangedSub;
@@ -34,7 +35,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
         IGitWorktreeOperations git,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        IStartupSweepCoordinator sweep)
+        StartupSweepCoordinator sweep)
     {
         _registry = registry;
         _git = git;
@@ -65,7 +66,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     private void OnActiveChanged(Repo? active)
     {
         if (active is null) return;
-        ScheduleSync(active.ParentRepoId ?? active.Id);
+        ScheduleSync(active.PrimaryId);
     }
 
     private void OnWorktreesChanged(WorktreesChangedMessage msg) => ScheduleSync(msg.PrimaryRepoId);
@@ -84,7 +85,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
         }
         if (source is null) return;
 
-        var primaryId = source.ParentRepoId ?? source.Id;
+        var primaryId = source.PrimaryId;
         ScheduleSync(primaryId);
 
         if (source.IsPrimary)
@@ -112,15 +113,15 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
             if (primary is null || !primary.IsPrimary) return;
 
             var infos = _git.ListWorktrees(primary);
-            var primaryNormalized = TryFullPath(primary.Path);
+            var primaryNormalized = PathKey.Normalize(primary.Path);
 
             string? primaryBranch = null;
             var descriptors = new List<WorktreeDescriptor>(infos.Count);
             foreach (var info in infos)
             {
                 if (info.IsBare) continue;
-                var normalized = TryFullPath(info.Path);
-                if (string.Equals(normalized, primaryNormalized, PathCmp))
+                var normalized = PathKey.Normalize(info.Path);
+                if (PathKey.Comparer.Equals(normalized, primaryNormalized))
                 {
                     primaryBranch = info.Branch;
                     continue;
@@ -139,15 +140,6 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
             });
         });
     }
-
-    private static string TryFullPath(string p)
-    {
-        try { return Path.GetFullPath(p); }
-        catch { return p; }
-    }
-
-    private static readonly StringComparison PathCmp =
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     public void Dispose()
     {

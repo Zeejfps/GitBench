@@ -35,12 +35,12 @@ internal sealed record DeleteEntryDialog : Widget
     {
         var s = ctx.Localization().Strings.Value;
         var bus = ctx.Require<IMessageBus>();
-        var shell = ctx.Get<IPlatformShell>();
+        var shell = ctx.Require<IPlatformShell>();
         var browser = Browser;
         var path = Path;
         var isDirectory = IsDirectory;
         var onClose = OnClose;
-        var toTrash = shell is { CanMoveToTrash: true };
+        var toTrash = shell.CanMoveToTrash;
 
         var delete = new AsyncCommand(
             ctx.Require<IUiDispatcher>(),
@@ -63,12 +63,7 @@ internal sealed record DeleteEntryDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = Body(s, Name, isDirectory, toTrash),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = Body(s, Name, isDirectory, toTrash) },
             ],
         };
     }

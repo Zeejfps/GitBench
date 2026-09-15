@@ -23,26 +23,20 @@ internal sealed record LanguageServersDialog : Widget
             ctx.Require<ILanguageServerStore>(),
             ctx.Require<ILocalizationService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Get<IMessageBus>(),
-            ctx.Get<IClipboard>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IClipboard>());
 
         return new Dialog
         {
             Title = s.LanguageServersTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             CancelLabel = s.CommonClose,
             Action = (s.LanguageServersReload, DialogButtonRole.Primary),
             Command = vm.ReloadCommand,
             Body =
             [
-                new Text
-                {
-                    Value = s.LanguageServersDescription,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.LanguageServersDescription },
                 new Box
                 {
                     Background = Theme.Color(t => t.Palette.SurfaceSunken),

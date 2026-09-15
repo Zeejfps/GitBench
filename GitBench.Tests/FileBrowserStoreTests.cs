@@ -51,31 +51,6 @@ public class FileBrowserStoreTests : IDisposable
     private static FileSystemEntry Dir(string name) => new(name, true, false, false);
     private static FileSystemEntry File(string name) => new(name, false, false, false);
 
-    private sealed class FakeFileSystem : IFileSystemReader
-    {
-        private readonly Dictionary<string, List<FileSystemEntry>> _directories = new(StringComparer.Ordinal);
-        private readonly List<string> _listed = [];
-
-        /// <summary>How many directory reads have landed under one working tree. Per root, because
-        /// the store gives whichever repository is active when it starts a browser of its own, so a
-        /// global count cannot tell the two apart.</summary>
-        public int ListsUnder(string root) =>
-            _listed.Count(path => path.StartsWith(root, StringComparison.Ordinal));
-
-        public DirectoryListing List(string absoluteDirectory, CancellationToken cancellation)
-        {
-            _listed.Add(absoluteDirectory);
-            return _directories.TryGetValue(absoluteDirectory, out var entries)
-                ? new DirectoryListing.Listed(entries)
-                : new DirectoryListing.Unavailable("No such directory.");
-        }
-
-        public string? ResolveLinkTarget(string absolutePath) => null;
-
-        public void With(string directory, params FileSystemEntry[] entries) =>
-            _directories[directory] = [.. entries];
-    }
-
     private sealed class NoIgnores : IGitRepositoryReader
     {
         public bool IsPathTracked(Repo repo, string relativePath) => false;
@@ -90,7 +65,7 @@ public class FileBrowserStoreTests : IDisposable
     {
         var documents = new DocumentStore(_registry, new LocalizationService(new State<Locale>(Locale.En)));
         var store = new FileBrowserStore(
-            _registry, new NoIgnores(), _files, new UnparsedFiles(), _bus, _dispatcher, documents);
+            _registry, new NoIgnores(), _files, new UnparsedFiles(), new PlainText(), _bus, _dispatcher, documents);
         store.Start();
         return store;
     }

@@ -78,7 +78,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                         {
                                             Label = L.T(s => s.AboutViewOnGithub),
                                             Role = DialogButtonRole.Primary,
-                                            Command = new Command(() => ctx.Get<IPlatformShell>()?.OpenUrl(RepoUrl)),
+                                            Command = new Command(() => ctx.Require<IPlatformShell>().OpenUrl(RepoUrl)),
                                             Height = DialogFrame.DefaultButtonHeight,
                                             MinWidth = DialogFrame.DefaultButtonMinWidth,
                                         }.WithController<KbmController>(),

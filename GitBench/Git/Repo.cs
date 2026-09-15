@@ -42,6 +42,10 @@ public sealed record Repo(
     [JsonIgnore]
     public bool IsPrimary => Kind == RepoKind.Primary;
 
+    // The repository this checkout belongs to: its parent for a worktree or submodule, itself otherwise.
+    [JsonIgnore]
+    public Guid PrimaryId => ParentRepoId ?? Id;
+
     [JsonIgnore]
     public bool IsWorktree => Kind == RepoKind.Worktree;
 

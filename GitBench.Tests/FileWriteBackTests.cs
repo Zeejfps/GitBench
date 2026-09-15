@@ -109,7 +109,7 @@ public class FileWriteBackTests : IDisposable
         File.WriteAllBytes(path, bytes);
 
         var text = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
         Assert.Equal(["héllo", "wörld"], text.Lines);
         Assert.Equal(FileCharset.Utf32BeBom, Assert.IsType<FileWriteBack.Reversible>(text.WriteBack).Encoding.Charset);
@@ -135,7 +135,7 @@ public class FileWriteBackTests : IDisposable
         File.WriteAllBytes(path, [0x63, 0x61, 0x66, 0xE9, 0x0A]);
 
         var text = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
         Assert.Equal(["caf�"], text.Lines);
         Assert.False(text.Truncated);
@@ -151,7 +151,7 @@ public class FileWriteBackTests : IDisposable
         File.WriteAllBytes(path, Utf8("héllo\r\nwörld\r\n"));
 
         var text = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
         var encoding = Assert.IsType<FileWriteBack.Reversible>(text.WriteBack).Encoding;
         Assert.Equal(FileCharset.Utf8, encoding.Charset);
@@ -168,7 +168,7 @@ public class FileWriteBackTests : IDisposable
             path, string.Concat(Enumerable.Repeat(line, FileContentLoader.MaxTextBytes / line.Length + 100)));
 
         var text = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
         Assert.True(text.Truncated);
         Assert.Equal(
@@ -191,7 +191,7 @@ public class FileWriteBackTests : IDisposable
         File.WriteAllBytes(path, [.. FileCharset.Utf16LeBom.Preamble(), .. Encoding.Unicode.GetBytes("héllo\r\nwörld\r\n")]);
 
         var text = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
         Assert.Equal(["héllo", "wörld"], text.Lines);
         var encoding = Assert.IsType<FileWriteBack.Reversible>(text.WriteBack).Encoding;
@@ -206,7 +206,7 @@ public class FileWriteBackTests : IDisposable
         File.WriteAllBytes(path, [0x7F, 0x45, 0x4C, 0x46, 0x00, 0x00, 0x01, 0x02]);
 
         var refused = Assert.IsType<FilePreview.Unavailable>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
 
         Assert.Equal(FilePreviewRefusal.Binary, refused.Reason);
     }

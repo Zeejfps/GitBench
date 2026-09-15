@@ -12,7 +12,7 @@ namespace GitBench.Features.Notifications;
 /// real after <see cref="ExitDuration"/>. Toasts are added/removed on the UI thread (bus broadcasts
 /// and direct callers both run there), so the lists and tables need no locking.
 /// </summary>
-internal sealed class ToastService : IToastService, IHostedService, IDisposable
+internal sealed class ToastService : IHostedService, IDisposable
 {
     // Only the newest toast is on screen (the status bar has one line), so this bounds the backlog
     // waiting behind it: a burst (e.g. fetch-all across many repos) drops its oldest rather than

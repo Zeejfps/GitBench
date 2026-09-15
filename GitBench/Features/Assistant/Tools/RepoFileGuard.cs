@@ -4,13 +4,14 @@ using GitBench.Infrastructure;
 namespace GitBench.Features.Assistant.Tools;
 
 /// <summary>What asking for a path settled: the file to address, or the sentence the model is told
-/// instead. Either the pair of paths is set or the refusal is.</summary>
-internal readonly record struct RepoFileResolution(string? FullPath, string? RelativePath, string? Refusal)
+/// instead.</summary>
+internal abstract record RepoFileResolution
 {
-    public static RepoFileResolution Allowed(string fullPath, string relativePath) =>
-        new(fullPath, relativePath, null);
+    private RepoFileResolution() { }
 
-    public static RepoFileResolution Refused(string reason) => new(null, null, reason);
+    public sealed record Allowed(string FullPath, string RelativePath) : RepoFileResolution;
+
+    public sealed record Refused(string Refusal) : RepoFileResolution;
 }
 
 /// <summary>
@@ -59,7 +60,7 @@ internal static class RepoFileGuard
         IGitRepositoryReader git, Repo repo, string? requested, bool requireInWorkingTree)
     {
         if (string.IsNullOrWhiteSpace(requested))
-            return RepoFileResolution.Refused("Argument 'path' is required.");
+            return new RepoFileResolution.Refused("Argument 'path' is required.");
 
         var raw = requested.Trim().Replace('\\', '/');
         if (Path.IsPathRooted(requested) || Path.IsPathRooted(raw) || raw.StartsWith("//", StringComparison.Ordinal))
@@ -74,11 +75,11 @@ internal static class RepoFileGuard
         }
 
         if (segments.Count == 0)
-            return RepoFileResolution.Refused($"'{requested}' names no file.");
+            return new RepoFileResolution.Refused($"'{requested}' names no file.");
 
         var relative = string.Join('/', segments);
         if (IsDenied(segments))
-            return RepoFileResolution.Refused(
+            return new RepoFileResolution.Refused(
                 $"'{relative}' looks like a credentials file, so it is off limits regardless of "
                 + "whether the repository tracks it.");
 
@@ -86,21 +87,21 @@ internal static class RepoFileGuard
             return Outside(requested);
 
         if (git.IsPathIgnored(repo, relative))
-            return RepoFileResolution.Refused($"'{relative}' is ignored by this repository's ignore rules.");
+            return new RepoFileResolution.Refused($"'{relative}' is ignored by this repository's ignore rules.");
 
         if (requireInWorkingTree)
         {
             if (!git.IsPathTracked(repo, relative))
-                return RepoFileResolution.Refused(
+                return new RepoFileResolution.Refused(
                     $"Git does not track '{relative}'.{Nearby(git, repo, relative)} This tool reads "
                     + "tracked files only — use get_local_changes or get_diff to see what is in the "
                     + "working tree.");
 
             if (!File.Exists(fullPath))
-                return RepoFileResolution.Refused($"'{relative}' is tracked but not present in the working tree.");
+                return new RepoFileResolution.Refused($"'{relative}' is tracked but not present in the working tree.");
         }
 
-        return RepoFileResolution.Allowed(fullPath, relative);
+        return new RepoFileResolution.Allowed(fullPath, relative);
     }
 
     /// <summary>The tracked paths a search may return: everything but the credential-shaped ones,
@@ -137,7 +138,7 @@ internal static class RepoFileGuard
     }
 
     private static RepoFileResolution Outside(string requested) =>
-        RepoFileResolution.Refused(
+        new RepoFileResolution.Refused(
             $"'{requested}' resolves outside the repository. Paths must be repo-relative, and "
             + "'..', absolute paths and links that leave the checkout are refused.");
 

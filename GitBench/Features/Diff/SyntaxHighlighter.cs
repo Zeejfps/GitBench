@@ -1,3 +1,5 @@
+using GitBench.Features.CodeIntel;
+using GitBench.Infrastructure;
 using GitBench.Theming;
 using TextMateSharp.Grammars;
 using TextMateSharp.Registry;
@@ -16,15 +18,6 @@ namespace GitBench.Features.Diff;
 /// </summary>
 internal sealed class SyntaxHighlighter : ISyntaxHighlighter
 {
-    /// <summary>
-    /// The one TextMate instance in the process. Surfaces do not reach for it directly any more —
-    /// <see cref="RoutedSyntaxHighlighter"/> is what they call, and this is the engine behind it
-    /// for the fifty-odd languages tree-sitter has no grammar for, plus any file it declines.
-    /// Constructing it builds the TextMate registry, and each instance warms its own grammar cache,
-    /// so a second instance means paying both costs twice.
-    /// </summary>
-    public static SyntaxHighlighter Shared { get; } = new();
-
     // Files larger than this skip highlighting entirely (GitHub Desktop uses a comparable
     // ~256 KB heuristic). Bounds worst-case tokenize cost on a huge blob.
     public const int MaxFileChars = 256 * 1024;
@@ -40,23 +33,29 @@ internal sealed class SyntaxHighlighter : ISyntaxHighlighter
 
     private static readonly TimeSpan WarmUpTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly RegistryOptions _options;
-    private readonly Registry _registry;
     private readonly Dictionary<string, IGrammar?> _grammarCache = new();
     // TextMateSharp grammars are not safe for concurrent tokenization; serialize all engine
     // access. The coordinator only highlights one file's two sides sequentially, so contention
     // is nil in practice — the lock is correctness insurance, not a hot path.
     private readonly object _lock = new();
+    private RegistryOptions? _options;
+    private Registry? _registry;
 
-    public SyntaxHighlighter()
+    /// <summary>Builds the TextMate registry ahead of the first file, off whatever thread this is
+    /// called on — the one cost here that is worth paying before it is asked for.</summary>
+    public void Warm()
     {
-        // The theme only drives TextMateSharp's own color resolution, which we don't use — we
-        // map scopes to the GitBench palette ourselves. Any valid theme works here.
-        _options = new RegistryOptions(ThemeName.DarkPlus);
-        // The wrapper adds grammars TextMateSharp doesn't bundle (Svelte); the inner options still
-        // serve every standard scope, including the languages a Svelte block embeds.
-        _registry = new Registry(new BundledGrammarRegistryOptions(_options));
+        lock (_lock) EnsureRegistry();
     }
+
+    public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language) =>
+        language switch
+        {
+            FileLanguage.TreeSitter(var parsed) => Highlight(fileText, parsed.TextMateId()),
+            FileLanguage.TextMate(var id) => Highlight(fileText, id),
+            FileLanguage.None => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(language), language, null),
+        };
 
     /// <summary>
     /// Tokenizes <paramref name="fileText"/> as <paramref name="languageId"/> and returns one
@@ -85,7 +84,7 @@ internal sealed class SyntaxHighlighter : ISyntaxHighlighter
 
     private static IReadOnlyList<IReadOnlyList<TokenSpan>>? Tokenize(IGrammar grammar, string fileText)
     {
-        var lines = SplitLines(fileText);
+        var lines = TextLines.SplitKeepingLast(fileText);
         var result = new List<IReadOnlyList<TokenSpan>>(lines.Count);
         IStateStack? state = null;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -131,20 +130,33 @@ internal sealed class SyntaxHighlighter : ISyntaxHighlighter
         return TokenColorSlot.Default;
     }
 
+    // The theme only drives TextMateSharp's own color resolution, which we don't use — we map
+    // scopes to the GitBench palette ourselves. Any valid theme works here. The wrapper adds
+    // grammars TextMateSharp doesn't bundle (Svelte); the inner options still serve every
+    // standard scope, including the languages a Svelte block embeds.
+    private (RegistryOptions Options, Registry Registry) EnsureRegistry()
+    {
+        if (_options is { } options && _registry is { } registry) return (options, registry);
+        _options = new RegistryOptions(ThemeName.DarkPlus);
+        _registry = new Registry(new BundledGrammarRegistryOptions(_options));
+        return (_options, _registry);
+    }
+
     private IGrammar? GetGrammar(string languageId)
     {
         lock (_lock)
         {
             if (_grammarCache.TryGetValue(languageId, out var cached)) return cached;
+            var (options, registry) = EnsureRegistry();
             IGrammar? grammar = null;
             try
             {
                 // Custom bundled grammars (Svelte) aren't in RegistryOptions' language table, so
                 // resolve their scope from the wrapper first, then fall back to the bundled set.
                 var scope = BundledGrammarRegistryOptions.ScopeForLanguageId(languageId)
-                            ?? _options.GetScopeByLanguageId(languageId);
+                            ?? options.GetScopeByLanguageId(languageId);
                 if (!string.IsNullOrEmpty(scope))
-                    grammar = _registry.LoadGrammar(scope);
+                    grammar = registry.LoadGrammar(scope);
             }
             catch
             {
@@ -164,22 +176,4 @@ internal sealed class SyntaxHighlighter : ISyntaxHighlighter
         }
     }
 
-    // Splits into lines on \n, tolerating \r\n, and always keeps a final element so 1-based
-    // source line numbers index straight into the result (a file ending in a newline yields a
-    // trailing empty line, matching how the diff numbers its lines).
-    private static List<string> SplitLines(string text)
-    {
-        var lines = new List<string>();
-        var start = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] != '\n') continue;
-            var end = i;
-            if (end > start && text[end - 1] == '\r') end--;
-            lines.Add(text.Substring(start, end - start));
-            start = i + 1;
-        }
-        lines.Add(text.Substring(start));
-        return lines;
-    }
 }

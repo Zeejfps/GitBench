@@ -11,76 +11,64 @@ namespace GitBench.Tests;
 /// is that each query compiled against its grammar and still names the nodes it thinks it does, so
 /// a pin bump that renames one fails here rather than quietly returning a file with no colors.
 /// </summary>
-public sealed class TreeSitterHighlightFixture : IDisposable
+[Collection(nameof(CodeIntelCollection))]
+public class TreeSitterHighlightTests(CodeIntelFixture fixture)
 {
-    private readonly TreeSitterSyntaxHighlighter _highlighter = new();
-
-    internal TreeSitterSyntaxHighlighter Highlighter => _highlighter;
-
-    public void Dispose() => _highlighter.Dispose();
-}
-
-[CollectionDefinition(nameof(TreeSitterHighlightCollection))]
-public sealed class TreeSitterHighlightCollection : ICollectionFixture<TreeSitterHighlightFixture>;
-
-[Collection(nameof(TreeSitterHighlightCollection))]
-public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
-{
-    // languageId, source, and the slot each named token must resolve to.
-    private static readonly (string LanguageId, string Source, (string Token, TokenColorSlot Slot)[] Expected)[] Cases =
+    // language, source, and the slot each named token must resolve to.
+    private static readonly (CodeLanguage Language, string Source, (string Token, TokenColorSlot Slot)[] Expected)[] Cases =
     [
-        ("csharp", "class Box { void Run() { Helper(1); } }",
+        (CodeLanguage.CSharp, "class Box { void Run() { Helper(1); } }",
             [("class", TokenColorSlot.Keyword), ("Box", TokenColorSlot.Type),
              ("Run", TokenColorSlot.Function), ("Helper", TokenColorSlot.Function),
              ("1", TokenColorSlot.Number)]),
 
-        ("typescript", "function load(): Pair { return make(); }",
+        (CodeLanguage.TypeScript, "function load(): Pair { return make(); }",
             [("function", TokenColorSlot.Keyword), ("load", TokenColorSlot.Function),
              ("Pair", TokenColorSlot.Type), ("make", TokenColorSlot.Function)]),
 
-        ("typescriptreact", "const el = <Row n={1} />;",
+        (CodeLanguage.Tsx, "const el = <Row n={1} />;",
             [("const", TokenColorSlot.Keyword), ("1", TokenColorSlot.Number)]),
 
-        ("javascript", "function go() { return \"s\"; }",
+        (CodeLanguage.JavaScript, "function go() { return \"s\"; }",
             [("function", TokenColorSlot.Keyword), ("go", TokenColorSlot.Function),
              ("\"s\"", TokenColorSlot.String)]),
 
-        ("json", "{ \"a\": 12 }", [("12", TokenColorSlot.Number)]),
+        (CodeLanguage.Json, "{ \"a\": 12 }", [("12", TokenColorSlot.Number)]),
 
-        ("css", ".card { color: red; }", [("color", TokenColorSlot.Variable)]),
+        (CodeLanguage.Css, ".card { color: red; }", [("color", TokenColorSlot.Variable)]),
 
-        ("yaml", "key: value", [("key", TokenColorSlot.Variable)]),
+        (CodeLanguage.Yaml, "key: value", [("key", TokenColorSlot.Variable)]),
 
-        ("python", "def go(x):\n    return \"s\"",
+        (CodeLanguage.Python, "def go(x):\n    return \"s\"",
             [("def", TokenColorSlot.Keyword), ("go", TokenColorSlot.Function),
              ("\"s\"", TokenColorSlot.String)]),
 
-        ("go", "func Go() int { return 1 }",
+        (CodeLanguage.Go, "func Go() int { return 1 }",
             [("func", TokenColorSlot.Keyword), ("Go", TokenColorSlot.Function),
              ("int", TokenColorSlot.Type), ("1", TokenColorSlot.Number)]),
 
-        ("rust", "fn go() -> u32 { 1 }",
+        (CodeLanguage.Rust, "fn go() -> u32 { 1 }",
             [("fn", TokenColorSlot.Keyword), ("go", TokenColorSlot.Function),
              ("u32", TokenColorSlot.Type), ("1", TokenColorSlot.Number)]),
 
-        ("java", "class A { void go() { } }",
+        (CodeLanguage.Java, "class A { void go() { } }",
             [("class", TokenColorSlot.Keyword), ("A", TokenColorSlot.Type),
              ("go", TokenColorSlot.Function)]),
 
-        ("shellscript", "echo \"hi\"", [("\"hi\"", TokenColorSlot.String)]),
+        (CodeLanguage.Bash, "echo \"hi\"", [("\"hi\"", TokenColorSlot.String)]),
 
-        ("c", "int go(void) { return 0; }",
+        (CodeLanguage.C, "int go(void) { return 0; }",
             [("go", TokenColorSlot.Function), ("0", TokenColorSlot.Number)]),
 
-        ("markdown", "# Title\n\nA `span` of code.\n",
+        (CodeLanguage.Markdown, "# Title\n\nA `span` of code.\n",
             [("Title", TokenColorSlot.Heading), ("`span`", TokenColorSlot.Code)]),
 
-        ("html", "<p class=\"a\">hi</p>",
+        (CodeLanguage.Html, "<p class=\"a\">hi</p>",
             [("p", TokenColorSlot.Keyword), ("class", TokenColorSlot.Variable)]),
 
         // The markup half comes from HTML's query and the template half from Svelte's own; the
         // bodies and expressions between them are injections, covered in TreeSitterInjectionTests.
-        ("svelte", "{#if shown}<p id=\"a\">hi</p>{:else}<b>no</b>{/if}\n{#each rows as row}{row}{/each}",
+        (CodeLanguage.Svelte, "{#if shown}<p id=\"a\">hi</p>{:else}<b>no</b>{/if}\n{#each rows as row}{row}{/each}",
             [("if", TokenColorSlot.Keyword), ("else", TokenColorSlot.Keyword),
              ("each", TokenColorSlot.Keyword), ("as", TokenColorSlot.Keyword),
              ("p", TokenColorSlot.Keyword), ("id", TokenColorSlot.Variable),
@@ -88,7 +76,7 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
 
         // The table header is a type and the key under it a property, which is the local edit
         // to the vendored query: upstream paints both with the same catch-all.
-        ("toml", "[package]\nname = \"gitbench\"\nedition = 2021\n",
+        (CodeLanguage.Toml, "[package]\nname = \"gitbench\"\nedition = 2021\n",
             [("package", TokenColorSlot.Type), ("name", TokenColorSlot.Variable),
              ("\"gitbench\"", TokenColorSlot.String), ("2021", TokenColorSlot.Number)]),
     ];
@@ -102,8 +90,8 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     public void EveryRoutedLanguageCompiledItsQuery()
     {
         var missing = Cases
-            .Select(c => c.LanguageId)
-            .Where(id => !fixture.Highlighter.Supports(id))
+            .Select(c => c.Language)
+            .Where(l => !fixture.Highlighter.Supports(l))
             .ToArray();
 
         Assert.Empty(missing);
@@ -114,13 +102,10 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     {
         // A new highlight query added to Assets/Queries/Highlights without a case here would ship
         // uncovered, which is the state this whole file exists to prevent.
-        var covered = Cases.Select(c => c.LanguageId).ToHashSet();
-        var routed = CodeLanguages.All
-            .Where(l => fixture.Highlighter.Supports(LanguageIdFor(l) ?? "none"))
-            .Select(l => LanguageIdFor(l)!)
-            .ToArray();
+        var covered = Cases.Select(c => c.Language).ToHashSet();
+        var routed = CodeLanguages.All.Where(fixture.Highlighter.Supports).ToArray();
 
-        Assert.Empty(routed.Where(id => !covered.Contains(id)));
+        Assert.Empty(routed.Where(l => !covered.Contains(l)));
     }
 
     // One test rather than a Theory: TokenColorSlot is internal, so it cannot cross a public
@@ -130,19 +115,19 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     {
         var wrong = new List<string>();
 
-        foreach (var (languageId, source, expected) in Cases)
+        foreach (var (language, source, expected) in Cases)
         {
-            var spans = fixture.Highlighter.Highlight(source, languageId);
+            var spans = fixture.Highlighter.Highlight(source, language);
             if (spans is null)
             {
-                wrong.Add($"{languageId}: highlighted nothing at all");
+                wrong.Add($"{language}: highlighted nothing at all");
                 continue;
             }
 
             foreach (var (token, slot) in expected)
             {
                 var actual = SlotOf(source, spans, token);
-                if (actual != slot) wrong.Add($"{languageId}: '{token}' was {actual}, expected {slot}");
+                if (actual != slot) wrong.Add($"{language}: '{token}' was {actual}, expected {slot}");
             }
         }
 
@@ -178,7 +163,7 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
             "}",
         ]);
 
-        var spans = fixture.Highlighter.Highlight(source, "csharp");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.CSharp);
         Assert.NotNull(spans);
 
         var lines = source.Split('\n');
@@ -204,7 +189,7 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     [Fact]
     public void ColumnsAreTabExpanded()
     {
-        var spans = fixture.Highlighter.Highlight("class A {\n\tvoid Go() { }\n}", "csharp");
+        var spans = fixture.Highlighter.Highlight("class A {\n\tvoid Go() { }\n}", CodeLanguage.CSharp);
         Assert.NotNull(spans);
 
         var onVoid = Assert.Single(spans[1].Where(s => s.Slot == TokenColorSlot.Type));
@@ -214,19 +199,23 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     [Fact]
     public void AFileOverTheCapIsDeclinedRatherThanTruncated()
     {
-        var huge = new string('a', TreeSitterSyntaxHighlighter.MaxFileBytes + 1);
-        Assert.Null(fixture.Highlighter.Highlight(huge, "csharp"));
+        var huge = new string('a', ParseText.MaxFileBytes + 1);
+        Assert.Null(fixture.Highlighter.Highlight(huge, CodeLanguage.CSharp));
     }
 
     [Fact]
-    public void ALanguageWithNoBundledQueryIsDeclined()
+    public void ALanguageWithNoBundledGrammarNeverReachesTheParser()
     {
-        // Shipping no highlights query is the whole of the routing rule, and jsonc is the one id
-        // deliberately left off a grammar we do bundle: the JSON parser reads its comments as
-        // errors, so its files are better colored by TextMate.
-        Assert.False(fixture.Highlighter.Supports("fsharp"));
-        Assert.False(fixture.Highlighter.Supports("jsonc"));
-        Assert.Null(fixture.Highlighter.Highlight("let x = 1", "fsharp"));
+        // jsonc is the one id deliberately kept off a grammar we do bundle: the JSON parser reads
+        // its comments as errors, so those files are better colored by TextMate.
+        Assert.Equal(new FileLanguage.TextMate("fsharp"), FileLanguage.Detect("a.fs"));
+        Assert.Equal(new FileLanguage.TextMate("jsonc"), FileLanguage.Detect("a.jsonc"));
+        Assert.Equal(new FileLanguage.TextMate("jsonc"), FileLanguage.Detect("tsconfig.json"));
+        Assert.Equal(new FileLanguage.TreeSitter(CodeLanguage.Json), FileLanguage.Detect("package.json"));
+        Assert.Equal(new FileLanguage.TreeSitter(CodeLanguage.C), FileLanguage.Detect("a.h"));
+        Assert.Equal(new FileLanguage.TreeSitter(CodeLanguage.Bash), FileLanguage.Named("sh"));
+        Assert.Equal(new FileLanguage.TextMate("fsharp"), FileLanguage.Named("fsharp"));
+        Assert.Equal(FileLanguage.None.Instance, FileLanguage.Detect("a.unknown"));
     }
 
     /// <summary>A file with a syntax error still colors — the reason a parser is usable on a diff
@@ -234,35 +223,11 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     [Fact]
     public void ABrokenFileStillColorsWhatItCan()
     {
-        var spans = fixture.Highlighter.Highlight("class Box { void Run( { \"s\"", "csharp");
+        var spans = fixture.Highlighter.Highlight("class Box { void Run( { \"s\"", CodeLanguage.CSharp);
         Assert.NotNull(spans);
         Assert.Equal(TokenColorSlot.Keyword, SlotOf("class Box { void Run( { \"s\"", spans, "class"));
     }
 
-    private static string? LanguageIdFor(CodeLanguage language) => language switch
-    {
-        CodeLanguage.CSharp => "csharp",
-        CodeLanguage.TypeScript => "typescript",
-        CodeLanguage.Tsx => "typescriptreact",
-        CodeLanguage.JavaScript => "javascript",
-        CodeLanguage.Json => "json",
-        CodeLanguage.Css => "css",
-        CodeLanguage.Html => "html",
-        CodeLanguage.Markdown => "markdown",
-        CodeLanguage.Yaml => "yaml",
-        CodeLanguage.Python => "python",
-        CodeLanguage.Go => "go",
-        CodeLanguage.Rust => "rust",
-        CodeLanguage.Java => "java",
-        CodeLanguage.Bash => "shellscript",
-        CodeLanguage.C => "c",
-        CodeLanguage.Toml => "toml",
-        CodeLanguage.Svelte => "svelte",
-        _ => null,
-    };
-
-    /// <summary>The slot covering <paramref name="token"/>'s first occurrence, or Default where the
-    /// token is uncolored. Fails if the token is not one solid run.</summary>
     internal static TokenColorSlot SlotOf(
         string source,
         IReadOnlyList<IReadOnlyList<TokenSpan>> spans,

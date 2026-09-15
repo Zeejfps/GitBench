@@ -1,8 +1,6 @@
-using System.Diagnostics;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -13,43 +11,19 @@ namespace GitBench.Tests;
 // --pathspec-from-file on stdin, or chunked command lines on old git).
 public sealed class GitPathspecTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
-    private readonly string _root;
+    private readonly TempGitRepo _work = TempGitRepo.Init();
     private readonly GitService _git;
     private readonly Repo _repo;
 
     public GitPathspecTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "gitbench-pathspec-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
         _git = new GitService(new NullActivityTracker());
-        _repo = new Repo(Guid.NewGuid(), _root, "test");
+        _repo = new Repo(Guid.NewGuid(), _work.Path, "test");
     }
 
     public void Dispose()
     {
-        DirectoryTree.Delete(_root);
-    }
-
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
+        _work.Dispose();
     }
 
     private LocalChangesSnapshot Snapshot()
@@ -61,7 +35,7 @@ public sealed class GitPathspecTests : IDisposable
     private List<string> CreateManyFiles()
     {
         // ~400 files x ~100-char paths ≈ 40k chars of pathspec — past the Windows cap.
-        var dir = Path.Combine(_root, "some", "fairly", "deeply", "nested", "directory", "structure");
+        var dir = Path.Combine(_work.Path, "some", "fairly", "deeply", "nested", "directory", "structure");
         Directory.CreateDirectory(dir);
         var paths = new List<string>();
         for (var i = 0; i < 400; i++)
@@ -71,7 +45,7 @@ public sealed class GitPathspecTests : IDisposable
             paths.Add($"some/fairly/deeply/nested/directory/structure/{name}");
         }
         // Non-ASCII path exercises the UTF-8 stdin encoding of the pathspec list.
-        File.WriteAllText(Path.Combine(_root, "файл-日本語.txt"), "unicode\n");
+        File.WriteAllText(Path.Combine(_work.Path, "файл-日本語.txt"), "unicode\n");
         paths.Add("файл-日本語.txt");
         return paths;
     }
@@ -79,14 +53,11 @@ public sealed class GitPathspecTests : IDisposable
     [Fact]
     public void StageUnstageDiscard_SurviveHugePathList()
     {
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
         // Seed a commit so this covers the ordinary HEAD-resolvable case; the no-commit case
         // is GitUnbornHeadTests.
-        File.WriteAllText(Path.Combine(_root, "seed.txt"), "seed\n");
-        Git("add", "seed.txt");
-        Git("-c", "commit.gpgsign=false", "commit", "-m", "seed");
+        File.WriteAllText(Path.Combine(_work.Path, "seed.txt"), "seed\n");
+        _work.Git("add", "seed.txt");
+        _work.Git("commit", "-m", "seed");
         var paths = CreateManyFiles();
 
         var staged = _git.Stage(_repo, paths);

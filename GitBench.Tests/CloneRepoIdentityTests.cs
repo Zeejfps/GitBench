@@ -113,7 +113,7 @@ public sealed class CloneRepoIdentityTests : IDisposable
     {
         var profiles = new IdentityProfileService(seed, Path.Combine(_root, "profiles.json"));
         var identity = new GitIdentityService(new StubReader(), profiles, _bus, _registry);
-        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc);
+        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc, () => { });
     }
 
     private void RunClone(CloneRepoDialogViewModel vm)
@@ -152,14 +152,5 @@ public sealed class CloneRepoIdentityTests : IDisposable
         public GitOutcome Push(Repo repo, bool force = false) => GitOutcome.Ok;
         public PullOutcome Pull(Repo repo, PullStrategy? strategy = null) => PullOutcome.Ok;
         public GitOutcome Fetch(Repo repo) => GitOutcome.Ok;
-    }
-
-    private sealed class StubReader : IGitRawConfigReader
-    {
-        public bool IsRepoAvailable(string repoPath) => true;
-        public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => Array.Empty<string>();
-        public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
-        public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
     }
 }

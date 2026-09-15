@@ -1,12 +1,10 @@
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Commits;
 using GitBench.Input;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.KeyboardModule;
@@ -35,7 +33,7 @@ internal sealed class GrowingDescriptionField : ContainerView
     private readonly TextInputView _input;
     private readonly FieldController _inputController;
     private readonly ScrollPane _scrollPane;
-    private readonly VerticalScrollBarView _scrollBar;
+    private readonly VerticalScrollBar _scrollBar;
 
     /// <summary>
     /// Claims plain Enter for the owner (send, commit) instead of breaking the line; Shift+Enter
@@ -120,12 +118,12 @@ internal sealed class GrowingDescriptionField : ContainerView
             _input.SelectionRectColor = s.TextInput.Selection;
             _input.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _inputController = new FieldController(_input, inputSystem, ctx.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
+        _inputController = new FieldController(_input, inputSystem, ctx.Require<IClipboard>()) { IsMultiLine = true };
         _input.UseController(inputSystem, _inputController);
 
         _scrollPane = new ScrollPane();
         _scrollPane.Children.Add(_input);
-        _scrollPane.UseController(inputSystem, () => new ScrollPaneWheelController(_scrollPane));
+        _scrollPane.UseController(inputSystem, () => WheelScrollController.For(_scrollPane));
 
         _scrollBar = ScrollBars.CreateVertical(ctx);
 
@@ -174,7 +172,7 @@ internal sealed class GrowingDescriptionField : ContainerView
     {
         private InputModifiers _modifiers;
 
-        public FieldController(TextInputView textInput, InputSystem inputSystem, ZGF.Gui.IClipboard? clipboard)
+        public FieldController(TextInputView textInput, InputSystem inputSystem, IClipboard clipboard)
             : base(textInput, inputSystem, clipboard)
         {
         }

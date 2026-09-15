@@ -25,13 +25,9 @@ public abstract record ServerNotification
 
     public sealed record Diagnostics(DocumentUri Uri, DocumentVersion? Version, IReadOnlyList<Diagnostic> Items) : ServerNotification;
 
-    public sealed record Log(LogLevel Level, string Message) : ServerNotification;
-
     /// <summary>Anything this client does not model. Kept whole so it can be logged, not dropped.</summary>
     public sealed record Other(LspMethod Method, JsonElement Params) : ServerNotification;
 }
-
-public enum LogLevel { Error = 1, Warning = 2, Info = 3, Log = 4 }
 
 public enum DiagnosticSeverity { Unspecified = 0, Error = 1, Warning = 2, Information = 3, Hint = 4 }
 
@@ -87,17 +83,4 @@ public interface ILspServerMessages
     Task<InboundReply> OnRequest(ServerRequest request, CancellationToken ct);
 
     void OnFault(LspFault fault);
-}
-
-/// <summary>Answers nothing and remembers nothing. The shape of a connection used only for requests.</summary>
-public sealed class IgnoreServerMessages : ILspServerMessages
-{
-    public static readonly IgnoreServerMessages Instance = new();
-
-    public void OnNotification(ServerNotification notification) { }
-
-    public Task<InboundReply> OnRequest(ServerRequest request, CancellationToken ct) =>
-        Task.FromResult<InboundReply>(new InboundReply.NotHandled());
-
-    public void OnFault(LspFault fault) { }
 }

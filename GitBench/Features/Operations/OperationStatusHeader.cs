@@ -49,7 +49,7 @@ internal sealed record OperationStatusHeader : Widget
 
     private static IWidget StatusIcon(OperationViewModel vm) => new Text
     {
-        Value = vm.IsConflicted.Bind(c => c ? LucideIcons.TriangleAlert : LucideIcons.CircleCheck),
+        Value = vm.IsConflicted.Bind<bool, string?>(c => c ? LucideIcons.TriangleAlert : LucideIcons.CircleCheck),
         FontFamily = LucideIcons.FontFamily,
         FontSize = FontSize.Display,
         VAlign = TextAlignment.Center,

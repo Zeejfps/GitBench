@@ -7,7 +7,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Worktrees;
 
-internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
+internal sealed class CreateWorktreeDialogViewModel
 {
     public State<string> ParentDir { get; } = new(string.Empty);
     public State<string> FolderName { get; } = new(string.Empty);
@@ -23,30 +23,29 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
 
     public AsyncCommand Create { get; }
 
-    public event Action? CloseRequested;
-
     // The name we last derived ourselves, so a manual edit sticks: the branch name only rewrites
     // the field while it still holds exactly what we put there. Mirrors CloneRepoDialogViewModel.
     private string _lastAutoName = string.Empty;
     private string? _warning;
 
     public CreateWorktreeDialogViewModel(
-        CreateWorktreeRequest request,
+        Repo primary,
         IGitWorktreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
+        Action onClose,
         Func<string, bool>? directoryExists = null)
     {
-        var primaryId = request.Primary.Id;
+        var primaryId = primary.Id;
         var exists = directoryExists ?? Directory.Exists;
 
-        ParentDir.Value = WorktreePathDefaults.ParentDirectoryFor(request.Primary.Path);
+        ParentDir.Value = WorktreePathDefaults.ParentDirectoryFor(primary.Path);
 
         NewBranchName.Subscribe(branch =>
         {
             if (FolderName.Value != _lastAutoName) return; // user took over the field
-            var derived = WorktreePathDefaults.FolderNameFor(request.Primary.Path, ParentDir.Value, branch, exists);
+            var derived = WorktreePathDefaults.FolderNameFor(primary.Path, ParentDir.Value, branch, exists);
             FolderName.Value = derived;
             _lastAutoName = derived;
         });
@@ -78,7 +77,7 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
                     Force: force,
                     InitSubmodules: InitSubmodules.Value,
                     RecurseSubmodules: RecurseSubmodules.Value);
-                var outcome = gitService.AddWorktree(request.Primary, req);
+                var outcome = gitService.AddWorktree(primary, req);
                 _warning = (outcome as WorktreeAddOutcome.Added)?.Warning;
                 return outcome;
             },
@@ -86,7 +85,7 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
             {
                 bus.Broadcast(new WorktreesChangedMessage(primaryId));
                 bus.Broadcast(new RefsChangedMessage(primaryId));
-                CloseRequested?.Invoke();
+                onClose();
                 // The worktree exists either way — a submodule step that failed is reported after
                 // the close, so it reads as "here is your worktree, and git said something about
                 // its submodules" rather than as the create having failed.
@@ -95,8 +94,4 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
             },
             gate: gate);
     }
-
-    public void Dispose() { }
 }
-
-internal readonly record struct CreateWorktreeRequest(Repo Primary);

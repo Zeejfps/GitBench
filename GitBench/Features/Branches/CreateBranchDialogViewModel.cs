@@ -9,7 +9,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class CreateBranchDialogViewModel : IDialogViewModel
+internal sealed class CreateBranchDialogViewModel
 {
     // The seeded ref and the label standing in for it in the field. While the field still reads as
     // the label, the seeded ref is what git gets — so a dialog opened "from the current branch"
@@ -31,8 +31,6 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
 
     public AsyncCommand Create { get; }
 
-    public event Action? CloseRequested;
-
     public CreateBranchDialogViewModel(
         Repo repo,
         GitRef startPoint,
@@ -43,6 +41,7 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
         IMessageBus bus,
         IRepoHeadStore head,
         ILocalizationService loc,
+        Action onClose,
         IUnsavedEditsGuard? guard = null)
     {
         _seedRef = startPoint;
@@ -65,7 +64,7 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
             onSuccess: () =>
             {
                 bus.Broadcast(new RefsChangedMessage(repoId));
-                CloseRequested?.Invoke();
+                onClose();
             },
             gate: gate,
             // With "check out after create" on, this moves HEAD onto the new branch — declare it so
@@ -89,6 +88,4 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
         if (text == _seedLabel) return _seedRef;
         return text.Length == 0 ? GitRef.Head : GitRef.Named(text);
     }
-
-    public void Dispose() { }
 }

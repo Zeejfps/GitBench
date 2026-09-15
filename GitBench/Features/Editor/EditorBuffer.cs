@@ -42,9 +42,6 @@ internal readonly struct Revised<T>
     }
 }
 
-/// <summary>What a parse of a file says about it: how it is colored, and what it declares.</summary>
-internal sealed record EditorAnnotations(DiffHighlight? Highlight, FileOutline? Outline);
-
 /// <summary>One change as it landed: the edit that puts the document back, the text the change put
 /// in, and the revision the document reached by taking it.</summary>
 /// <remarks>
@@ -139,38 +136,17 @@ internal sealed class EditorBuffer
     public bool ReadIsCurrent => Read.Describes(_document);
 
     /// <summary>The rows, for the surface to draw and to size itself from.</summary>
-    public IDiffRowSource Rows => _rows;
-
-    /// <summary>Told which declaration the projection had to open to uncover the caret.</summary>
-    public Action<string>? FoldExpanded
-    {
-        get => _rows.FoldExpanded;
-        set => _rows.FoldExpanded = value;
-    }
-
-    /// <summary>Whether declarations carry a usages row.</summary>
-    public bool UsageLensRows
-    {
-        get => _rows.UsageLensRows;
-        set => _rows.UsageLensRows = value;
-    }
-
-    /// <summary>Colors and folds the projection from a parse, unless the parse describes a revision
-    /// this document has moved on from. Returns whether it was applied.</summary>
-    public bool Apply(Revised<EditorAnnotations> annotations) => _rows.SetAnnotations(annotations);
+    public EditorRowSet Rows => _rows;
 
     /// <summary>Colors and folds from a parse of the file as it was read off disk, which describes
     /// this document only while nothing has been typed on top of that read. Returns whether it was
     /// applied.</summary>
-    public bool ApplyRead(EditorAnnotations annotations) =>
-        Apply(new Revised<EditorAnnotations>(Read, annotations));
+    public bool ApplyRead(DiffAnnotations annotations) =>
+        _rows.SetAnnotations(new Revised<DiffAnnotations>(Read, annotations));
 
     /// <summary>Records that the file has been read again and found to say exactly what this
     /// document already does, so that read's parse describes this revision.</summary>
     public void Reread() => Read = DocumentRevision.Of(_document);
-
-    /// <summary>Replaces the declarations the reader has folded shut.</summary>
-    public void SetFolds(FoldState? folds) => _rows.SetFolds(folds);
 
     /// <summary>Everything a keystroke can mean, and the goal cell a run of vertical motion aims
     /// at.</summary>

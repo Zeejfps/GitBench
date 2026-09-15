@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -38,7 +37,7 @@ public sealed class RepoHeadStoreTests : IDisposable
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
         _head = new RepoHeadStore(_gitService, _bus, _loc, _dispatcher, new NoUnsavedEdits());
         _status = new RepoStatusStore(
-            new IdleOperations(), new IdleIndexOperations(), _registry, _gitService, _bus, _gate, _dispatcher, _head, _head);
+            new IdleRemoteOperations(), new IdleIndexOperations(), _registry, _gitService, _bus, _gate, _dispatcher, _head, _head);
     }
 
     // The whole point of the store: from the instant the checkout starts, the name every caller reads
@@ -222,10 +221,7 @@ public sealed class RepoHeadStoreTests : IDisposable
     {
         var path = Path.Combine(_root, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", branch);
-        Git(path, "config", "user.name", "Test");
-        Git(path, "config", "user.email", "test@example.com");
-        Git(path, "config", "commit.gpgsign", "false");
+        TestGit.Init(path, branch);
         File.WriteAllText(Path.Combine(path, "a.txt"), "0");
         Git(path, "add", "a.txt");
         Git(path, "commit", "-qm", "base");
@@ -247,25 +243,7 @@ public sealed class RepoHeadStoreTests : IDisposable
         throw new TimeoutException($"Timed out waiting for {what}.");
     }
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose()
     {
@@ -274,31 +252,5 @@ public sealed class RepoHeadStoreTests : IDisposable
         _registry.Dispose();
         _loc.Dispose();
         DirectoryTree.Delete(_root);
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
-    }
-
-    private sealed class IdleOperations : IRepoOperationsStore
-    {
-        private readonly State<RepoOperations> _active = new(RepoOperations.Idle);
-
-        public IReadable<RepoOperations> Active => _active;
-        public bool HasUnseenError(Guid repoId) => false;
-        public bool IsBusy(Guid repoId) => false;
-        public void Push(Repo repo, bool force = false) { }
-        public void Pull(Repo repo, PullStrategy? strategy = null) { }
-        public void Fetch(Repo repo) { }
-        public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null) => Task.FromResult(RemoteOpResult.Ok);
-        public Task<RemoteOpResult> FetchAsync(Repo repo) => Task.FromResult(RemoteOpResult.Ok);
     }
 }

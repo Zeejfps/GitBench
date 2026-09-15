@@ -182,9 +182,10 @@ public sealed class ContentNavigatorTests(CodeIntelFixture fixture) : IDisposabl
         _browser = new FileBrowserViewModel(
             new Repo(Guid.NewGuid(), _dir.Path, "repo"),
             new FileSystemReader(),
-            NoIgnoreOracle.Instance,
-            EmptyFileCatalog.Instance,
+            FileBrowserFakes.NoIgnore,
+            FileBrowserFakes.EmptyCatalog,
             fixture.Extractor,
+            fixture.Colors,
             _dispatcher,
             new FileBrowserUiState(),
             _persisted.Add,

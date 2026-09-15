@@ -1,13 +1,10 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -27,36 +24,80 @@ internal sealed record AbortOperationDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new AbortOperationDialogViewModel(
-            new AbortOperationRequest(Repo, State),
-            ctx.Require<IGitIntegrationOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Localization());
-
+        var repo = Repo;
+        var state = State;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitIntegrationOperations>();
+        var bus = ctx.Require<IMessageBus>();
         var s = ctx.Localization().Strings.Value;
-        var (titleText, bodyText) = CopyFor(s, State);
+
+        var forceQuitMode = new State<bool>(false);
+        // Plain local, not a State<T>: written in the background work lambda and read back in the
+        // UI-thread onError callback (which runs after work completes). It drives no binding — only
+        // forceQuitMode does — so it needs no notifications, and a plain assignment avoids firing
+        // them off the worker thread.
+        var forceQuitAvailable = false;
+
+        var defaultLabel = DefaultConfirmLabel(s, state);
+        var confirmButtonLabel = new Derived<string>(() => forceQuitMode.Value ? s.OperationsAbortForceClear : defaultLabel);
+        var gate = new Derived<bool>(() => state != RepoOperationState.None);
+
+        var abort = new AsyncCommand(
+            ctx.Require<IUiDispatcher>(),
+            work: () =>
+            {
+                var outcome = gitService.AbortOperation(repo, state, forceQuitMode.Value);
+                if (outcome is AbortOutcome.Failed failed)
+                {
+                    forceQuitAvailable = failed.ForceQuitAvailable;
+                    return failed.Message;
+                }
+                forceQuitAvailable = false;
+                return null;
+            },
+            onSuccess: () =>
+            {
+                onClose();
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+            },
+            gate: gate,
+            onError: _ =>
+            {
+                // A first failure that reports force-quit availability flips the button into
+                // "Force clear" mode so a second press can hard-clear the operation state.
+                if (forceQuitAvailable && !forceQuitMode.Value)
+                    forceQuitMode.Value = true;
+            });
+
+        var (titleText, bodyText) = CopyFor(s, state);
 
         return new Dialog
         {
             Title = titleText,
-            OnClose = OnClose,
-            Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(s, State), DialogButtonRole.Destructive),
-            Command = vm.Abort,
-            BindActionLabel = vm.ConfirmButtonLabel,
+            OnClose = onClose,
+            Action = (defaultLabel, DialogButtonRole.Destructive),
+            Command = abort,
+            BindActionLabel = confirmButtonLabel,
             ConfirmKeys = true,
-            ViewModel = vm,
             Body =
             [
-                new Text
-                {
-                    Value = bodyText,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = bodyText },
             ],
         };
     }
+
+    private static string DefaultConfirmLabel(Strings s, RepoOperationState state) => state switch
+    {
+        RepoOperationState.Merge => s.OperationsAbortMerge,
+        RepoOperationState.Rebase => s.OperationsAbortRebase,
+        RepoOperationState.CherryPick => s.OperationsAbortCherryPick,
+        RepoOperationState.Revert => s.OperationsAbortRevert,
+        RepoOperationState.ApplyMailbox => s.OperationsAbortApply,
+        RepoOperationState.Bisect => s.OperationsAbortBisect,
+        RepoOperationState.UnmergedPaths => s.OperationsAbortUnmerged,
+        _ => s.CommonAbort,
+    };
 
     private static (string Title, string Body) CopyFor(Strings s, RepoOperationState state) => state switch
     {

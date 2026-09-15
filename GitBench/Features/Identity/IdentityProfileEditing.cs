@@ -55,7 +55,7 @@ internal static class IdentityProfileEditing
 
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    private static string ExpandHome(string path)
+    public static string ExpandHome(string path)
     {
         if (path == "~") return Home;
         if (path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith("~\\", StringComparison.Ordinal))

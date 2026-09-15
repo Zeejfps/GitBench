@@ -1,4 +1,3 @@
-using GitBench.Controls;
 using GitBench.Git;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -8,16 +7,16 @@ using ZGF.KeyboardModule;
 
 namespace GitBench.Features.Repos;
 
-public sealed class RepoRowController : KeyboardMouseController, IDisposable
+internal sealed class RepoRowController : KeyboardMouseController, IDisposable
 {
     private const float DragThresholdSq = 6f * 6f;
 
     private readonly View _view;
-    private readonly IRepoRow _target;
+    private readonly RepoRowState _target;
     private readonly IRepoRegistry _registry;
     private readonly RepoHoverState _hover;
     private readonly Context _context;
-    private readonly IDragController? _dragController;
+    private readonly DragController _dragController;
     private readonly InputSystem _inputSystem;
 
     private bool _pressed;
@@ -26,12 +25,12 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
 
     public RepoRowController(
         View view,
-        IRepoRow target,
+        RepoRowState target,
         IRepoRegistry registry,
         RepoHoverState hover,
         InputSystem inputSystem,
         Context context,
-        IDragController? dragController = null)
+        DragController dragController)
     {
         _view = view;
         _target = target;
@@ -43,16 +42,16 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
 
         var group = _registry.FindGroupContaining(_target.Repo.Id);
         if (group is not null)
-            _dragController?.RegisterRepoRow(view, group.Id, _target.Repo.Id);
+            _dragController.RegisterRepoRow(view, group.Id, _target.Repo.Id);
     }
 
     public void Dispose()
     {
         _hover.Exit(_target.Repo.Id);
-        _dragController?.Unregister(_view);
+        _dragController.Unregister(_view);
         if (_pressed || _dragging)
         {
-            _dragController?.CancelDrag();
+            _dragController.CancelDrag();
             _inputSystem.Blur(this);
         }
     }
@@ -84,12 +83,12 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
             _dragging = true;
             _target.Hovered.Value = false;
             _hover.Exit(_target.Repo.Id);
-            _dragController?.StartRepoDrag(_target.Repo, e.Mouse.Point);
+            _dragController.StartRepoDrag(_target.Repo);
             e.Consume();
             return;
         }
 
-        _dragController?.UpdateDrag(e.Mouse.Point);
+        _dragController.UpdateDrag(e.Mouse.Point);
         e.Consume();
     }
 
@@ -128,7 +127,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
             if (_dragging)
             {
                 _dragging = false;
-                _dragController?.CompleteDrag();
+                _dragController.CompleteDrag();
             }
             else
             {
@@ -146,7 +145,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
         if (e.Key != KeyboardKey.Escape) return;
         _dragging = false;
         _pressed = false;
-        _dragController?.CancelDrag();
+        _dragController.CancelDrag();
         _inputSystem.Blur(this);
         e.Consume();
     }
@@ -155,7 +154,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
     {
         if (_dragging)
         {
-            _dragController?.CancelDrag();
+            _dragController.CancelDrag();
             _dragging = false;
         }
         _pressed = false;

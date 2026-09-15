@@ -22,7 +22,7 @@ internal sealed record LanguageServerStatusChip : Widget
     protected override IWidget Build(Context ctx)
     {
         var store = ctx.Get<ILanguageServerStore>();
-        var bus = ctx.Get<IMessageBus>();
+        var bus = ctx.Require<IMessageBus>();
         var loc = ctx.Localization();
         var browser = Model;
 
@@ -36,7 +36,7 @@ internal sealed record LanguageServerStatusChip : Widget
         {
             Style = ButtonStyle.BareMuted,
             Visible = Prop.Bind(() => ServerStateText.WorthShowing(state.Value)),
-            Command = new Command(() => bus?.Broadcast(new ShowDialogMessage(
+            Command = new Command(() => bus.Broadcast(new ShowDialogMessage(
                 onClose => new LanguageServersDialog { OnClose = onClose }))),
             Children =
             [

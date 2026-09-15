@@ -46,12 +46,7 @@ internal sealed record ConfirmCloseTerminalDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.TerminalCloseTabBody,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.TerminalCloseTabBody },
                 new Text
                 {
                     Value = Terminal,

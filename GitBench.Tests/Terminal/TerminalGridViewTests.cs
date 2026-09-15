@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text;
 using GitBench.Features.Terminal;
 using GitBench.Localization;
@@ -425,7 +424,7 @@ public class TerminalGridViewTests
     [Fact]
     public void MovingARealPointerOverALink_RulesItAndTurnsThePointerIntoAHand()
     {
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         using var session = TerminalSession.Start(
             () => new RecordedPtySession(Linked("see ", "docs", " after")),
             new XtermSharpEngineFactory(),
@@ -433,7 +432,7 @@ public class TerminalGridViewTests
             dispatcher);
 
         Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
-        dispatcher.Pump();
+        dispatcher.Drain();
 
         TerminalGridView? view = null;
         TerminalInputController? controller = null;
@@ -444,17 +443,13 @@ public class TerminalGridViewTests
                 var input = ctx.Require<InputSystem>();
                 view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
                 view.SetRenderState(new TerminalRenderState.Running(session));
-                controller = new TerminalInputController(view, input, new IdleTerminal(), view);
+                controller = TerminalTestHost.Controller(ctx, view, new IdleTerminal(), view);
                 input.RegisterController(view, controller);
                 return view;
             },
             width: Width,
             height: Height,
-            configure: ctx =>
-            {
-                ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-            });
+            configure: TerminalTestHost.Configure);
 
         harness.Render();
 
@@ -513,7 +508,7 @@ public class TerminalGridViewTests
         byte[] output,
         Action<TerminalSession>? scrolled = null)
     {
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         using var session = TerminalSession.Start(
             () => new RecordedPtySession(output),
             new XtermSharpEngineFactory(),
@@ -523,7 +518,7 @@ public class TerminalGridViewTests
         // The recording ends its stream once its bytes are gone, so the session having exited means
         // every batch has been posted — and pumping now feeds all of them.
         Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
-        dispatcher.Pump();
+        dispatcher.Drain();
 
         scrolled?.Invoke(session);
 
@@ -542,7 +537,7 @@ public class TerminalGridViewTests
         byte[] output,
         Action<TerminalSession>? scrolled = null)
     {
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         var session = TerminalSession.Start(
             () => new RecordedPtySession(output),
             new XtermSharpEngineFactory(),
@@ -550,7 +545,7 @@ public class TerminalGridViewTests
             dispatcher);
 
         Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
-        dispatcher.Pump();
+        dispatcher.Drain();
 
         scrolled?.Invoke(session);
 
@@ -564,7 +559,7 @@ public class TerminalGridViewTests
         byte[] output,
         Func<TerminalSession, TerminalRenderState> ended)
     {
-        var dispatcher = new QueueDispatcher();
+        var dispatcher = new QueuedDispatcher();
         var session = TerminalSession.Start(
             () => new RecordedPtySession(output),
             new XtermSharpEngineFactory(),
@@ -572,7 +567,7 @@ public class TerminalGridViewTests
             dispatcher);
 
         Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
-        dispatcher.Pump();
+        dispatcher.Drain();
 
         var harness = Harness(view => view.SetRenderState(ended(session)));
         harness.Render();
@@ -597,21 +592,4 @@ public class TerminalGridViewTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
             });
-
-    /// <summary>
-    /// Collects posted work instead of running it, so a test says when the engine is fed rather than
-    /// racing the reader thread for it.
-    /// </summary>
-    private sealed class QueueDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Pump()
-        {
-            while (_queue.TryDequeue(out var action))
-                action();
-        }
-    }
 }

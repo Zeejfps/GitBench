@@ -68,7 +68,7 @@ internal sealed record CommitBarWidget : Widget
             titleInput.SelectionRectColor = s.TextInput.Selection;
             titleInput.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        var titleController = new TextInputViewKbmController(titleInput, input, ctx.Get<IClipboard>());
+        var titleController = new TextInputViewKbmController(titleInput, input, ctx.Require<IClipboard>());
         titleInput.UseController(input, titleController);
         titleInput.BindTwoWay(vm.Title, vm.SetTitle);
 

@@ -43,7 +43,6 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly Derived<bool> _canGenerateMessage;
     private readonly Derived<bool> _canReviewBranch;
     private readonly Derived<bool> _showSettings;
-    private readonly Derived<bool> _wantsKey;
     private readonly Derived<bool> _keyOptional;
     private readonly Derived<bool> _wantsBaseUrl;
     private readonly Derived<bool> _hasModelPresets;
@@ -53,7 +52,6 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly Derived<string> _baseUrlHint;
     private readonly Derived<string> _keyHint;
     private readonly IDisposable _availableSub;
-    private readonly IDisposable _selectionSub;
 
     // Which provider the key field's contents are for, and whether they are that provider's stored
     // key rather than something typed. Only the stored case makes emptying the box a deletion — an
@@ -95,9 +93,8 @@ internal sealed class AssistantViewModel : IDisposable
 
         // Onboarding and settings are the same card: one is the other with nothing configured yet.
         _showSettings = new Derived<bool>(() => _settingsOpen.Value || !store.IsConfigured.Value);
-        _wantsKey = new Derived<bool>(() => DraftProvider.AcceptsApiKey);
         _keyOptional = new Derived<bool>(() => !DraftProvider.RequiresApiKey);
-        _wantsBaseUrl = new Derived<bool>(() => DraftProvider.CustomBaseUrl);
+        _wantsBaseUrl = new Derived<bool>(() => DraftProvider.Hosting is AssistantHosting.SelfHosted);
         _hasModelPresets = new Derived<bool>(() => DraftProvider.ModelPresets.Count > 0);
         _providerName = new Derived<string>(() => DraftProvider.DisplayName);
         _activeProviderName = new Derived<string>(() => store.Settings.Value.Provider.DisplayName);
@@ -125,24 +122,23 @@ internal sealed class AssistantViewModel : IDisposable
             if (!available) _open.Value = false;
         });
 
-        _selectionSub = bus.SubscribeScoped<AskAssistantAboutSelectionMessage>(AskAboutSelection);
     }
 
-    // The diff's quick actions land here. A preset runs at once and answers in the transcript
-    // without joining the thread; the free-form one only fills the composer, because the question is
-    // still the person's to write and sending it is still their move.
-    private void AskAboutSelection(AskAssistantAboutSelectionMessage m)
+    // The diff's quick actions land here. A preset (agentName) runs at once and answers in the
+    // transcript without joining the thread; the free-form one (null) only fills the composer,
+    // because the question is still the person's to write and sending it is still their move.
+    public void AskAboutSelection(string? agentName, string prompt)
     {
         if (!_available.Value) return;
         _open.Value = true;
 
-        if (m.AgentName is { Length: > 0 } agent)
+        if (agentName is { Length: > 0 } agent)
         {
-            _store.RunPreset(agent, m.Prompt);
+            _store.RunPreset(agent, prompt);
             return;
         }
 
-        _draft.Value = m.Prompt + "\n\n";
+        _draft.Value = prompt + "\n\n";
     }
 
     // The review runs the moment it is picked, in the overlay, as a one-shot detached from the
@@ -193,11 +189,6 @@ internal sealed class AssistantViewModel : IDisposable
     public State<string> ModelDraft => _modelDraft;
     public State<string> BaseUrlDraft => _baseUrlDraft;
     public State<string> KeyDraft => _keyDraft;
-
-    /// <summary>Whether the card offers a key field for the draft provider. Asked of what the
-    /// endpoint will take, not of what it demands: a self-hosted one takes a key without needing
-    /// one, and leaving the field off is what pushes a gateway token into the endpoint box.</summary>
-    public IReadable<bool> WantsApiKey => _wantsKey;
 
     /// <summary>Whether a key for the draft provider is worth offering but not needed, so the field
     /// says so rather than asking for something the user usually does not have.</summary>
@@ -399,8 +390,8 @@ internal sealed class AssistantViewModel : IDisposable
         {
             // A saved key is in the field, so there is nothing left for a line of prose to add.
             AssistantKeySource.Saved => string.Empty,
-            AssistantKeySource.Environment =>
-                s.AssistantSettingsKeyEnvironment(provider.EnvironmentVariable ?? string.Empty),
+            AssistantKeySource.Environment when provider.Hosting is AssistantHosting.Hosted hosted =>
+                s.AssistantSettingsKeyEnvironment(hosted.EnvironmentVariable),
             // No key and none needed — but the box above is there for one, so it says what it is for
             // rather than reading as a question left unanswered.
             AssistantKeySource.NotRequired => s.AssistantSettingsKeyNotRequired(provider.DisplayName),
@@ -479,7 +470,6 @@ internal sealed class AssistantViewModel : IDisposable
 
     public void Dispose()
     {
-        _selectionSub.Dispose();
         _availableSub.Dispose();
         _keyHint.Dispose();
         _baseUrlHint.Dispose();
@@ -489,7 +479,6 @@ internal sealed class AssistantViewModel : IDisposable
         _activeProviderName.Dispose();
         _wantsBaseUrl.Dispose();
         _keyOptional.Dispose();
-        _wantsKey.Dispose();
         _showSettings.Dispose();
         _keyDraft.Dispose();
         _baseUrlDraft.Dispose();

@@ -35,7 +35,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         _sweep = new StartupSweepCoordinator(_gate);
         var head = new SettledHead();
         _store = new RepoStatusStore(
-            new IdleOperations(), new IdleIndexOperations(), _registry, new GitService(new RepoActivityTracker()),
+            new IdleRemoteOperations(), new IdleIndexOperations(), _registry, new GitService(new RepoActivityTracker()),
             new MessageBus(), _gate, _dispatcher, head, head);
     }
 
@@ -389,7 +389,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         Seed(h, id, Tracked(ahead: 0));
         var before = h.Git.StatusSummaryCalls;
 
-        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        h.Store.NoteLocalCommit(id);
 
         // Synchronous, like every other write to the slot — no drain window can be needed.
         Assert.Equal(1, h.Store.For(id).Ahead);
@@ -403,7 +403,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         var id = RepoId("active");
         Seed(h, id, Summary("active-branch"));
 
-        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        h.Store.NoteLocalCommit(id);
 
         // Ahead means nothing without an upstream, and the toolbar already enables push as a publish.
         Assert.Equal(0, h.Store.For(id).Ahead);
@@ -415,7 +415,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         using var h = StartActive();
         var id = RepoId("active");
         Seed(h, id, Tracked(ahead: 0));
-        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        h.Store.NoteLocalCommit(id);
         Assert.Equal(1, h.Store.For(id).Ahead);
 
         // The bump stands in for the reload's answer; it never becomes part of it.
@@ -445,7 +445,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     {
         var gate = new GitReadGate();
         var head = new SettledHead();
-        return new(new IdleOperations(), new IdleIndexOperations(), _registry, git, new MessageBus(), gate, dispatcher, head, head);
+        return new(new IdleRemoteOperations(), new IdleIndexOperations(), _registry, git, new MessageBus(), gate, dispatcher, head, head);
     }
 
     // Two real repos with "active" made the active one, over a store wired to a counting GitService.
@@ -495,10 +495,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     {
         var path = Path.Combine(_root, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", branch);
-        Git(path, "config", "user.name", "Test");
-        Git(path, "config", "user.email", "test@example.com");
-        Git(path, "config", "commit.gpgsign", "false");
+        TestGit.Init(path, branch);
         File.WriteAllText(Path.Combine(path, "a.txt"), "0");
         Git(path, "add", "a.txt");
         Git(path, "commit", "-qm", "base");
@@ -509,45 +506,13 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     // reflects it. Failing here means no probe was produced at all, which is the regression.
     private void DrainUntil(Func<bool> done, string what) => DrainUntil(_dispatcher, done, what);
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose()
     {
         _store.Dispose();
         _registry.Dispose();
         DirectoryTree.Delete(_root);
-    }
-
-    // Collects posted work so the test thread decides when results land, mirroring how the real
-    // app drains the UI queue once per frame.
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 
     // A started RepoStatusStore wired to a counting GitService plus the bus it subscribes to, so a
@@ -564,33 +529,9 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         public CountingHarness(IRepoRegistry registry)
         {
             var head = new SettledHead();
-            Store = new RepoStatusStore(new IdleOperations(), new IdleIndexOperations(), registry, Git, Bus, Gate, Dispatcher, head, head);
+            Store = new RepoStatusStore(new IdleRemoteOperations(), new IdleIndexOperations(), registry, Git, Bus, Gate, Dispatcher, head, head);
         }
 
         public void Dispose() => Store.Dispose();
-    }
-
-    // No checkout ever in flight, so these tests keep measuring probes rather than HEAD motion.
-    private sealed class SettledHead : IRepoHeadStore, IRepoHeadConfirm
-    {
-        public RepoHead For(Guid repoId) => RepoHead.Settled;
-        public void Checkout(Repo repo, string branchName) { }
-        public void RunMove(Repo repo, string branchName, Func<GitOutcome> work, string? failureTitle = null) { }
-        public Action<bool> BeginMove(Repo repo, string branchName) => _ => { };
-        public void Confirm(Guid repoId) { }
-    }
-
-    private sealed class IdleOperations : IRepoOperationsStore
-    {
-        private readonly State<RepoOperations> _active = new(RepoOperations.Idle);
-
-        public IReadable<RepoOperations> Active => _active;
-        public bool HasUnseenError(Guid repoId) => false;
-        public bool IsBusy(Guid repoId) => false;
-        public void Push(Repo repo, bool force = false) { }
-        public void Pull(Repo repo, PullStrategy? strategy = null) { }
-        public void Fetch(Repo repo) { }
-        public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null) => Task.FromResult(RemoteOpResult.Ok);
-        public Task<RemoteOpResult> FetchAsync(Repo repo) => Task.FromResult(RemoteOpResult.Ok);
     }
 }

@@ -37,15 +37,13 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
         var shown = new List<ShowOperationErrorMessage>();
         _bus.Subscribe<ShowOperationErrorMessage>(shown.Add);
 
-        var closed = false;
         var vm = Build();
-        vm.CloseRequested += () => closed = true;
         vm.Url.Value = "git@github.com:series-ai/app.git";
         vm.ParentDir.Value = _root;
         RunClone(vm);
 
         Assert.Single(_registry.Repos);
-        Assert.True(closed);
+        Assert.True(_closed);
         Assert.Equal("post-checkout hook exited with 1", Assert.Single(shown).Message);
     }
 
@@ -88,11 +86,13 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
         Assert.Equal("Receiving objects: 100% (12/12), done.", GitProcessRunner.ErrorTail(captured));
     }
 
+    private bool _closed;
+
     private CloneRepoDialogViewModel Build()
     {
         var profiles = new IdentityProfileService(Array.Empty<IdentityProfile>(), Path.Combine(_root, "profiles.json"));
         var identity = new GitIdentityService(new StubReader(), profiles, _bus, _registry);
-        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc);
+        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc, () => _closed = true);
     }
 
     private void RunClone(CloneRepoDialogViewModel vm)
@@ -124,14 +124,5 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
         public GitOutcome Push(Repo repo, bool force = false) => GitOutcome.Ok;
         public PullOutcome Pull(Repo repo, PullStrategy? strategy = null) => PullOutcome.Ok;
         public GitOutcome Fetch(Repo repo) => GitOutcome.Ok;
-    }
-
-    private sealed class StubReader : IGitRawConfigReader
-    {
-        public bool IsRepoAvailable(string repoPath) => true;
-        public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => Array.Empty<string>();
-        public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
-        public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
     }
 }

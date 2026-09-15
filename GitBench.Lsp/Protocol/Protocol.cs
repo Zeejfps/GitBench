@@ -139,11 +139,14 @@ public abstract record Hover
     }
 }
 
+/// <summary>A place in a file, as a server reports one.</summary>
+public sealed record Location(DocumentUri Uri, LspRange Range);
+
 /// <summary>Where a symbol is declared, where in that file to put the cursor, and — in the link
 /// shape only — the span of the symbol that was asked about, back in the file the reader is
 /// looking at.</summary>
 public sealed record DefinitionLocation(
-    DocumentUri Uri, LspRange Range, LspRange EnclosingRange, LspRange? OriginRange = null);
+    DocumentUri Uri, LspRange Range, LspRange EnclosingRange, OptionalRange OriginRange);
 
 /// <summary>
 /// The answer to "go to definition". Three wire shapes — one location, an array of them, or an array
@@ -186,13 +189,15 @@ public abstract record Definition
                 var uri = Json.ReadUri(element, "targetUri");
                 var enclosing = Json.ReadRange(element.Require("targetRange"));
                 var selection = element.Optional("targetSelectionRange") is { } s ? Json.ReadRange(s) : enclosing;
-                var origin = element.Optional("originSelectionRange") is { } o ? Json.ReadRange(o) : (LspRange?)null;
+                var origin = element.Optional("originSelectionRange") is { } o
+                    ? OptionalRange.Of(Json.ReadRange(o))
+                    : OptionalRange.Absent;
                 return new DefinitionLocation(uri, selection, enclosing, origin);
             }
 
             var location = Json.ReadUri(element, "uri");
             var range = Json.ReadRange(element.Require("range"));
-            return new DefinitionLocation(location, range, range);
+            return new DefinitionLocation(location, range, range, OptionalRange.Absent);
         }
     }
 }
@@ -208,7 +213,7 @@ public abstract record References
 
     public sealed record None : References;
 
-    public sealed record Sites(IReadOnlyList<Documents.Location> Items) : References;
+    public sealed record Sites(IReadOnlyList<Location> Items) : References;
 
     public static readonly ILspResultReader<References> Reader = new ReferencesReader();
 
@@ -221,17 +226,17 @@ public abstract record References
             if (result.ValueKind != JsonValueKind.Array)
                 throw new LspParseException($"references must be an array or null, was {result.ValueKind}");
 
-            var sites = new List<Documents.Location>();
+            var sites = new List<Location>();
             foreach (var element in result.EnumerateArray()) sites.Add(ReadOne(element));
             return sites.Count == 0 ? new None() : new Sites(sites);
         }
 
-        private static Documents.Location ReadOne(JsonElement element)
+        private static Location ReadOne(JsonElement element)
         {
             if (element.ValueKind != JsonValueKind.Object)
                 throw new LspParseException($"a reference must be an object, was {element.ValueKind}");
 
-            return new Documents.Location(
+            return new Location(
                 Json.ReadUri(element, "uri"), Json.ReadRange(element.Require("range")));
         }
     }
@@ -305,7 +310,6 @@ internal static class ServerNotifications
     public static ServerNotification Read(LspMethod method, JsonElement parameters)
     {
         if (method == LspMethod.PublishDiagnostics) return ReadDiagnostics(parameters);
-        if (method == LspMethod.LogMessage) return ReadLog(parameters);
         return new ServerNotification.Other(method, parameters.Clone());
     }
 
@@ -348,19 +352,5 @@ internal static class ServerNotifications
         }
 
         return new ServerNotification.Diagnostics(uri, version, items);
-    }
-
-    private static ServerNotification ReadLog(JsonElement parameters)
-    {
-        var level = parameters.Optional("type") is { } t
-            ? t.AsCount("a log level") switch
-            {
-                1 => LogLevel.Error,
-                2 => LogLevel.Warning,
-                3 => LogLevel.Info,
-                _ => LogLevel.Log,
-            }
-            : LogLevel.Log;
-        return new ServerNotification.Log(level, parameters.RequireString("message"));
     }
 }

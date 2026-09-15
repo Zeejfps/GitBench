@@ -1,12 +1,8 @@
 using GitBench.Controls;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
-using GitBench.Features.Operations;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -25,29 +21,12 @@ internal sealed record MarkdownDocumentView : Widget
     /// which case only remote images show.</summary>
     public Prop<IMarkdownImageSource?> ImageSource { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx) => new ScrollRegion
     {
-        var pane = new VerticalScrollPane { FillParent = true, StretchContent = true };
-        pane.Children.Add(new FlexItem { Grow = 1, Child = Body().BuildView(ctx) });
-        pane.UseController(ctx.Require<InputSystem>(), () => new VerticalScrollPaneWheelController(pane));
-
-        var bar = ScrollBars.CreateVertical(ctx);
-        bar.IsVisible = false;
-        pane.ScrollPositionChanged += _ => bar.IsVisible = pane.Scale < 1f;
-
-        var container = new ContainerView();
-        container.Children.Add(new FlexRowView
-        {
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                new FlexItem { Grow = 1, Shrink = 1, Child = pane },
-                bar,
-            },
-        });
-        container.Use(() => new VerticalScrollBarSyncController(pane, bar));
-        return container;
-    }
+        Content = Body(),
+        FillParent = true,
+        StretchContent = true,
+    };
 
     private IWidget Body() => new MarkdownDocumentBody
     {

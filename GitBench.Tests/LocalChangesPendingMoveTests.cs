@@ -24,20 +24,6 @@ namespace GitBench.Tests;
 // chunks, each reconciled by its own reload, so the rows land in waves the user can watch.
 public sealed class LocalChangesPendingMoveTests : IDisposable
 {
-    private sealed class NoopShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
-    private sealed class NoopClipboard : IClipboard
-    {
-        public void SetText(string text) { }
-        public string? GetText() => null;
-    }
-
     private sealed class FakeSnapshotStore : IRepoSnapshotStore
     {
         public State<Fetched<LocalChangesData>?> LocalState { get; } = new(null);
@@ -92,8 +78,8 @@ public sealed class LocalChangesPendingMoveTests : IDisposable
         _indexOps = StartedIndexOperationsStore.Create(_registry, _bus, _loc, _dispatcher);
         _vm = new LocalChangesViewModel(
             _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), _bus,
-            _indexOps, new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
-            _preferences, _store, _loc, new NoUnsavedEdits());
+            _indexOps, new LocalChangesSelectionStore(), new FakeShell(), new FakeClipboard(),
+            _preferences, _store, new NoStatusIngest(), _loc, new NoUnsavedEdits());
         PushSnapshot();
     }
 

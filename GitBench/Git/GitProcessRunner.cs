@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using GitBench.Features.Repos;
@@ -39,7 +40,7 @@ internal sealed class GitProcessRunner
         // the whole context (file lists, hints) is useful.
         public string BlockError(string commandLabel)
         {
-            if (!Started) return "Failed to start git.";
+            if (!Started) return StartFailure;
             var msg = CombineGitOutput(Stderr, Stdout);
             return string.IsNullOrEmpty(msg) ? $"{commandLabel} exited with code {ExitCode}." : msg;
         }
@@ -47,9 +48,27 @@ internal sealed class GitProcessRunner
         // Single most-relevant line — for callers that show the error in a one-line banner.
         public string FirstLineError(string commandLabel)
         {
-            if (!Started) return "Failed to start git.";
+            if (!Started) return StartFailure;
             var msg = FirstMeaningfulLine(PreferredStream);
             return string.IsNullOrEmpty(msg) ? $"{commandLabel} exited with code {ExitCode}." : msg;
+        }
+
+        private string StartFailure => Stderr.Length == 0 ? "Failed to start git." : $"Failed to start git: {Stderr}";
+    }
+
+    // The one place a process that never ran becomes a result. Process.Start reports a missing
+    // executable or working directory as Win32Exception; nothing else it throws is recoverable.
+    private static Process? TryStart(ProcessStartInfo psi, out string failure)
+    {
+        failure = string.Empty;
+        try
+        {
+            return Process.Start(psi);
+        }
+        catch (Win32Exception ex)
+        {
+            failure = ex.Message;
+            return null;
         }
     }
 
@@ -74,8 +93,8 @@ internal sealed class GitProcessRunner
         }
         configure?.Invoke(psi);
 
-        using var proc = Process.Start(psi);
-        if (proc == null) return new GitResult(-1, string.Empty, string.Empty, Started: false);
+        using var proc = TryStart(psi, out var failure);
+        if (proc == null) return new GitResult(-1, string.Empty, failure, Started: false);
 
         // Read both streams concurrently so a full pipe buffer on either side can't deadlock.
         var stdoutTask = proc.StandardOutput.ReadToEndAsync();
@@ -106,7 +125,7 @@ internal sealed class GitProcessRunner
         using var _ = _activity.Begin(workingDir);
         var psi = BuildPsi(workingDir, args, prefix);
 
-        using var proc = Process.Start(psi);
+        using var proc = TryStart(psi, out var _);
         if (proc == null) return (-1, [], false, false);
 
         var stderrTask = proc.StandardError.ReadToEndAsync();
@@ -138,7 +157,7 @@ internal sealed class GitProcessRunner
         using var _ = _activity.Begin(workingDir);
         var psi = BuildPsi(workingDir, args, prefix);
 
-        using var proc = Process.Start(psi);
+        using var proc = TryStart(psi, out var _);
         if (proc == null) return (-1, string.Empty, false);
 
         var captured = new StringBuilder();
@@ -177,7 +196,7 @@ internal sealed class GitProcessRunner
     {
         var psi = new ProcessStartInfo
         {
-            FileName = GitExecutable(),
+            FileName = GitExecutable.Value,
             WorkingDirectory = workingDir,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -205,18 +224,7 @@ internal sealed class GitProcessRunner
     // Homebrew git (/opt/homebrew/bin/git, /usr/local/bin/git) is invisible to a bare
     // Process.Start("git"). Find it on the login shell's PATH, once, and reuse the
     // absolute path everywhere.
-    private static string? _gitExecutable;
-    private static readonly object _gitExecutableLock = new();
-
-    private static string GitExecutable()
-    {
-        if (_gitExecutable != null) return _gitExecutable;
-        lock (_gitExecutableLock)
-        {
-            _gitExecutable ??= ResolveGitExecutable();
-            return _gitExecutable;
-        }
-    }
+    private static readonly Lazy<string> GitExecutable = new(ResolveGitExecutable);
 
     private static string ResolveGitExecutable()
     {
@@ -252,7 +260,7 @@ internal sealed class GitProcessRunner
         {
             var psi = new ProcessStartInfo
             {
-                FileName = GitExecutable(),
+                FileName = GitExecutable.Value,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

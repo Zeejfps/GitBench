@@ -4,7 +4,7 @@ using ZGF.Observable;
 namespace GitBench.Features.Notifications;
 
 /// <summary>
-/// Projects <see cref="IToastService.Active"/> into a stable, keyed list for the slot's <c>Each</c> —
+/// Projects <see cref="ToastService.Active"/> into a stable, keyed list for the slot's <c>Each</c> —
 /// a chip's view model survives while its toast is on screen and is disposed when the toast expires.
 /// Holds no state of its own; the service is the source of truth.
 /// </summary>
@@ -15,7 +15,7 @@ internal sealed class ToastsViewModel : IDisposable
 
     public ObservableList<ToastItemViewModel> Items => _items.Items;
 
-    public ToastsViewModel(IToastService toasts)
+    public ToastsViewModel(ToastService toasts)
     {
         _onScreen = toasts.Active.Select(Newest);
         _items = new KeyedViewModelList<Toast, ToastId, ToastItemViewModel>(

@@ -10,7 +10,7 @@ namespace GitBench.Features.Identity;
 // selects it; edits persist on Save (offered whenever the form is named and differs from the stored
 // profile) and auto-save when the selection changes, so navigating the list never silently drops them.
 // Deleting always routes through an inline confirmation.
-internal sealed class IdentityProfileManagerDialogViewModel : IDialogViewModel
+internal sealed class IdentityProfileManagerDialogViewModel
 {
     private readonly IdentityProfileService _profiles;
     private readonly string _newProfileName;
@@ -39,8 +39,6 @@ internal sealed class IdentityProfileManagerDialogViewModel : IDialogViewModel
 
     public AsyncCommand Save { get; }
     public Command Add { get; }
-
-    public event Action? CloseRequested;
 
     public IdentityProfileManagerDialogViewModel(
         Guid? initialProfileId,
@@ -179,10 +177,5 @@ internal sealed class IdentityProfileManagerDialogViewModel : IDialogViewModel
         SshKeyPath.Value = p?.SshKeyPath ?? string.Empty;
         MatchHost.Value = rule?.Host ?? string.Empty;
         MatchOwner.Value = rule?.Owner ?? string.Empty;
-    }
-
-    public void Dispose()
-    {
-        CloseRequested = null;
     }
 }

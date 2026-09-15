@@ -29,12 +29,14 @@ internal sealed record RemoveWorktreeDialog : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = new RemoveWorktreeDialogViewModel(
-            new RemoveWorktreeRequest(Primary, Worktree),
+            Primary,
+            Worktree,
             ctx.Require<IGitWorktreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IPlatformShell>(),
-            ctx.Localization());
+            ctx.Localization(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
 
@@ -82,19 +84,13 @@ internal sealed record RemoveWorktreeDialog : Widget
         {
             Title = s.WorktreesRemoveTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Action = (s.WorktreesRemoveAction, DialogButtonRole.Destructive),
             Command = vm.Remove,
             ErrorRecovery = vm.UnlockRecoveryFor,
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.WorktreesRemoveConfirm(Worktree.DisplayName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.WorktreesRemoveConfirm(Worktree.DisplayName) },
                 pathBox,
                 new CheckboxWidget
                 {

@@ -1,3 +1,6 @@
+using GitBench.Lsp.Configuration;
+using GitBench.Lsp.Lifecycle;
+
 namespace GitBench.Lsp.Documents;
 
 /// <summary>The version a pushed result claims. Servers are allowed to omit it, and most do, so
@@ -36,13 +39,7 @@ public abstract record PreviewContent
     public sealed record CutShort : PreviewContent;
 }
 
-public sealed record PreviewFile(DocumentUri Uri, LanguageId Language, PreviewContent Content);
-
-public enum SkipReason
-{
-    NoServerForLanguage,
-    PreviewTruncated,
-}
+public sealed record PreviewFile(DocumentUri Uri, PreviewContent Content);
 
 /// <summary>What the pane is holding. Diagnostics live inside <see cref="Open"/> because there is
 /// no such thing as diagnostics for a document that is not open — closing drops them with the
@@ -55,7 +52,8 @@ public abstract record DocumentState
 
     public sealed record Nothing : DocumentState;
 
-    public sealed record NotSent(SkipReason Reason) : DocumentState;
+    /// <summary>The preview cut the file short, so the server was never told about it.</summary>
+    public sealed record Truncated : DocumentState;
 
     public sealed record Open(DocumentUri Uri, DocumentVersion Version, DiagnosticsState Diagnostics)
         : DocumentState;
@@ -75,114 +73,40 @@ public abstract record DiagnosticsState
     public sealed record Received(IReadOnlyList<Diagnostic> Diagnostics) : DiagnosticsState;
 }
 
-/// <summary>Hover as the protocol sends it: content, and optionally the range it describes.</summary>
-public sealed record HoverReply(HoverPayload Content, OptionalRange Range);
-
-/// <summary>The answer a hover request produced. <see cref="Discarded"/> is not a failure — it is
-/// an answer that arrived after the selection moved, and applying it would put another file's
-/// tooltip on this one.</summary>
-public abstract record HoverAnswer
+/// <summary>
+/// What a server said about a symbol: where it is declared, and the span of the symbol itself back
+/// in the asking file when the server bothered to say. The span is what the link is drawn over —
+/// without it the caller falls back to the word it found on screen, which is right for every server
+/// and exact for the ones that answer about a qualified name rather than the word under the cursor.
+/// </summary>
+public sealed record DefinitionReply(IReadOnlyList<DefinitionTarget> Targets, OptionalRange Origin)
 {
-    private HoverAnswer() { }
-
-    public static readonly HoverAnswer Discarded = new Stale();
-
-    public static readonly HoverAnswer None = new Empty();
-
-    public sealed record Stale : HoverAnswer;
-
-    public sealed record Empty : HoverAnswer;
-
-    public sealed record Content(HoverText Text, LspRange Range) : HoverAnswer;
-
-    /// <summary>A hover with no range of its own anchors to the position that was asked about, so
-    /// the popup always has somewhere to point.</summary>
-    public static HoverAnswer For(HoverReply reply, LspPosition asked)
-    {
-        var markdown = HoverText.ToMarkdown(reply.Content);
-        if (markdown.Length == 0) return None;
-
-        var range = reply.Range is OptionalRange.Present present
-            ? present.Range
-            : LspRange.Empty(asked);
-        return new Content(new HoverText(markdown), range);
-    }
-}
-
-public abstract record DefinitionAnswer
-{
-    private DefinitionAnswer() { }
-
-    public static readonly DefinitionAnswer Discarded = new Stale();
-
-    public static readonly DefinitionAnswer NotFound = new Nowhere();
-
-    public sealed record Stale : DefinitionAnswer;
-
-    public sealed record Nowhere : DefinitionAnswer;
-
-    public sealed record Targets(IReadOnlyList<DefinitionTarget> Items, OptionalRange Origin)
-        : DefinitionAnswer;
+    public static readonly DefinitionReply Nothing = new([], OptionalRange.Absent);
 }
 
 /// <summary>
-/// The answer a references request produced. The three ways of having no sites to show are
-/// separate cases because they are three different sentences: a symbol nothing uses, a file that
-/// left the screen before the answer arrived, and a server that would not answer the question.
-/// Only the first is a zero.
+/// Where a symbol is used, the declaration itself excluded — so the number of sites is the number
+/// a reader is shown.
 /// </summary>
-public abstract record ReferenceAnswer
+/// <remarks>
+/// A symbol nothing uses and a question that could not be put are held apart, rather than both
+/// arriving as an empty list, because the count is shown as a sentence about the code: "no usages"
+/// over a symbol whose server never started says the code is dead, which is the one thing this
+/// feature must never say by accident. <see cref="Answered"/> with an empty list is the real zero.
+/// </remarks>
+public abstract record ReferenceReply
 {
-    private ReferenceAnswer() { }
+    private ReferenceReply() { }
 
-    public static readonly ReferenceAnswer Discarded = new Stale();
+    /// <summary>Nobody could be asked: no server for the file, a server that does not answer the
+    /// question, one that never finished starting, a file it could not be shown — or a file that
+    /// left the screen before the answer arrived.</summary>
+    public sealed record Unavailable : ReferenceReply
+    {
+        public static readonly Unavailable Instance = new();
+    }
 
-    public static readonly ReferenceAnswer NotFound = new Nowhere();
-
-    public static readonly ReferenceAnswer NoAnswer = new Refused();
-
-    public sealed record Stale : ReferenceAnswer;
-
-    public sealed record Nowhere : ReferenceAnswer;
-
-    /// <summary>The server was asked and did not answer — starting, failed, or unable at this
-    /// position. Never a count.</summary>
-    public sealed record Refused : ReferenceAnswer;
-
-    public sealed record Sites(IReadOnlyList<DefinitionTarget> Items) : ReferenceAnswer;
-}
-
-/// <summary>What the session needs from a running server, and nothing more.</summary>
-public interface ILanguageClient
-{
-    /// <summary>Whether any configured server claims this language. False is the whole cost of the
-    /// feature when the user has no config file.</summary>
-    bool Handles(LanguageId language);
-
-    void OpenDocument(DocumentUri uri, LanguageId language, DocumentVersion version, string text);
-
-    void CloseDocument(DocumentUri uri);
-
-    Task<HoverReply> HoverAsync(DocumentUri uri, LspPosition position, CancellationToken cancel);
-
-    Task<DefinitionPayload> DefinitionAsync(DocumentUri uri, LspPosition position, CancellationToken cancel);
-
-    /// <summary>
-    /// Every use of the symbol at a position, the declaration excluded — or null where the server
-    /// did not answer at all.
-    /// </summary>
-    /// <remarks>
-    /// An empty list and a refusal are held apart here, unlike everywhere else in this interface,
-    /// because this answer is shown to a reader as a number. A server that is still starting, or
-    /// has failed, refuses every question; counting those refusals as zero puts "no usages" over
-    /// live code, which reads as a statement that it is dead.
-    /// </remarks>
-    Task<IReadOnlyList<Location>?> ReferencesAsync(
-        DocumentUri uri, LspPosition position, CancellationToken cancel);
-
-    /// <summary>Diagnostics are pushed, repeatedly, seconds apart, for as long as a document is
-    /// open.</summary>
-    event Action<PublishedDiagnostics>? DiagnosticsPublished;
+    public sealed record Answered(IReadOnlyList<DefinitionTarget> Sites) : ReferenceReply;
 }
 
 /// <summary>
@@ -193,19 +117,31 @@ public interface ILanguageClient
 /// </summary>
 public sealed class PreviewSession : IDisposable
 {
-    private readonly ILanguageClient _client;
+    private readonly ILanguageServerQuestions _server;
+    private readonly LanguageServerEntry _entry;
     private readonly RepoBoundary _boundary;
+    private readonly AskAgainPolicy _retry;
+    private readonly Func<TimeSpan, CancellationToken, Task> _wait;
+    private readonly CancellationTokenSource _closing = new();
 
     private DocumentState _state = DocumentState.Idle;
     private string _openText = string.Empty;
     private DocumentVersion _nextVersion = new(1);
     private CancellationTokenSource? _requests;
 
-    public PreviewSession(ILanguageClient client, RepoBoundary boundary)
+    public PreviewSession(
+        ILanguageServerQuestions server,
+        LanguageServerEntry entry,
+        RepoBoundary boundary,
+        AskAgainPolicy retry,
+        Func<TimeSpan, CancellationToken, Task> wait)
     {
-        _client = client;
+        _server = server;
+        _entry = entry;
         _boundary = boundary;
-        _client.DiagnosticsPublished += OnDiagnosticsPublished;
+        _retry = retry;
+        _wait = wait;
+        _server.DiagnosticsPublished += OnDiagnosticsPublished;
     }
 
     public DocumentState State => _state;
@@ -226,15 +162,9 @@ public sealed class PreviewSession : IDisposable
 
         CloseOpenDocument();
 
-        if (!_client.Handles(file.Language))
-        {
-            Publish(new DocumentState.NotSent(SkipReason.NoServerForLanguage));
-            return;
-        }
-
         if (file.Content is not PreviewContent.Complete complete)
         {
-            Publish(new DocumentState.NotSent(SkipReason.PreviewTruncated));
+            Publish(new DocumentState.Truncated());
             return;
         }
 
@@ -242,7 +172,7 @@ public sealed class PreviewSession : IDisposable
         _nextVersion = _nextVersion.Next();
         _openText = complete.Text;
         _requests = new CancellationTokenSource();
-        _client.OpenDocument(file.Uri, file.Language, version, complete.Text);
+        _ = _server.OpenAsync(file.Uri, _entry.Language, version, complete.Text, _closing.Token);
         Publish(new DocumentState.Open(file.Uri, version, DiagnosticsState.Pending));
     }
 
@@ -253,73 +183,90 @@ public sealed class PreviewSession : IDisposable
         Publish(DocumentState.Idle);
     }
 
-    public async Task<HoverAnswer> HoverAsync(LspPosition position)
+    /// <summary>What the server says about a position, as markdown — or null when it said nothing,
+    /// or the answer arrived for a file that has since left the screen.</summary>
+    public async Task<HoverText?> HoverAsync(LspPosition position)
     {
-        if (Asking() is not (var uri, var version, var cancel)) return HoverAnswer.Discarded;
+        if (Asking() is not (var uri, var version, var cancel)) return null;
 
-        HoverReply reply;
-        try
-        {
-            reply = await _client.HoverAsync(uri, position, cancel).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
-        {
-            return HoverAnswer.Discarded;
-        }
-
-        return StillShowing(uri, version) ? HoverAnswer.For(reply, position) : HoverAnswer.Discarded;
+        var response = await AskAsync(LspRequests.Hover(uri, position), cancel).ConfigureAwait(false);
+        return StillShowing(uri, version) && response is LspResponse<Hover>.Ok(var hover)
+            ? HoverText.Of(hover)
+            : null;
     }
 
-    public async Task<DefinitionAnswer> DefinitionAsync(LspPosition position)
+    public async Task<DefinitionReply> DefinitionAsync(LspPosition position)
     {
-        if (Asking() is not (var uri, var version, var cancel)) return DefinitionAnswer.Discarded;
+        if (Asking() is not (var uri, var version, var cancel)) return DefinitionReply.Nothing;
 
-        DefinitionPayload payload;
-        try
-        {
-            payload = await _client.DefinitionAsync(uri, position, cancel).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
-        {
-            return DefinitionAnswer.Discarded;
-        }
+        var response = await AskAsync(LspRequests.Definition(uri, position), cancel).ConfigureAwait(false);
+        if (!StillShowing(uri, version)) return DefinitionReply.Nothing;
+        if (response is not LspResponse<Definition>.Ok(Definition.Targets targets)) return DefinitionReply.Nothing;
 
-        if (!StillShowing(uri, version)) return DefinitionAnswer.Discarded;
-
-        var targets = DefinitionTargets.From(payload, _boundary);
-        return targets.Count == 0
-            ? DefinitionAnswer.NotFound
-            : new DefinitionAnswer.Targets(targets, DefinitionTargets.OriginOf(payload));
+        // The selection range is the name; the enclosing range is the whole declaration with its
+        // doc comment and attributes above it. Landing on the name is what the user asked for. The
+        // origin is read off the first target only: several targets for one symbol are alternative
+        // declarations of the same span, and a reader can only be pointing at one thing.
+        return new DefinitionReply(
+            targets.Items.Select(item => _boundary.Classify(item.Uri, item.Range.Start)).ToArray(),
+            targets.Items[0].OriginRange);
     }
 
-    public async Task<ReferenceAnswer> ReferencesAsync(LspPosition position)
+    /// <summary>
+    /// Every use of the symbol at a position, the declaration excluded. Only an Ok is an answer: a
+    /// server still starting, or one that has failed, refuses every question the same way, and a
+    /// refusal counted as zero would be drawn as "no usages" over code that is used.
+    /// </summary>
+    public async Task<ReferenceReply> ReferencesAsync(LspPosition position)
     {
-        if (Asking() is not (var uri, var version, var cancel)) return ReferenceAnswer.Discarded;
+        if (Asking() is not (var uri, var version, var cancel)) return ReferenceReply.Unavailable.Instance;
 
-        IReadOnlyList<Location>? locations;
-        try
+        var response = await AskAsync(
+                LspRequests.References(uri, position, includeDeclaration: false), cancel)
+            .ConfigureAwait(false);
+        if (!StillShowing(uri, version)) return ReferenceReply.Unavailable.Instance;
+
+        return response switch
         {
-            locations = await _client.ReferencesAsync(uri, position, cancel).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
-        {
-            return ReferenceAnswer.Discarded;
-        }
-
-        if (!StillShowing(uri, version)) return ReferenceAnswer.Discarded;
-        if (locations is null) return ReferenceAnswer.NoAnswer;
-        if (locations.Count == 0) return ReferenceAnswer.NotFound;
-
-        return new ReferenceAnswer.Sites(
-            locations.Select(site => _boundary.Classify(site.Uri, site.Range.Start)).ToArray());
+            LspResponse<References>.Ok(References.Sites sites) => new ReferenceReply.Answered(
+                sites.Items.Select(site => _boundary.Classify(site.Uri, site.Range.Start)).ToArray()),
+            LspResponse<References>.Ok => new ReferenceReply.Answered([]),
+            _ => ReferenceReply.Unavailable.Instance,
+        };
     }
 
     public void Dispose()
     {
-        _client.DiagnosticsPublished -= OnDiagnosticsPublished;
+        if (_closing.IsCancellationRequested) return;
+        _server.DiagnosticsPublished -= OnDiagnosticsPublished;
         CloseOpenDocument();
+        _closing.Cancel();
+        _closing.Dispose();
         _state = DocumentState.Idle;
         StateChanged = null;
+    }
+
+    /// <summary>
+    /// Asks, asking again while the server says it is not ready. A request that outlives the
+    /// source it was handed — closed underneath it on the way to the transport — reads as the
+    /// cancellation it means rather than as a thrown object-disposed.
+    /// </summary>
+    private async Task<LspResponse<T>> AskAsync<T>(LspRequest<T> request, CancellationToken cancel)
+    {
+        try
+        {
+            return await AskAgain
+                .AskAsync(
+                    token => _server.AskAsync(request, _entry.RequestTimeout, token),
+                    _retry,
+                    _wait,
+                    cancel)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
+        {
+            return new LspResponse<T>.Cancelled();
+        }
     }
 
     private bool StillShowing(DocumentUri uri, DocumentVersion version) =>
@@ -377,7 +324,7 @@ public sealed class PreviewSession : IDisposable
             requests.Cancel();
             requests.Dispose();
         }
-        if (_state is DocumentState.Open open) _client.CloseDocument(open.Uri);
+        if (_state is DocumentState.Open open) _ = _server.CloseAsync(open.Uri, _closing.Token);
         _openText = string.Empty;
     }
 }

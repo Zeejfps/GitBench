@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Theming;
 
@@ -10,20 +11,21 @@ namespace GitBench.Tests;
 /// tree-sitter only when it has a query, and every other path — an unbundled language, a file
 /// tree-sitter refuses — still lands on TextMate rather than on plain text.
 /// </summary>
-[Collection(nameof(TreeSitterHighlightCollection))]
-public class RoutedSyntaxHighlighterTests(TreeSitterHighlightFixture fixture)
+[Collection(nameof(CodeIntelCollection))]
+public class RoutedSyntaxHighlighterTests(CodeIntelFixture fixture)
 {
+    private static readonly FileLanguage CSharp = new FileLanguage.TreeSitter(CodeLanguage.CSharp);
+
     [Fact]
     public void ABundledLanguageIsColoredByTheParser()
     {
         var textMate = new RecordingHighlighter();
         var routed = new RoutedSyntaxHighlighter(fixture.Highlighter, textMate);
 
-        var spans = routed.Highlight("class Box { void Run() { } }", "csharp");
+        var spans = routed.Highlight("class Box { void Run() { } }", CSharp);
 
         Assert.NotNull(spans);
         Assert.Equal(0, textMate.Calls);
-        Assert.True(routed.RoutesToTreeSitter("csharp"));
     }
 
     [Fact]
@@ -34,12 +36,10 @@ public class RoutedSyntaxHighlighterTests(TreeSitterHighlightFixture fixture)
 
         // The two that spent a phase on TextMate: their queries are almost entirely injections, so
         // routing them was the injection engine landing rather than a query being written.
-        routed.Highlight("# heading\n\n**bold**\n\n```json\n{ \"a\": 1 }\n```", "markdown");
-        routed.Highlight("<p class=\"x\">hi</p>\n<script>const a = 1;</script>", "html");
+        routed.Highlight("# heading\n\n**bold**\n\n```json\n{ \"a\": 1 }\n```", new FileLanguage.TreeSitter(CodeLanguage.Markdown));
+        routed.Highlight("<p class=\"x\">hi</p>\n<script>const a = 1;</script>", new FileLanguage.TreeSitter(CodeLanguage.Html));
 
         Assert.Equal(0, textMate.Calls);
-        Assert.True(routed.RoutesToTreeSitter("markdown"));
-        Assert.True(routed.RoutesToTreeSitter("html"));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class RoutedSyntaxHighlighterTests(TreeSitterHighlightFixture fixture)
         var textMate = new RecordingHighlighter();
         var routed = new RoutedSyntaxHighlighter(fixture.Highlighter, textMate);
 
-        routed.Highlight("let x = 1", "fsharp");
+        routed.Highlight("let x = 1", new FileLanguage.TextMate("fsharp"));
 
         Assert.Equal(1, textMate.Calls);
     }
@@ -61,10 +61,10 @@ public class RoutedSyntaxHighlighterTests(TreeSitterHighlightFixture fixture)
         var textMate = new RecordingHighlighter();
         var routed = new RoutedSyntaxHighlighter(fixture.Highlighter, textMate);
 
-        var overCap = new string('a', TreeSitterSyntaxHighlighter.MaxFileBytes + 1);
-        Assert.Null(fixture.Highlighter.Highlight(overCap, "csharp"));
+        var overCap = new string('a', ParseText.MaxFileBytes + 1);
+        Assert.Null(fixture.Highlighter.Highlight(overCap, CodeLanguage.CSharp));
 
-        var spans = routed.Highlight(overCap, "csharp");
+        var spans = routed.Highlight(overCap, CSharp);
 
         Assert.Equal(1, textMate.Calls);
         Assert.NotNull(spans);
@@ -73,23 +73,19 @@ public class RoutedSyntaxHighlighterTests(TreeSitterHighlightFixture fixture)
     [Fact]
     public void BothEnginesDecliningIsTheOnlyWayToRenderPlain()
     {
-        var routed = new RoutedSyntaxHighlighter(fixture.Highlighter, new NullHighlighter());
-        Assert.Null(routed.Highlight("x", "nonsense-language"));
+        var routed = new RoutedSyntaxHighlighter(fixture.Highlighter, new PlainText());
+        Assert.Null(routed.Highlight("x", new FileLanguage.TextMate("nonsense-language")));
+        Assert.Null(routed.Highlight("x", FileLanguage.None.Instance));
     }
 
     private sealed class RecordingHighlighter : ISyntaxHighlighter
     {
         public int Calls { get; private set; }
 
-        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, string languageId)
+        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language)
         {
             Calls++;
             return [[new TokenSpan(0, 1, TokenColorSlot.Keyword)]];
         }
-    }
-
-    private sealed class NullHighlighter : ISyntaxHighlighter
-    {
-        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, string languageId) => null;
     }
 }

@@ -297,13 +297,6 @@ public class DiffSelectionRemapViewTests(CodeIntelFixture fixture)
             "file.cs", lines, new HashSet<int>(), DiffSide.WorkingTree, Truncated: false);
     }
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
     private (GuiTestHarness Harness, DiffContentView View, FakeClipboard Clipboard) DiffView()
     {
         var (h, view, clipboard) = Create();

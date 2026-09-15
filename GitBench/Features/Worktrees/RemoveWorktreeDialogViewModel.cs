@@ -8,7 +8,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Worktrees;
 
-internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
+internal sealed class RemoveWorktreeDialogViewModel
 {
     private readonly IGitWorktreeOperations _gitService;
     private readonly Repo _primary;
@@ -22,21 +22,21 @@ internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
 
     public AsyncCommand Remove { get; }
 
-    public event Action? CloseRequested;
-
     public RemoveWorktreeDialogViewModel(
-        RemoveWorktreeRequest request,
+        Repo primary,
+        Repo worktree,
         IGitWorktreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IPlatformShell shell,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        Action onClose)
     {
         _gitService = gitService;
-        _primary = request.Primary;
-        _worktreePath = request.Worktree.Path;
+        _primary = primary;
+        _worktreePath = worktree.Path;
         _strings = loc.Strings.Value;
-        var primaryId = request.Primary.Id;
+        var primaryId = primary.Id;
 
         Remove = AsyncCommand.ForOutcome(
             dispatcher,
@@ -54,7 +54,7 @@ internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
                         _strings.WorktreesRemovedWithLeftovers(left.Path, left.Reason),
                         new ToastAction(_strings.WorktreesLeftoversOpenAction, () => shell.OpenFolder(left.Path)))));
 
-                CloseRequested?.Invoke();
+                onClose();
             });
     }
 
@@ -73,8 +73,4 @@ internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
             _strings.WorktreesUnlockedStatus,
             () => _gitService.UnlockWorktree(_primary, _worktreePath).FailureMessage);
     }
-
-    public void Dispose() { }
 }
-
-internal readonly record struct RemoveWorktreeRequest(Repo Primary, Repo Worktree);

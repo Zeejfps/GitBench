@@ -61,8 +61,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public IReadable<string?> BusyBranch { get; }
     public IReadable<string?> SyncingBranch { get; }
     public IReadable<string?> SyncedBranch { get; }
-    public IReadable<string?> LoadError { get; }
-    public IReadable<bool> IsLoading { get; }
     public IReadable<IReadOnlySet<string>> WorktreeBranches { get; }
 
     /// <summary>Angle for the badge spinner; bind a row's spinner glyph to it.</summary>
@@ -78,8 +76,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     // The error message shown in place of the list (null unless a load failed); paired with
     // ContentKind, which selects list vs. loading skeleton vs. this message.
-    public IReadable<string?> PlaceholderText => _placeholderText;
-    public IReadable<BranchesContentKind> ContentKind => _contentKind;
+    public IReadable<string?> PlaceholderText { get; }
+    public IReadable<BranchesContentKind> ContentKind { get; }
 
     // The branch a checkout is switching to, or null once HEAD has settled. Projected from the head
     // store via the status store rather than written here, so the row that renders it and the toolbar
@@ -98,8 +96,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private readonly Derived<IReadOnlyList<BranchRow>> _rowModels;
     private readonly KeyedViewModelList<BranchRow, BranchRow, BranchRow> _rows;
-    private readonly Derived<string?> _placeholderText;
-    private readonly Derived<BranchesContentKind> _contentKind;
     private readonly Derived<string?> _pendingHead;
     private readonly IUnsavedEditsGuard _unsavedEdits;
 
@@ -135,16 +131,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _syncMark.Completed += () => Update(s => s with { SyncedBranch = null });
 
         _branchOpGen = CreateLane();
-        _stashGen = CreateLane();
+        _stashGen = CreateLane(exclusive: true);
 
-        Listing = Slice(s => s.Listing);
+        Listing = Slice(s => (s.Listing as Fetched<BranchListing>.Ok)?.Value);
         Ui = Slice(s => s.Ui);
         Selection = Slice(s => s.Selection);
         BusyBranch = Slice(s => s.BusyBranch);
         SyncingBranch = Slice(s => s.SyncingBranch);
         SyncedBranch = Slice(s => s.SyncedBranch);
-        LoadError = Slice(s => s.LoadError);
-        IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
 
         // Reading the status store here — rather than carrying HEAD's counts in the listing — is what
@@ -153,14 +147,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             () => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value, status.Active.Value));
         _rows = new KeyedViewModelList<BranchRow, BranchRow, BranchRow>(_rowModels, r => r, r => r);
         _pendingHead = new Derived<string?>(() => status.Active.Value.PendingBranchName);
-        _placeholderText = new Derived<string?>(() =>
-            LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err) : null);
-        // Loading shows the skeleton (no text); a failure shows the message; otherwise — listed, or no
-        // repo yet — the tree (empty when there's nothing to list), matching the prior behavior.
-        _contentKind = new Derived<BranchesContentKind>(() =>
-            LoadError.Value != null ? BranchesContentKind.Message
-            : Listing.Value == null && IsLoading.Value ? BranchesContentKind.Loading
-            : BranchesContentKind.List);
+        PlaceholderText = Slice(s =>
+            s.Listing is Fetched<BranchListing>.Failed failed ? _loc.Strings.Value.BranchesLoadError(failed.Message) : null);
+        ContentKind = Slice(s => s.Listing switch
+        {
+            null => BranchesContentKind.Loading,
+            Fetched<BranchListing>.Failed => BranchesContentKind.Message,
+            _ => BranchesContentKind.List,
+        });
 
         // The listing is projected from the store (which owns loading + caching). OnActiveRepoChanged
         // handles only the per-repo UI bits (fold state, worktree set, selection reset).
@@ -168,7 +162,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Subscriptions.Add(store.Branches.Subscribe(OnStoreBranches));
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
         Subscriptions.Add(_bus.SubscribeScoped<CheckoutRequestedMessage>(OnCheckoutRequested));
-        Subscriptions.Add(_bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged));
         Subscriptions.Add(_registry.WorktreesChanged.Subscribe(_ => RefreshWorktreeBranches()));
 
         // Row badges spin off the operations store (push/pull/fetch) and our own fast-forward, so
@@ -231,8 +224,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             _syncSpinner.Stop();
     }
 
-    private void OnWorktreesChanged(WorktreesChangedMessage _) => RefreshWorktreeBranches();
-
     // Checkout requests raised elsewhere (history badge clicks) funnel into the same activation
     // paths as sidebar double-clicks, so every guard applies identically.
     private void OnCheckoutRequested(CheckoutRequestedMessage msg)
@@ -260,15 +251,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             Update(s => s.WorktreeBranches.Count == 0 ? s : s with { WorktreeBranches = EmptyStringSet });
             return;
         }
-        var primaryId = active.ParentRepoId ?? active.Id;
-
         var set = new HashSet<string>(StringComparer.Ordinal);
         foreach (var r in _registry.Repos)
         {
             if (r.Id == active.Id) continue;
             if (r.IsSubmodule) continue;
-            var rootId = r.ParentRepoId ?? r.Id;
-            if (rootId != primaryId) continue;
+            if (r.PrimaryId != active.PrimaryId) continue;
             // Repo.Branch is populated from `git worktree list` by WorktreeSyncService for
             // both the primary and its worktrees. Detached HEADs leave it null and produce
             // no marker (correct: there's no branch name to take).
@@ -294,9 +282,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
 
         var ui = _registry.GetBranchesUi(active.Id);
-        // Listing/IsLoading/LoadError are driven by the store subscription (OnStoreBranches);
-        // here we only refresh the per-repo UI fold state, drop the previous repo's selection,
-        // and recompute the worktree-branch set. Listing is deliberately left untouched.
+        // Listing is driven by the store subscription (OnStoreBranches); here we only refresh the
+        // per-repo UI fold state, drop the previous repo's selection, and recompute the
+        // worktree-branch set. Listing is deliberately left untouched.
         // SyncedBranch is dropped rather than carried: the mark belongs to the repo whose operation
         // earned it, and a same-named branch here didn't. PendingHead needs no reset — it's the head
         // store's per-repo value, which swaps with the active repo on its own.
@@ -305,25 +293,25 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     }
 
     // Projection of the store's branch slice. null means no data for the active repo yet
-    // (switching / cache miss) → show "Loading…"; a non-null listing is applied as before.
+    // (switching / cache miss) → show "Loading…".
     private void OnStoreBranches(Fetched<BranchListing>? fetched)
     {
         switch (fetched)
         {
             case null:
                 if (_registry.Active.Value == null) return; // no repo → OnActiveRepoChanged sets Initial
-                Update(s => s with { Listing = null, IsLoading = true, LoadError = null });
+                Update(s => s with { Listing = null });
                 return;
-            case Fetched<BranchListing>.Failed failed:
+            case Fetched<BranchListing>.Failed:
             {
                 var hadSelection = State.Value.Selection != null;
-                Update(s => s with { Listing = null, IsLoading = false, LoadError = failed.Message, Selection = null });
+                Update(s => s with { Listing = fetched, Selection = null });
                 if (hadSelection)
                     _bus.Broadcast(new CommitSelectedMessage(_activeRepoId, null));
                 return;
             }
             case Fetched<BranchListing>.Ok ok:
-                ApplyListing(ok.Value);
+                ApplyListing(ok);
                 return;
         }
     }
@@ -337,8 +325,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Update(s => s with { Selection = null });
     }
 
-    private void ApplyListing(BranchListing listing)
+    private void ApplyListing(Fetched<BranchListing>.Ok ok)
     {
+        var listing = ok.Value;
         var hadSelection = State.Value.Selection != null;
         Update(s =>
         {
@@ -349,13 +338,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             if (selection.HasValue && !RefStillExists(selection.Value, listing))
                 selection = null;
 
-            return s with
-            {
-                Listing = listing,
-                LoadError = null,
-                IsLoading = false,
-                Selection = selection,
-            };
+            return s with { Listing = ok, Selection = selection };
         });
 
         // Tell the commits panel to drop its tip highlight only when a branch selection we were
@@ -422,7 +405,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     public void SetRemotesSubtreeOpen(bool open)
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return;
         MutateUi(ui =>
         {
@@ -453,7 +436,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private RemoteGroup? FindRemote(string remoteName)
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return null;
         foreach (var rg in listing.Remotes)
             if (rg.Name == remoteName) return rg;
@@ -463,14 +446,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private IEnumerable<string>? BranchNamesIn(BranchScope scope)
     {
         if (!scope.IsRemote)
-            return State.Value.Listing?.LocalBranches.Select(b => b.Name);
+            return Listing.Value?.LocalBranches.Select(b => b.Name);
         return FindRemote(scope.RemoteName!)?.Branches.Select(b => b.Name);
     }
 
     // True when the Remotes section has at least one remote, so its menu can hide the
     // Expand/Collapse-All items where they'd be no-ops.
     private bool RemotesHaveCollapsibles()
-        => State.Value.Listing is { } listing && listing.Remotes.Count > 0;
+        => Listing.Value is { } listing && listing.Remotes.Count > 0;
 
     // True when the folder holds at least one branch (directly or nested), so the menu hides
     // Expand/Collapse-All where it'd be a no-op. A named folder always qualifies (folders only
@@ -567,13 +550,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     {
         var active = _registry.Active.Value;
         if (active is null || active.IsSubmodule) return;
-        var primaryId = active.ParentRepoId ?? active.Id;
         foreach (var r in _registry.Repos)
         {
             if (r.Id == active.Id) continue;
             if (r.IsSubmodule) continue;
-            var rootId = r.ParentRepoId ?? r.Id;
-            if (rootId != primaryId) continue;
+            if (r.PrimaryId != active.PrimaryId) continue;
             if (string.Equals(r.Branch, branchName, StringComparison.Ordinal))
             {
                 _registry.SetActive(r.Id);
@@ -621,8 +602,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private void ApplyStashNow(Repo repo, int index, string label, string subject, bool offerDrop)
     {
-        TryRunOutcome(
-            _stashGen,
+        RunBackground(
             work: () => _gitStash.ApplyStash(repo, index),
             onResult: outcome =>
             {
@@ -647,12 +627,13 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                         Subject = subject,
                         OnClose = onClose,
                     }));
-            });
+            },
+            lane: _stashGen);
     }
 
     private bool LocalBranchExists(string name)
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return false;
         foreach (var b in listing.LocalBranches)
             if (string.Equals(b.Name, name, StringComparison.Ordinal)) return true;
@@ -684,7 +665,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         var bus = _bus;
 
-        RunOutcome(
+        RunBackground(
             work: () => _gitBranches.FastForwardBranch(repo, branchName, remoteName, remoteBranch),
             onResult: outcome =>
             {
@@ -758,7 +739,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private bool FolderHasCleanCandidates(BranchFolder folder)
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return false;
         var worktree = State.Value.WorktreeBranches;
         foreach (var b in listing.LocalBranches)
@@ -768,7 +749,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private IReadOnlyList<CleanBranchCandidate> BuildCleanCandidates(BranchFolder folder)
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return Array.Empty<CleanBranchCandidate>();
         var worktree = State.Value.WorktreeBranches;
         var result = new List<CleanBranchCandidate>();
@@ -811,7 +792,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // whenever there's at least one stash (the header row only renders in that case).
     public IReadOnlyList<RepoBarContextMenu.Item> BuildStashesHeaderMenuItems()
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null || listing.Stashes.Count == 0) return Array.Empty<RepoBarContextMenu.Item>();
         return ExpandCollapseMenu(() => SetStashesSectionOpen(true), () => SetStashesSectionOpen(false));
     }
@@ -1154,7 +1135,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private string? GetHeadBranchName()
     {
         if (_pendingHead.Value is { } pending) return pending;
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return null;
         foreach (var b in listing.LocalBranches)
             if (b is LocalBranchEntry.Head) return b.Name;
@@ -1163,7 +1144,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private LocalBranchEntry? FindLocalBranchEntry(string name)
     {
-        var listing = State.Value.Listing;
+        var listing = Listing.Value;
         if (listing == null) return null;
         foreach (var b in listing.LocalBranches)
             if (b.Name == name) return b;
@@ -1214,8 +1195,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _syncMark.Dispose();
         _rows.Dispose();
         _rowModels.Dispose();
-        _placeholderText.Dispose();
-        _contentKind.Dispose();
         _pendingHead.Dispose();
         base.Dispose();
     }
@@ -1230,7 +1209,8 @@ internal enum BranchesContentKind
 }
 
 internal sealed record BranchesState(
-    BranchListing? Listing,
+    // null while the active repo's branches have not arrived yet.
+    Fetched<BranchListing>? Listing,
     BranchesUiState Ui,
     BranchSelection? Selection,
     string? BusyBranch,
@@ -1239,8 +1219,6 @@ internal sealed record BranchesState(
     string? SyncingBranch,
     // The branch that just went in sync, held for the mark's lifetime (Transitions.SyncMarkSeconds).
     string? SyncedBranch,
-    bool IsLoading,
-    string? LoadError,
     IReadOnlySet<string> WorktreeBranches)
 {
     public static BranchesState Initial { get; } = new(
@@ -1250,7 +1228,5 @@ internal sealed record BranchesState(
         BusyBranch: null,
         SyncingBranch: null,
         SyncedBranch: null,
-        IsLoading: false,
-        LoadError: null,
         WorktreeBranches: new HashSet<string>());
 }

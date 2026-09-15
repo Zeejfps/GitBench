@@ -26,8 +26,8 @@ public abstract record CommitsRenderState
 ///
 /// The load flow is generation-guarded through <see cref="ViewModelBase{TState}.RunBackground"/>
 /// so stale loads (repo switched, newer reload) never clobber fresher state. The reset, move,
-/// and apply flows each run exclusively on their own lane via TryRunBackground/TryRunOutcome,
-/// kept off the load generation so a repo-switch reload never drops their results.
+/// and apply flows each run on their own exclusive lane, kept off the load generation so a
+/// repo-switch reload never drops their results.
 /// </summary>
 internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 {
@@ -103,9 +103,9 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         _loc = loc;
         _preferences = preferences;
 
-        _resetGen = CreateLane();
-        _moveGen = CreateLane();
-        _applyGen = CreateLane();
+        _resetGen = CreateLane(exclusive: true);
+        _moveGen = CreateLane(exclusive: true);
+        _applyGen = CreateLane(exclusive: true);
 
         Render = Slice(s => s.Render);
         SelectedSha = Slice(s => s.SelectedSha);
@@ -192,34 +192,32 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
         // All git I/O happens in work; onResult only dispatches UI. The probe decides between an
         // immediate hard reset (clean tree) and prompting for the reset mode (dirty tree).
-        TryRunBackground<ResetProbe>(
-            _resetGen,
+        RunBackground(
             work: () => ProbeReset(repo, sha),
-            onResult: (probe, error) => OnResetProbed(probe, error, repo, sha, snap));
+            onResult: probe => OnResetProbed(probe, repo, sha, snap),
+            lane: _resetGen);
     }
 
-    private (ResetProbe?, string?) ProbeReset(Repo repo, string sha)
+    private ResetProbe ProbeReset(Repo repo, string sha)
     {
-        var fetched = _gitStatus.GetLocalChanges(repo);
-        if (fetched is Fetched<LocalChangesSnapshot>.Failed failed)
-            return (new ResetProbe.Failed(failed.Message), null);
-
-        var changes = ((Fetched<LocalChangesSnapshot>.Ok)fetched).Value;
-        var staged = changes.Staged.Count;
-        var unstaged = changes.Unstaged.Count;
-        if (staged == 0 && unstaged == 0)
-            return (new ResetProbe.CleanReset(_gitBranches.ResetCurrent(repo, sha, ResetMode.Hard)), null);
-        return (new ResetProbe.NeedsDialog(staged, unstaged), null);
+        switch (_gitStatus.GetLocalChanges(repo))
+        {
+            case Fetched<LocalChangesSnapshot>.Failed failed:
+                return new ResetProbe.Failed(failed.Message);
+            case Fetched<LocalChangesSnapshot>.Ok { Value: var changes }:
+                var staged = changes.Staged.Count;
+                var unstaged = changes.Unstaged.Count;
+                if (staged == 0 && unstaged == 0)
+                    return new ResetProbe.CleanReset(_gitBranches.ResetCurrent(repo, sha, ResetMode.Hard));
+                return new ResetProbe.NeedsDialog(staged, unstaged);
+            default:
+                throw new System.Diagnostics.UnreachableException();
+        }
     }
 
-    private void OnResetProbed(ResetProbe? probe, string? error, Repo repo, string sha, CommitSnapshot snap)
+    private void OnResetProbed(ResetProbe probe, Repo repo, string sha, CommitSnapshot snap)
     {
         var strings = _loc.Strings.Value;
-        if (error != null)
-        {
-            _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, error));
-            return;
-        }
         switch (probe)
         {
             case ResetProbe.Failed f:
@@ -326,20 +324,19 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var capturedBranch = branchName;
         var capturedSha = sha;
 
-        TryRunBackground<MoveBranchProbe>(
-            _moveGen,
-            work: () => (_gitHistory.IsAncestor(capturedRepo, capturedBranch, capturedSha)
+        RunBackground<Fetched<MoveBranchProbe>>(
+            work: () => _gitHistory.IsAncestor(capturedRepo, capturedBranch, capturedSha)
                 ? MoveBranchProbe.FastForward
-                : MoveBranchProbe.NeedsConfirm, null),
-            onResult: (probe, error) =>
+                : MoveBranchProbe.NeedsConfirm,
+            onResult: probe =>
             {
                 var strings = _loc.Strings.Value;
-                if (error != null)
+                if (probe is Fetched<MoveBranchProbe>.Failed failed)
                 {
-                    _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetBranchFailed, error));
+                    _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetBranchFailed, failed.Message));
                     return;
                 }
-                if (probe == MoveBranchProbe.FastForward)
+                if (probe is Fetched<MoveBranchProbe>.Ok { Value: MoveBranchProbe.FastForward })
                 {
                     _head.RunMove(
                         capturedRepo,
@@ -415,8 +412,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var capturedRepo = repo;
         var capturedSha = sha;
 
-        TryRunOutcome(
-            _applyGen,
+        RunBackground(
             work: () => op(capturedRepo, capturedSha),
             onResult: outcome =>
             {
@@ -427,12 +423,16 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                 }
                 _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-            });
+            },
+            lane: _applyGen);
     }
 
     // Outcome of the off-thread reset probe, handed from work to onResult above.
-    private abstract record ResetProbe
+    private abstract record ResetProbe : IOutcome<ResetProbe>
     {
+        public static ResetProbe Fail(string message) => new Failed(message);
+        public string? FailureMessage => (this as Failed)?.Message;
+
         public sealed record Failed(string Message) : ResetProbe;
         public sealed record CleanReset(GitOutcome Outcome) : ResetProbe;
         public sealed record NeedsDialog(int Staged, int Unstaged) : ResetProbe;
@@ -466,7 +466,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     public void ToggleRemoteOnlyFilter()
     {
         var hide = !State.Value.HideRemoteOnly;
-        _preferences.SetHideRemoteOnlyBranches(hide);
+        _preferences.Update(p => p with { HideRemoteOnlyBranches = hide });
         Update(s => s with { HideRemoteOnly = hide });
         if (_snapshot != null) ApplyProjection(_snapshot, State.Value.Query);
     }
@@ -551,38 +551,36 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         if (_renderedRepoId != activeId) ClearSelectionAndBroadcast(_renderedRepoId);
         _renderedRepoId = activeId;
 
-        if (fetched is Fetched<CommitSnapshot>.Failed failed)
+        switch (fetched)
         {
-            // Drop any prior good snapshot so the next reload shows "Loading…" not a stale graph.
-            _snapshot = null;
-            _rendered = null;
-            _remoteFilterSource = null;
-            _remoteFilterResult = null;
-            Update(s => s with { Render = new CommitsRenderState.Error(failed.Message) });
-        }
-        else
-        {
-            var snap = ((Fetched<CommitSnapshot>.Ok)fetched).Value;
-            _snapshot = snap;
-            // Re-apply the active filter so a soft refresh / reload keeps the user's query.
-            ApplyProjection(snap, State.Value.Query);
-            // Selection survives only if the commit still exists in the new snapshot
-            // (e.g. it may have been pruned by a rebase or reset).
-            var selected = State.Value.SelectedSha;
-            if (selected != null && !SnapshotContainsSha(snap, selected))
-                ClearSelectionAndBroadcast(snap.RepoId);
+            case Fetched<CommitSnapshot>.Failed failed:
+                // Drop any prior good snapshot so the next reload shows "Loading…" not a stale graph.
+                _snapshot = null;
+                _rendered = null;
+                _remoteFilterSource = null;
+                _remoteFilterResult = null;
+                Update(s => s with { Render = new CommitsRenderState.Error(failed.Message) });
+                break;
+            case Fetched<CommitSnapshot>.Ok { Value: var snap }:
+                _snapshot = snap;
+                // Re-apply the active filter so a soft refresh / reload keeps the user's query.
+                ApplyProjection(snap, State.Value.Query);
+                // Selection survives only if the commit still exists in the new snapshot
+                // (e.g. it may have been pruned by a rebase or reset).
+                var selected = State.Value.SelectedSha;
+                if (selected != null && !SnapshotContainsSha(snap, selected))
+                    ClearSelectionAndBroadcast(snap.RepoId);
 
-            // With nothing selected (fresh load, repo switch, or the prior selection just
-            // pruned), default to the commit HEAD points at so the details panel opens on
-            // something instead of the empty "select a commit" placeholder.
-            if (State.Value.SelectedSha == null)
-            {
-                var headSha = FindHeadSha(snap);
-                if (headSha != null) SelectCommit(headSha);
-            }
+                // With nothing selected (fresh load, repo switch, or the prior selection just
+                // pruned), default to the commit HEAD points at so the details panel opens on
+                // something instead of the empty "select a commit" placeholder.
+                if (State.Value.SelectedSha == null)
+                {
+                    var headSha = FindHeadSha(snap);
+                    if (headSha != null) SelectCommit(headSha);
+                }
+                break;
         }
-
-        _bus.Broadcast(new CommitsLoadedMessage(activeId ?? Guid.Empty));
     }
 
     // Broadcasts against the given repo (the one the cleared selection belonged to), which is

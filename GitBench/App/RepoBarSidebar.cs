@@ -40,7 +40,7 @@ internal sealed record RepoBarSidebar : Widget
                     MinResizeWidth = 220f,
                     OnWidthChanged = width =>
                     {
-                        preferences.SetRepoBarWidth(width);
+                        preferences.Update(p => p with { RepoBarWidth = width });
                         host.SetRestingWidth(width);
                     },
                     OnSplitterDoubleClick = collapse.Toggle,

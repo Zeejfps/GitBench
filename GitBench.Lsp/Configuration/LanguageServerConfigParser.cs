@@ -208,12 +208,6 @@ static class LanguageServerConfigParser
             return null;
         }
 
-        if (RawObject(element, "settings", out var settings) is false)
-        {
-            Skip("'settings' must be an object.");
-            return null;
-        }
-
         if (Milliseconds(element, "requestTimeoutMs", TimeSpan.FromSeconds(5)) is not { } requestTimeout)
         {
             Skip("'requestTimeoutMs' must be a number of milliseconds above zero.");
@@ -228,7 +222,7 @@ static class LanguageServerConfigParser
 
         return new LanguageServerEntry(
             language, command, args, extensions, markers, environment,
-            initialization, settings, requestTimeout, idleShutdown);
+            initialization, requestTimeout, idleShutdown);
     }
 
     static bool? Bool(JsonElement parent, string name, bool defaultValue)

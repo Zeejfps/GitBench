@@ -15,13 +15,13 @@ internal sealed class BranchRowController : KeyboardMouseController
 {
     private const int DoubleClickThresholdMs = 400;
 
-    private readonly IBranchRowInteraction _target;
+    private readonly BranchRowState _target;
     private readonly Context _context;
     private int _lastClickTickMs;
     private bool _hasLastClick;
     private bool _armed;
 
-    public BranchRowController(IBranchRowInteraction target, Context context)
+    public BranchRowController(BranchRowState target, Context context)
     {
         _target = target;
         _context = context;

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -22,8 +21,10 @@ public sealed class CreateWorktreeDialogViewModelTests
 
     private static readonly string Root = OperatingSystem.IsWindows() ? "C:\\" : "/";
 
+    private bool _closed;
+
     private CreateWorktreeDialogViewModel Vm(params string[] existingDirectories)
-        => new(new CreateWorktreeRequest(_primary), _git, _dispatcher, _bus, _loc,
+        => new(_primary, _git, _dispatcher, _bus, _loc, () => _closed = true,
             p => existingDirectories.Contains(p));
 
     private static readonly string Parent = Path.Combine(Root, "repos");
@@ -127,11 +128,9 @@ public sealed class CreateWorktreeDialogViewModelTests
         _bus.Subscribe<ShowOperationErrorMessage>(errors.Add);
 
         var vm = Vm();
-        var closed = false;
-        vm.CloseRequested += () => closed = true;
         Run(vm);
 
-        Assert.True(closed);
+        Assert.True(_closed);
         Assert.Single(refreshed);
         Assert.Null(vm.Create.Error.Value);
         Assert.Equal("fatal: could not read Username", Assert.Single(errors).Message);
@@ -166,17 +165,5 @@ public sealed class CreateWorktreeDialogViewModelTests
         public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => WorktreeRemoveOutcome.Ok;
         public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => GitOutcome.Ok;
         public GitOutcome PruneWorktrees(Repo primary) => GitOutcome.Ok;
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

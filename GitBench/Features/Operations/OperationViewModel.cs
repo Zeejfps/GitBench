@@ -65,7 +65,7 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         _bus = bus;
         _loc = loc;
         _spinner = new SpinnerAnimation(ticker);
-        _continueLane = CreateLane();
+        _continueLane = CreateLane(exclusive: true);
 
         IsActive = Slice(s => s.Operation is not null);
         Operation = Slice(s => s.Operation);
@@ -114,8 +114,7 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
 
         var service = _gitIntegration;
         var bus = _bus;
-        var started = TryRunOutcome(
-            _continueLane,
+        var started = RunBackground(
             () => skip ? service.SkipOperation(repo, op.Kind) : service.ContinueOperation(repo, op.Kind),
             outcome =>
             {
@@ -137,7 +136,8 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
                         bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                         break;
                 }
-            });
+            },
+            _continueLane);
         if (started) _spinner.Start();
     }
 
@@ -152,16 +152,12 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
 
         var repoId = repo.Id;
         var status = _gitStatus;
-        RunBackground<RepoOperation?>(
-            () =>
-            {
-                try { return (status.GetOperation(repo), null); }
-                catch { return (null, null); }
-            },
-            (op, _) =>
+        RunBackground<Fetched<RepoOperation?>>(
+            () => status.GetOperation(repo),
+            fetched =>
             {
                 if (_registry.Active.Value?.Id != repoId) return;
-                Update(_ => new OperationVmState(op));
+                Update(_ => new OperationVmState((fetched as Fetched<RepoOperation?>.Ok)?.Value));
             });
     }
 

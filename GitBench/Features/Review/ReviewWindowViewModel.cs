@@ -267,20 +267,14 @@ internal sealed partial class ReviewWindowViewModel : ViewModelBase<ReviewState>
         _baseSwitching.Value = true;
         _details.EnterLoading();
         var session = EffectiveSession();
-        RunBackground<ReviewStack>(
-            work: () => (_source.LoadAsync(session, StackCap).GetAwaiter().GetResult(), null),
-            onResult: (stack, error) =>
+        RunBackground(
+            work: LoadStack,
+            onResult: fetched =>
             {
-                if (error != null)
+                if (fetched is not Fetched<ReviewStack>.Ok { Value: { Increments.Count: > 0 } stack })
                 {
                     _baseSwitching.Value = false;
-                    Update(s => s with { Render = new ReviewRenderState.Placeholder(error) });
-                    return;
-                }
-                if (stack == null || stack.Increments.Count == 0)
-                {
-                    _baseSwitching.Value = false;
-                    Update(s => s with { Render = new ReviewRenderState.Placeholder(_loc.Strings.Value.ReviewEmptyRange) });
+                    Update(s => s with { Render = new ReviewRenderState.Placeholder(PlaceholderFor(fetched)) });
                     return;
                 }
 
@@ -453,23 +447,13 @@ internal sealed partial class ReviewWindowViewModel : ViewModelBase<ReviewState>
     {
         Update(s => s with { Render = new ReviewRenderState.Loading() });
         var session = EffectiveSession();
-        RunBackground<ReviewStack>(
-            // The source is async by contract; bridging through RunBackground's worker keeps the
-            // proven staleness/dispatcher handling.
-            work: () => (_source.LoadAsync(session, StackCap).GetAwaiter().GetResult(), null),
-            onResult: (stack, error) =>
+        RunBackground(
+            work: LoadStack,
+            onResult: fetched =>
             {
-                if (error != null)
+                if (fetched is not Fetched<ReviewStack>.Ok { Value: { Increments.Count: > 0 } stack })
                 {
-                    Update(s => s with { Render = new ReviewRenderState.Placeholder(error) });
-                    return;
-                }
-                if (stack == null || stack.Increments.Count == 0)
-                {
-                    Update(s => s with
-                    {
-                        Render = new ReviewRenderState.Placeholder(_loc.Strings.Value.ReviewEmptyRange),
-                    });
+                    Update(s => s with { Render = new ReviewRenderState.Placeholder(PlaceholderFor(fetched)) });
                     return;
                 }
 
@@ -485,15 +469,21 @@ internal sealed partial class ReviewWindowViewModel : ViewModelBase<ReviewState>
     private void Reload()
     {
         var session = EffectiveSession();
-        RunBackground<ReviewStack>(
-            work: () => (_source.LoadAsync(session, StackCap).GetAwaiter().GetResult(), null),
-            onResult: (stack, error) =>
+        RunBackground(
+            work: LoadStack,
+            onResult: fetched =>
             {
-                if (error != null || stack == null) return;
-                ApplyReloadedStack(stack);
+                if (fetched is Fetched<ReviewStack>.Ok ok) ApplyReloadedStack(ok.Value);
             },
             lane: _reloadLane);
     }
+
+    // The source is async by contract; bridging through RunBackground's worker keeps the
+    // proven staleness/dispatcher handling.
+    private Fetched<ReviewStack> LoadStack() => _source.LoadAsync(EffectiveSession(), StackCap).GetAwaiter().GetResult();
+
+    private string PlaceholderFor(Fetched<ReviewStack> fetched)
+        => fetched is Fetched<ReviewStack>.Failed failed ? failed.Message : _loc.Strings.Value.ReviewEmptyRange;
 
     private void ApplyReloadedStack(ReviewStack stack)
     {

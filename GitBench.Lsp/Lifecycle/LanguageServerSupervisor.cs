@@ -7,9 +7,9 @@ namespace GitBench.Lsp.Lifecycle;
 /// at most the configured number alive, restarts what crashes until that stops being worth doing,
 /// and stops what nothing is looking at.
 /// </summary>
-public sealed class LanguageServerSupervisor : IDisposable
+public sealed class LanguageServerSupervisor<TProcess> : IDisposable where TProcess : class, ILanguageServerProcess
 {
-    readonly ILanguageServerLauncher _launcher;
+    readonly ILanguageServerLauncher<TProcess> _launcher;
     readonly IClock _clock;
     readonly SupervisorPolicy _policy;
     readonly Dictionary<(RepositoryId Repo, LanguageId Language), ServerRecord> _servers = [];
@@ -21,7 +21,7 @@ public sealed class LanguageServerSupervisor : IDisposable
     Repository? _active;
     bool _disposed;
 
-    public LanguageServerSupervisor(ILanguageServerLauncher launcher, IClock clock, SupervisorPolicy? policy = null)
+    public LanguageServerSupervisor(ILanguageServerLauncher<TProcess> launcher, IClock clock, SupervisorPolicy? policy = null)
     {
         _launcher = launcher;
         _clock = clock;
@@ -109,42 +109,19 @@ public sealed class LanguageServerSupervisor : IDisposable
         return Start(active, entry, root, filePath).State;
     }
 
-    /// <summary>Where a file's server stands, without starting anything.</summary>
-    public ServerState StateFor(string filePath)
-    {
-        var entry = _config.ServerFor(filePath);
-        if (entry is null) return new ServerState.NotConfigured();
-        if (_active is not { } active) return new ServerState.Stopped();
-        return StateFor(active.Id, entry.Language);
-    }
-
     /// <summary>
     /// The process currently attached to a server, or null when nothing is running for it — it is
     /// stopped, waiting to be restarted, or given up on. Null is the whole point: a caller cannot
     /// hold a handle to a server the supervisor has since replaced.
     /// </summary>
-    public ILanguageServerProcess? ProcessFor(RepositoryId repository, LanguageId language) =>
+    public TProcess? ProcessFor(RepositoryId repository, LanguageId language) =>
         _servers.TryGetValue((repository, language), out var record) ? record.Link?.Process : null;
 
+    /// <summary>Where a server stands, without starting anything.</summary>
     public ServerState StateFor(RepositoryId repository, LanguageId language) =>
         _servers.TryGetValue((repository, language), out var record)
             ? record.State
             : new ServerState.Stopped();
-
-    /// <summary>
-    /// The user asking again after a failure. The only way a given-up server comes back, which is
-    /// what makes giving up safe.
-    /// </summary>
-    public ServerState Retry(string filePath)
-    {
-        if (_config.ServerFor(filePath) is { } entry &&
-            _active is { } active &&
-            _servers.TryGetValue((active.Id, entry.Language), out var record) &&
-            record.State is ServerState.Failed)
-            Discard(record);
-
-        return OpenFile(filePath);
-    }
 
     /// <summary>
     /// Stops one server on request. It is not banned: the next file of its language starts it
@@ -264,7 +241,7 @@ public sealed class LanguageServerSupervisor : IDisposable
 
         switch (_launcher.Launch(new ServerLaunchRequest(record.Entry, record.Root, record.RepoRoot)))
         {
-            case LaunchResult.Started started:
+            case LaunchResult<TProcess>.Started started:
                 // Wired up and marked starting before anything is listened to. A process that has
                 // already failed — a binary that exits at once, a handshake refused in the first
                 // millisecond — replays its exit the instant a handler is added, and the handler
@@ -279,17 +256,15 @@ public sealed class LanguageServerSupervisor : IDisposable
                 link.Listen();
                 break;
 
-            case LaunchResult.Failed failed:
+            case LaunchResult<TProcess>.Failed failed:
                 SetState(record, new ServerState.Failed(failed.Reason));
                 break;
         }
     }
 
-    Attachment Attach(ServerRecord record, ILanguageServerProcess process)
-    {
-        var link = new Attachment { Process = process };
-
-        link.OnReadiness = readiness =>
+    Attachment Attach(ServerRecord record, TProcess process) => new(
+        process,
+        readiness =>
         {
             if (!ReferenceEquals(record.Link?.Process, process)) return;
             record.LastSignal = _clock.Now;
@@ -301,23 +276,19 @@ public sealed class LanguageServerSupervisor : IDisposable
                     ? record.State
                     : new ServerState.Starting(),
             });
-        };
-
-        link.OnExited = exit =>
+        },
+        exit =>
         {
             if (!ReferenceEquals(record.Link?.Process, process)) return;
             record.Link = null;
             process.Dispose();
             OnCrashed(record, exit);
-        };
-
-        return link;
-    }
+        });
 
     /// <summary>
     /// The process ended. That is the end of it: a server stops for a reason that starting it again
     /// does not change, so the reason is reported and the server stays stopped until the reader
-    /// asks for it back. <see cref="Retry"/> is that ask.
+    /// asks for it back. <see cref="RestartServer"/> is that ask.
     /// </summary>
     void OnCrashed(ServerRecord record, ServerExit exit) =>
         SetState(record, new ServerState.Failed(
@@ -373,14 +344,9 @@ public sealed class LanguageServerSupervisor : IDisposable
         BeginShutdown(link.Process);
     }
 
-    void BeginShutdown(ILanguageServerProcess process)
+    void BeginShutdown(TProcess process)
     {
-        var stopping = new Stopping
-        {
-            Process = process,
-            Deadline = _clock.Now + _policy.ShutdownGrace,
-        };
-        stopping.OnExited = _ => Forget(stopping);
+        var stopping = new Stopping(this, process, _clock.Now + _policy.ShutdownGrace);
         process.Exited += stopping.OnExited;
         _stopping.Add(stopping);
 
@@ -398,7 +364,7 @@ public sealed class LanguageServerSupervisor : IDisposable
     {
         public RepositoryId Repo;
         public LanguageId Language;
-        public LanguageServerEntry Entry = null!;
+        public required LanguageServerEntry Entry;
         public string RepoRoot = string.Empty;
         public string Root = string.Empty;
         public string TriggerFile = string.Empty;
@@ -408,32 +374,32 @@ public sealed class LanguageServerSupervisor : IDisposable
         public DateTimeOffset LastSignal;
     }
 
-    sealed class Attachment
+    sealed class Attachment(TProcess process, Action<ServerReadiness> onReadiness, Action<ServerExit> onExited)
     {
-        public ILanguageServerProcess Process = null!;
-        public Action<ServerReadiness> OnReadiness = null!;
-        public Action<ServerExit> OnExited = null!;
+        public TProcess Process => process;
 
         /// <summary>Starts listening. Separate from building the attachment because a process that
         /// has already ended announces it during the subscription itself, and everything the
         /// handlers read has to be in place before that can happen.</summary>
         public void Listen()
         {
-            Process.ReadinessChanged += OnReadiness;
-            Process.Exited += OnExited;
+            process.ReadinessChanged += onReadiness;
+            process.Exited += onExited;
         }
 
         public void Detach()
         {
-            Process.ReadinessChanged -= OnReadiness;
-            Process.Exited -= OnExited;
+            process.ReadinessChanged -= onReadiness;
+            process.Exited -= onExited;
         }
     }
 
-    sealed class Stopping
+    sealed class Stopping(LanguageServerSupervisor<TProcess> owner, TProcess process, DateTimeOffset deadline)
     {
-        public ILanguageServerProcess Process = null!;
-        public Action<ServerExit> OnExited = null!;
-        public DateTimeOffset Deadline;
+        public TProcess Process => process;
+
+        public DateTimeOffset Deadline => deadline;
+
+        public void OnExited(ServerExit _) => owner.Forget(this);
     }
 }

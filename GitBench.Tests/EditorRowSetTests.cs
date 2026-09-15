@@ -338,9 +338,9 @@ public sealed class EditorRowSetTests
         return taken;
     }
 
-    private static Revised<EditorAnnotations> Parsed(
+    private static Revised<DiffAnnotations> Parsed(
         TextDocument document, DiffHighlight? highlight = null, FileOutline? outline = null) =>
-        new(DocumentRevision.Of(document), new EditorAnnotations(highlight, outline));
+        new(DocumentRevision.Of(document), new DiffAnnotations(highlight, outline, null));
 
     private static ILocalizationService Loc() => new LocalizationService(new State<Locale>(Locale.En));
 }

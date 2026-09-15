@@ -88,9 +88,7 @@ internal static class MarkdownImageParagraph
 /// </summary>
 internal sealed class MarkdownImageView : View
 {
-    private static int _nextId;
-
-    private readonly string _imageId = $"markdown-image:{Interlocked.Increment(ref _nextId)}";
+    private readonly UploadedImage _image = new();
     private readonly IMarkdownImageLoader _loader;
     private readonly IMarkdownImageSource? _source;
     private readonly string _src;
@@ -98,8 +96,6 @@ internal sealed class MarkdownImageView : View
 
     private ImageFrame? _frame;
     private IDisposable? _load;
-    private ICanvas? _canvas;
-    private bool _uploaded;
 
     public MarkdownImageView(IMarkdownImageLoader loader, IMarkdownImageSource? source, string src, Action onFailed)
     {
@@ -141,11 +137,8 @@ internal sealed class MarkdownImageView : View
 
     protected override void OnDrawSelf(ICanvas c)
     {
-        _canvas = c;
         if (_frame is not { } frame) return;
-        if (!_uploaded)
-            _uploaded = c.CreateOrUpdateRgbaImage(_imageId, frame.Width, frame.Height, frame.Rgba);
-        if (!_uploaded) return;
+        if (!_image.Ensure(c, frame)) return;
 
         var bounds = Position;
         var (width, height) = Fit(frame.Width, frame.Height, bounds.Width);
@@ -153,7 +146,7 @@ internal sealed class MarkdownImageView : View
         c.DrawImage(new DrawImageInputs
         {
             Position = new RectF(bounds.Left, bounds.Bottom + bounds.Height - height, width, height),
-            ImageId = _imageId,
+            ImageId = _image.Id,
             ZIndex = GetDrawZIndex(),
             TintColor = 0xFFFFFFFF,
             Rotation = 0f,
@@ -173,7 +166,7 @@ internal sealed class MarkdownImageView : View
             return;
         }
         _frame = frame;
-        _uploaded = false;
+        _image.Invalidate();
         SetDirty();
     }
 
@@ -181,8 +174,7 @@ internal sealed class MarkdownImageView : View
     {
         _load?.Dispose();
         _load = null;
-        if (_uploaded) _canvas?.RemoveImage(_imageId);
-        _uploaded = false;
+        _image.Release();
     }
 
     private sealed class Lifetime : IViewBehavior

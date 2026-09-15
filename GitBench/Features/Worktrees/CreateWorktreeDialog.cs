@@ -26,11 +26,12 @@ internal sealed record CreateWorktreeDialog : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = new CreateWorktreeDialogViewModel(
-            new CreateWorktreeRequest(Primary),
+            Primary,
             ctx.Require<IGitWorktreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<ILocalizationService>());
+            ctx.Require<ILocalizationService>(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
         var browseButton = new SecondaryDialogButton
@@ -44,7 +45,6 @@ internal sealed record CreateWorktreeDialog : Widget
         {
             Title = s.WorktreesCreateTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Action = (s.CommonCreate, DialogButtonRole.Primary),
             Command = vm.Create,
             Body =
@@ -98,8 +98,7 @@ internal sealed record CreateWorktreeDialog : Widget
 
     private static void PickPath(Context ctx, CreateWorktreeDialogViewModel vm)
     {
-        var picker = ctx.Get<IFilePicker>();
-        picker?.PickFolder(
+        ctx.Require<IFilePicker>().PickFolder(
             ctx.Localization().Strings.Value.WorktreesCreatePickerTitle,
             WorktreePathDefaults.NearestExistingDirectory(vm.ParentDir.Value, Directory.Exists),
             picked => vm.ParentDir.Value = picked);
