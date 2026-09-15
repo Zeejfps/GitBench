@@ -40,7 +40,7 @@ internal sealed record ReviewWalkthroughRail : Widget
                     new WalkthroughRailHeader { Model = Model },
                     new Grow
                     {
-                        Child = new DialogScrollRegion
+                        Child = new ScrollRegion
                         {
                             FillParent = true,
                             Content = new Padding

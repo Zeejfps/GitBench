@@ -41,6 +41,8 @@ internal sealed class DiffListScroll
 
     public event Action<float>? HorizontalScrollPositionChanged;
 
+    public bool HasTarget => _pendingY != null;
+
     public void SetTarget(float y)
     {
         _pendingY = y;

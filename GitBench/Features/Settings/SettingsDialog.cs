@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -65,7 +66,7 @@ internal sealed record SettingsDialog : Widget<DialogState>
                             },
                             new Grow
                             {
-                                Child = new DialogScrollRegion
+                                Child = new ScrollRegion
                                 {
                                     FillParent = true,
                                     Content = new Padding

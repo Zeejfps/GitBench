@@ -42,7 +42,7 @@ public sealed record ResizableSidebar : Widget
         splitter.BindThemedBackgroundColor(ctx.Theme(), s =>
             splitterHovered.Value ? s.SidebarSplitter.Hover : s.SidebarSplitter.Idle);
 
-        var sidebar = new SidebarView(Content.BuildView(ctx), splitter, InitialWidth, MinResizeWidth, MaxResizeWidth)
+        var sidebar = new ResizableSidebarView(Content.BuildView(ctx), splitter, InitialWidth, MinResizeWidth, MaxResizeWidth)
         {
             WidthChanged = OnWidthChanged,
             SplitterAtInlineStart = Edge == SidebarEdge.Trailing,
@@ -57,66 +57,66 @@ public sealed record ResizableSidebar : Widget
 
         return sidebar;
     }
+}
 
-    private sealed class SidebarView : ContainerView
+internal sealed class ResizableSidebarView : ContainerView
+{
+    private const float SplitterThickness = 5f;
+
+    private readonly View _content;
+    private readonly View _splitter;
+    private readonly float _minWidth;
+    private readonly float _maxWidth;
+
+    public Action<float>? WidthChanged { get; init; }
+    public bool SplitterAtInlineStart { get; init; }
+
+    public ResizableSidebarView(View content, View splitter, float initialWidth, float minWidth, float maxWidth)
     {
-        private const float SplitterThickness = 5f;
+        _content = content;
+        _splitter = splitter;
+        _minWidth = minWidth;
+        _maxWidth = maxWidth;
+        Width = Math.Clamp(initialWidth, _minWidth, _maxWidth);
+        AddChildToSelf(_content);
+        AddChildToSelf(_splitter);
+    }
 
-        private readonly View _content;
-        private readonly View _splitter;
-        private readonly float _minWidth;
-        private readonly float _maxWidth;
+    // The inline-end edge is the right one under LTR; the inline-start edge is the right one under RTL.
+    private bool SplitterOnRight => SplitterAtInlineStart == IsRtl;
 
-        public Action<float>? WidthChanged { get; init; }
-        public bool SplitterAtInlineStart { get; init; }
+    // Dragging the splitter toward the main content grows the sidebar. With the splitter on the
+    // right a rightward move (positive dx) grows it; on the left the sense flips. Clamping keeps the
+    // sidebar usable at both extremes (it can't disappear or eat the main view).
+    public void AdjustWidthByPixels(float dx)
+    {
+        var signed = SplitterOnRight ? dx : -dx;
+        var newWidth = Math.Clamp((float)Width + signed, _minWidth, _maxWidth);
+        if (Math.Abs(newWidth - (float)Width) < 0.5f) return;
+        Width = newWidth;
+        WidthChanged?.Invoke(newWidth);
+    }
 
-        public SidebarView(View content, View splitter, float initialWidth, float minWidth, float maxWidth)
-        {
-            _content = content;
-            _splitter = splitter;
-            _minWidth = minWidth;
-            _maxWidth = maxWidth;
-            Width = Math.Clamp(initialWidth, _minWidth, _maxWidth);
-            AddChildToSelf(_content);
-            AddChildToSelf(_splitter);
-        }
+    protected override void OnLayoutChildren()
+    {
+        var pos = Position;
+        if (pos.Width <= 0f || pos.Height <= 0f) return;
 
-        // The inline-end edge is the right one under LTR; the inline-start edge is the right one under RTL.
-        private bool SplitterOnRight => SplitterAtInlineStart == IsRtl;
+        var contentWidth = Math.Max(0f, pos.Width - SplitterThickness);
+        var onRight = SplitterOnRight;
+        var contentLeft = onRight ? pos.Left : pos.Left + SplitterThickness;
+        var splitterLeft = onRight ? pos.Left + contentWidth : pos.Left;
 
-        // Dragging the splitter toward the main content grows the sidebar. With the splitter on the
-        // right a rightward move (positive dx) grows it; on the left the sense flips. Clamping keeps the
-        // sidebar usable at both extremes (it can't disappear or eat the main view).
-        public void AdjustWidthByPixels(float dx)
-        {
-            var signed = SplitterOnRight ? dx : -dx;
-            var newWidth = Math.Clamp((float)Width + signed, _minWidth, _maxWidth);
-            if (Math.Abs(newWidth - (float)Width) < 0.5f) return;
-            Width = newWidth;
-            WidthChanged?.Invoke(newWidth);
-        }
+        _content.LeftConstraint = contentLeft;
+        _content.BottomConstraint = pos.Bottom;
+        _content.WidthConstraint = contentWidth;
+        _content.HeightConstraint = pos.Height;
+        _content.LayoutSelf();
 
-        protected override void OnLayoutChildren()
-        {
-            var pos = Position;
-            if (pos.Width <= 0f || pos.Height <= 0f) return;
-
-            var contentWidth = Math.Max(0f, pos.Width - SplitterThickness);
-            var onRight = SplitterOnRight;
-            var contentLeft = onRight ? pos.Left : pos.Left + SplitterThickness;
-            var splitterLeft = onRight ? pos.Left + contentWidth : pos.Left;
-
-            _content.LeftConstraint = contentLeft;
-            _content.BottomConstraint = pos.Bottom;
-            _content.WidthConstraint = contentWidth;
-            _content.HeightConstraint = pos.Height;
-            _content.LayoutSelf();
-
-            _splitter.LeftConstraint = splitterLeft;
-            _splitter.BottomConstraint = pos.Bottom;
-            _splitter.WidthConstraint = SplitterThickness;
-            _splitter.HeightConstraint = pos.Height;
-            _splitter.LayoutSelf();
-        }
+        _splitter.LeftConstraint = splitterLeft;
+        _splitter.BottomConstraint = pos.Bottom;
+        _splitter.WidthConstraint = SplitterThickness;
+        _splitter.HeightConstraint = pos.Height;
+        _splitter.LayoutSelf();
     }
 }

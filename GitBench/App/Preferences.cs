@@ -71,12 +71,24 @@ public sealed record Preferences
 
     /// <summary>Whether local agents may connect over MCP, and on which port.</summary>
     public bool AgentConnectionsEnabled { get; init; }
-    public int AgentConnectionsPort { get => _agentConnectionsPort; init => _agentConnectionsPort = value is >= 1 and <= 65535 ? value : _agentConnectionsPort; }
-    private int _agentConnectionsPort = 5577;
+    public int AgentConnectionsPort { get; init; } = 5577;
 
     /// <summary>The secret path segment the endpoint carries. Null until the first enable
     /// generates one; kept afterwards so a command copied from the settings stays valid.</summary>
     public McpPathToken? AgentConnectionsToken { get; init; }
+
+    /// <summary>The agent-connections preference as one move: on or off, the port, and the
+    /// endpoint's token. A port outside 1–65535 leaves everything as it was, since no server could
+    /// bind it.</summary>
+    public Preferences WithAgentConnections(bool enabled, int port, McpPathToken? token) =>
+        port is < 1 or > 65535
+            ? this
+            : this with
+            {
+                AgentConnectionsEnabled = enabled,
+                AgentConnectionsPort = port,
+                AgentConnectionsToken = token,
+            };
 
     public static Preferences Default { get; } = new();
 }

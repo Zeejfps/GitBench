@@ -166,7 +166,14 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         public int StartRow;
         public int BodyRows;
 
-        public IReadOnlyList<DiffRow> Rows => Surface.Rows.Rows;
+        public DiffRowSet RowSet { get; private set; } = DiffRowSet.Empty;
+        public IReadOnlyList<DiffRow> Rows => RowSet.Rows;
+
+        public void SetRows(DiffRowSet rows)
+        {
+            RowSet = rows;
+            Surface.Rows = rows;
+        }
 
         public void DisposeDiff()
         {
@@ -599,7 +606,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var oldHeight = BodyHeight(s);
         var before = s.Surface.Rows;
         s.Render = state;
-        s.Surface.Rows = DiffRowSet.Build(state, _loc);
+        s.SetRows(DiffRowSet.Build(state, _loc));
         s.Surface.HunkButtons = HasHunkButtons(s);
         SyncBodyView(s);
         RemapSelectionIn(s.File.Path, before, s.Surface.Rows);
@@ -1528,7 +1535,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             pending.Landed = true;
             _vm.ReportActiveFile(s.File.Path);
             SetFolded(s, false);
-            SetScrollTarget(SectionTopOffset(s) - TopPadRowHeight);
+            _scroll.SetTarget(SectionTopOffset(s) - TopPadRowHeight);
         }
 
         // A spotlight resolves against a folded file too: its diff loads behind the header, and
@@ -1570,7 +1577,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         switch (lookup.Target)
         {
             case ReviewLookupTarget.Header:
-                if (_pendingScrollY != null) return;
+                if (_scroll.HasTarget) return;
                 lookup.TryComplete(ReviewLineLocator.FirstLine(s.RowSet) is { } first
                     ? new ReviewLineResolution.Resolved(new ReviewLineRef(s.File.Path, first.Side, first.Line), first.Text)
                     : new ReviewLineResolution.Unavailable(lookup.Path, "the diff holds no lines"));
@@ -1583,10 +1590,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 if (!pending.Scrolled)
                 {
                     pending.Scrolled = true;
-                    SetScrollTarget(BodyRowContentTop(s, row.Value) - _list.Position.Height / 3f);
+                    _scroll.SetTarget(BodyRowContentTop(s, row.Value) - _list.Position.Height / 3f);
                     return;
                 }
-                if (_pendingScrollY != null) return;
+                if (_scroll.HasTarget) return;
                 lookup.TryComplete(new ReviewLineResolution.Resolved(
                     line, ReviewLineLocator.RangeText(s.RowSet, line.Side, line.Line, line.Line)));
                 return;

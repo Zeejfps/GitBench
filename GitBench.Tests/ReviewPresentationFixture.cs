@@ -12,6 +12,7 @@ using GitBench.Features.Review.Walkthrough;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Platform;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -87,11 +88,11 @@ internal sealed class ReviewPresentationFixture : IDisposable
         _registry.SetActive(Repo.Id);
         _preferences = new PreferencesService(Preferences.Default, Path.Combine(_dir.Path, "prefs.json"));
 
-        Windows = new ReviewWindowsViewModel(
+        Windows = TestWindows.Review(
             Bus,
             new GitReviewStackSource(_registry, Git, Localization),
             _registry,
-            Git, Git, Git, Git, Git,
+            Git,
             new UnparsedFiles(),
             new IdleSnapshots(),
             new ReviewProgressStore(),
@@ -147,6 +148,8 @@ internal sealed class ReviewPresentationFixture : IDisposable
                 ctx.AddService<IUiDispatcher>(Dispatcher);
                 ctx.AddService<IRepoRegistry>(_registry);
                 ctx.AddService(_preferences);
+                ctx.AddService<IClipboard>(new FakeClipboard());
+                ctx.AddService<IPlatformShell>(new FakeShell());
             });
         Settle();
         return _harness;

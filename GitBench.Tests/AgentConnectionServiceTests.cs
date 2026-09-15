@@ -56,7 +56,7 @@ public sealed class AgentConnectionServiceTests : IDisposable
     {
         _preferences = new PreferencesService(Preferences.Default, Path.Combine(_dir.Path, "prefs.json"));
         _settings = new State<AgentConnectionSettings>(AgentConnectionSettings.From(_preferences.Current));
-        _settings.Changed += s => _preferences.SetAgentConnections(s.Enabled, s.Port, s.Token);
+        _settings.Changed += s => _preferences.Update(p => p.WithAgentConnections(s.Enabled, s.Port, s.Token));
 
         var statePath = Path.Combine(_dir.Path, "repos.json");
         var registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
@@ -236,10 +236,10 @@ public sealed class AgentConnectionServiceTests : IDisposable
     [Fact]
     public void PreferencesService_RefusesAPortOutsideTheRange()
     {
-        _preferences.SetAgentConnections(true, 0, null);
+        _preferences.Update(p => p.WithAgentConnections(true, 0, null));
         Assert.False(_preferences.Current.AgentConnectionsEnabled);
 
-        _preferences.SetAgentConnections(true, 65536, null);
+        _preferences.Update(p => p.WithAgentConnections(true, 65536, null));
         Assert.False(_preferences.Current.AgentConnectionsEnabled);
     }
 

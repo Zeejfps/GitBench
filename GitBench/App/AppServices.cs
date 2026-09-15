@@ -195,10 +195,6 @@ internal static class AppServices
         // windows so closing and reopening a branch's review keeps its progress.
         context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
 
-        // The open review windows, one instance: the ReviewWindowsView reflects it into OS windows
-        // and the assistant's walkthrough tools find the window a narration targets through it.
-        context.AddSingleton<ReviewWindowsViewModel>();
-
         // The terminal pane's two halves: what spawns the shell, and what parses what it writes.
         // Both stateless, and both registered rather than constructed at the pane — this is the only
         // place that names a concrete VT engine, so replacing XtermSharp is a line here.
@@ -311,12 +307,7 @@ internal static class AppServices
         // because the server is the app's. The write surface here is the same hop the assistant's
         // session store builds for itself: a record over shared services, not state of its own.
         var agentConnections = new State<AgentConnectionSettings>(AgentConnectionSettings.From(preferences.Current));
-        agentConnections.Changed += s => preferences.Update(p => p with
-        {
-            AgentConnectionsEnabled = s.Enabled,
-            AgentConnectionsPort = s.Port,
-            AgentConnectionsToken = s.Token,
-        });
+        agentConnections.Changed += s => preferences.Update(p => p.WithAgentConnections(s.Enabled, s.Port, s.Token));
         context.AddService(agentConnections);
         context.AddService(new State<AgentConnectionState>(new AgentConnectionState.Off()));
         context.AddSingleton(ctx => new AssistantWriteSurface(

@@ -212,7 +212,7 @@ public sealed class AssistantWalkthroughNarrationTests : IDisposable
     public void WithNothingToAnswerWith_TheRailIsToldItsNarratorIsGone()
     {
         var environment = new Dictionary<string, string?>(StringComparer.Ordinal);
-        foreach (var variable in AssistantProviders.All.Select(p => p.EnvironmentVariable).OfType<string>())
+        foreach (var variable in AssistantProviders.All.Select(p => p.Hosting).OfType<AssistantHosting.Hosted>().Select(h => h.EnvironmentVariable))
         {
             environment[variable] = Environment.GetEnvironmentVariable(variable);
             Environment.SetEnvironmentVariable(variable, null);
@@ -245,7 +245,7 @@ public sealed class AssistantWalkthroughNarrationTests : IDisposable
             _fixture.Registry,
             _fixture.Git,
             new UnparsedFiles(),
-            new AssistantCredentials(new AssistantViewFixture.FakeSecretStore(key)),
+            new AssistantCredentials(new FakeSecretStore(key)),
             new State<AssistantSettings>(AssistantSettings.Default),
             _fixture.Localization,
             _fixture.Dispatcher,
