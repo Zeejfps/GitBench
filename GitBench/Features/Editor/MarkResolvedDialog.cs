@@ -25,14 +25,14 @@ internal sealed record MarkResolvedDialog : Widget
             ctx.Require<IGitConflictOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<ILocalizationService>());
+            ctx.Require<ILocalizationService>(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.EditorMarkResolvedTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Action = (s.LocalchangesConflictMarkResolved, DialogButtonRole.Primary),
             Command = vm.MarkResolved,
             ConfirmKeys = true,

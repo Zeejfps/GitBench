@@ -28,8 +28,8 @@ public sealed class StashDialogViewModelTests
     private static StashDialogViewModel Build(
         LocalChangesSnapshot snapshot, CountingGitService git, LocalizationService loc, QueuedDispatcher dispatcher)
         => new(
-            new StashRequest(Repo), snapshot, git, dispatcher, new MessageBus(),
-            new LocalChangesSelectionStore(), loc);
+            Repo, snapshot, git, dispatcher, new MessageBus(),
+            new LocalChangesSelectionStore(), loc, () => { });
 
     [Fact]
     public void Constructor_reads_no_git_and_merges_staged_and_unstaged()

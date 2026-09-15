@@ -36,7 +36,7 @@ internal sealed class AsyncCommand : ICommand
     /// <param name="work">Runs on a background thread. Return null on success or an error
     /// string on failure. Exceptions are caught and surfaced as <see cref="Error"/> too.</param>
     /// <param name="onSuccess">Invoked on the UI thread after a null/no-error result.
-    /// Typical use: broadcast bus messages and raise <c>CloseRequested</c>.</param>
+    /// Typical use: broadcast bus messages and close the dialog.</param>
     /// <param name="gate">Additional CanExecute condition ANDed with <see cref="IsRunning"/>
     /// being false. Pass null to gate purely on running state.</param>
     /// <param name="onError">Invoked on the UI thread after a failing result, with the same

@@ -26,11 +26,12 @@ internal sealed record CreateWorktreeDialog : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = new CreateWorktreeDialogViewModel(
-            new CreateWorktreeRequest(Primary),
+            Primary,
             ctx.Require<IGitWorktreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<ILocalizationService>());
+            ctx.Require<ILocalizationService>(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
         var browseButton = new SecondaryDialogButton
@@ -44,7 +45,6 @@ internal sealed record CreateWorktreeDialog : Widget
         {
             Title = s.WorktreesCreateTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Action = (s.CommonCreate, DialogButtonRole.Primary),
             Command = vm.Create,
             Body =

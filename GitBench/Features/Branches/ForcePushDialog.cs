@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -19,11 +20,19 @@ internal sealed record ForcePushDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new ForcePushDialogViewModel(
-            Repo,
-            ctx.Require<IGitRemoteOperations>(),
+        var repo = Repo;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitRemoteOperations>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var forcePush = AsyncCommand.ForOutcome(
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            work: () => gitService.Push(repo, force: true),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                onClose();
+            });
 
         var s = ctx.Localization().Strings.Value;
         var displayBranch = string.IsNullOrEmpty(BranchName) ? s.BranchesForcePushThisBranch : $"'{BranchName}'";
@@ -31,10 +40,9 @@ internal sealed record ForcePushDialog : Widget
         return new Dialog
         {
             Title = s.BranchesForcePushTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Action = (s.BranchesForcePushAction, DialogButtonRole.Destructive),
-            Command = vm.ForcePush,
+            Command = forcePush,
             ConfirmKeys = true,
             Body =
             [

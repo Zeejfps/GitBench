@@ -13,7 +13,7 @@ namespace GitBench.Features.Repos;
 /// profile the clone runs under. On a successful clone it registers and activates the new repo,
 /// mirroring "Open from folder".
 /// </summary>
-internal sealed class CloneRepoDialogViewModel : IDialogViewModel
+internal sealed class CloneRepoDialogViewModel
 {
     public State<string> Url { get; } = new(string.Empty);
     public State<string> ParentDir { get; } = new(string.Empty);
@@ -33,8 +33,6 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
 
     public AsyncCommand Clone { get; }
 
-    public event Action? CloseRequested;
-
     // Tracks the last name we auto-filled so manual edits to FolderName stick: we only
     // overwrite the field while it still matches what we last derived from the URL.
     private string _lastAutoName = string.Empty;
@@ -50,6 +48,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
+        Action onClose,
         Guid? targetGroupId = null)
     {
         _targetGroupId = targetGroupId;
@@ -95,7 +94,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
                     registry.Open(_clonedPath, _targetGroupId);
                     PinChoice(registry, identity, _clonedPath);
                 }
-                CloseRequested?.Invoke();
+                onClose();
                 // Raised after the dialog closes and the repo is open, so it reads as "this repo is
                 // here, and git said something about it" rather than as the clone having failed.
                 if (_cloneWarning is { Length: > 0 } warning)
@@ -139,6 +138,4 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
         var name = sep >= 0 ? u[(sep + 1)..] : u;
         return name.Trim();
     }
-
-    public void Dispose() { }
 }

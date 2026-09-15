@@ -1,7 +1,9 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -32,22 +34,33 @@ internal sealed record ResetCommitDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new ResetCommitDialogViewModel(
-            new ResetCommitRequest(Repo, Sha),
-            ctx.Require<IGitBranchOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<ILocalizationService>());
+        var repo = Repo;
+        var sha = Sha;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitBranchOperations>();
+        var bus = ctx.Require<IMessageBus>();
+        var loc = ctx.Localization();
 
-        var s = ctx.Localization().Strings.Value;
+        var mode = new State<ResetMode>(ResetMode.Mixed);
+        var reset = AsyncCommand.ForOutcome(
+            ctx.Require<IUiDispatcher>(),
+            work: () => gitService.ResetCurrent(repo, sha, mode.Value),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                bus.Broadcast(new ShowToastMessage(ToastIntent.Success(loc.Strings.Value.ToastBranchReset)));
+                onClose();
+            });
+
+        var s = loc.Strings.Value;
         return new Dialog
         {
             Title = s.CommitsResetTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Width = DialogFrame.WidthWide,
             Action = (s.CommitsResetAction, DialogButtonRole.Destructive),
-            Command = vm.Reset,
+            Command = reset,
             ConfirmKeys = true,
             Body =
             [
@@ -67,7 +80,7 @@ internal sealed record ResetCommitDialog : Widget
                 },
                 new LabeledRow { Label = s.CommitsResetBranchLabel, Value = BranchValue(BranchName, s) },
                 new LabeledRow { Label = s.CommitsResetMoveToLabel, Value = CommitValue(ShortSha, Summary) },
-                new LabeledRow { Label = s.CommitsResetModeLabel, Value = new ResetModeDropdown { Selected = vm.Mode } },
+                new LabeledRow { Label = s.CommitsResetModeLabel, Value = new ResetModeDropdown { Selected = mode } },
             ],
         };
     }

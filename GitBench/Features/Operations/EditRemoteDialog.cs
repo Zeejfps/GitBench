@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Branches;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -31,26 +32,64 @@ internal sealed record EditRemoteDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var isAdd = RemoteName is null;
-        var request = isAdd
-            ? new EditRemoteRequest(Repo, "origin", IsAdd: true)
-            : new EditRemoteRequest(Repo, RemoteName!);
+        var repo = Repo;
+        var existingName = RemoteName;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitRemoteOperations>();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+        var bus = ctx.Require<IMessageBus>();
+        var isAdd = existingName is null;
 
-        var vm = new EditRemoteDialogViewModel(
-            request,
-            ctx.Require<IGitRemoteOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+        // Two-way states: user edits flow back automatically, and wholesale replacements (the
+        // background `git remote get-url` load, or an SSH/HTTPS rewrite) are plain assignments
+        // the binding reflects without a typed-edit feedback loop.
+        var name = new State<string>(existingName ?? "origin");
+        var url = new State<string>(string.Empty);
+        var originalUrl = string.Empty;
+        var scheme = new Derived<RemoteUrlScheme>(() => RemoteUrl.Detect(url.Value));
+
+        var gate = new Derived<bool>(() =>
+        {
+            var newName = name.Value.Trim();
+            var newUrl = url.Value.Trim();
+            if (newName.Length == 0 || newUrl.Length == 0) return false;
+            return newName != existingName || newUrl != originalUrl;
+        });
+
+        var save = AsyncCommand.ForOutcome(
+            dispatcher,
+            work: () => existingName is { } current
+                ? gitService.EditRemote(repo, current, name.Value.Trim(), url.Value.Trim())
+                : gitService.AddRemote(repo, name.Value.Trim(), url.Value.Trim()),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                onClose();
+            },
+            gate: gate);
+
+        // Add-mode has no existing remote to read a URL from; leave the field blank.
+        if (existingName is { } remoteToLoad)
+        {
+            Task.Run(() =>
+            {
+                var loaded = gitService.GetRemoteUrl(repo, remoteToLoad) ?? string.Empty;
+                dispatcher.Post(() =>
+                {
+                    originalUrl = loaded;
+                    url.Value = loaded;
+                });
+            });
+        }
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            ViewModel = vm,
             Title = isAdd ? s.OperationsRemoteTitleAdd : s.OperationsRemoteTitleEdit,
-            OnClose = OnClose,
+            OnClose = onClose,
             Width = DialogFrame.WidthWide,
             Action = (isAdd ? s.CommonAdd : s.CommonSave, DialogButtonRole.Primary),
-            Command = vm.Save,
+            Command = save,
             Body =
             [
                 new Text
@@ -61,13 +100,17 @@ internal sealed record EditRemoteDialog : Widget
                 new LabeledInput
                 {
                     Label = s.OperationsRemoteNameLabel,
-                    Value = vm.Name,
+                    Value = name,
                 },
                 new LabeledInput
                 {
                     Label = s.CommonRepositoryUrl,
-                    Value = vm.Url,
-                    Accessory = new SchemeDropdown { Scheme = vm.Scheme, OnSelect = vm.SetScheme },
+                    Value = url,
+                    Accessory = new SchemeDropdown
+                    {
+                        Scheme = scheme,
+                        OnSelect = picked => url.Value = RemoteUrl.Convert(url.Value, picked),
+                    },
                 },
             ],
         };

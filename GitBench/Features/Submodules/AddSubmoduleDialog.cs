@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -22,45 +23,77 @@ internal sealed record AddSubmoduleDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new AddSubmoduleDialogViewModel(
-            new AddSubmoduleViewRequest(Primary),
-            ctx.Require<IGitSubmoduleOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<ILocalizationService>());
+        var primary = Primary;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitSubmoduleOperations>();
+        var bus = ctx.Require<IMessageBus>();
+        var loc = ctx.Localization();
 
-        var s = ctx.Localization().Strings.Value;
+        var url = new State<string>(string.Empty);
+        var path = new State<string>(string.Empty);
+        var branch = new State<string>(string.Empty);
+        var force = new State<bool>(false);
+
+        // Track branch is optional, so blank is valid; a non-blank name must be a legal refname.
+        var branchStatus = new Derived<FieldStatus?>(() =>
+        {
+            var strings = loc.Strings.Value;
+            return RefNameRules.Validate(branch.Value.Trim(), strings, strings.RefnameNounBranch);
+        });
+        var gate = new Derived<bool>(() =>
+            url.Value.Trim().Length > 0 && path.Value.Trim().Length > 0
+            && RefNameRules.IsValid(branch.Value.Trim()));
+
+        var add = AsyncCommand.ForOutcome(
+            ctx.Require<IUiDispatcher>(),
+            work: () =>
+            {
+                var trackBranch = branch.Value.Trim();
+                return gitService.AddSubmodule(primary, new SubmoduleAddRequest(
+                    Url: url.Value.Trim(),
+                    Path: path.Value.Trim(),
+                    Branch: trackBranch.Length > 0 ? trackBranch : null,
+                    Force: force.Value));
+            },
+            onSuccess: () =>
+            {
+                bus.Broadcast(new SubmodulesChangedMessage(primary.Id));
+                bus.Broadcast(new WorkingTreeChangedMessage(primary.Id));
+                onClose();
+            },
+            gate: gate);
+
+        var s = loc.Strings.Value;
         return new Dialog
         {
             Title = s.SubmodulesAddTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Action = (s.CommonAdd, DialogButtonRole.Primary),
-            Command = vm.Add,
+            Command = add,
             Body =
             [
                 new LabeledInput
                 {
                     Label = s.CommonRepositoryUrl,
-                    Value = vm.Url,
+                    Value = url,
                 },
                 new LabeledInput
                 {
                     Label = s.SubmodulesAddPathLabel,
-                    Value = vm.Path,
+                    Value = path,
                     Hint = s.SubmodulesAddPathHint,
                 },
                 new LabeledInput
                 {
                     Label = s.SubmodulesAddBranchLabel,
-                    Value = vm.Branch,
+                    Value = branch,
                     Hint = s.SubmodulesAddBranchHint,
-                    Status = vm.BranchStatus,
+                    Status = branchStatus,
                 },
                 new CheckboxWidget
                 {
                     Label = s.SubmodulesAddForceLabel,
-                    Checked = vm.Force,
+                    Checked = force,
                     Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],

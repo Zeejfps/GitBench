@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -26,20 +27,29 @@ internal sealed record DeleteTagDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new DeleteTagDialogViewModel(
-            new DeleteTagRequest(Repo, TagName),
-            ctx.Require<IGitTagOperations>(),
+        var repo = Repo;
+        var tagName = TagName;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitTagOperations>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var deleteFromRemotes = new State<bool>(false);
+        var delete = AsyncCommand.ForOutcome(
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            work: () => gitService.DeleteTag(repo, tagName, deleteFromRemotes.Value),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                onClose();
+            });
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.CommitsDeleteTagTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Action = (s.CommitsDeleteTagAction, DialogButtonRole.Destructive),
-            Command = vm.Delete,
+            Command = delete,
             ConfirmKeys = true,
             Body =
             [
@@ -53,7 +63,7 @@ internal sealed record DeleteTagDialog : Widget
                 new CheckboxWidget
                 {
                     Label = s.CommitsDeleteTagRemoteCheckbox,
-                    Checked = vm.DeleteFromRemotes,
+                    Checked = deleteFromRemotes,
                     Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],

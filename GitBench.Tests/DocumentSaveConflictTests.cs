@@ -84,10 +84,9 @@ public sealed class DocumentSaveConflictTests : IDisposable
         var path = Path.Combine(_merge.Path, "a.txt");
         Save(conflicts, path, "one\nmine and theirs\nthree\n");
 
-        var vm = new MarkResolvedDialogViewModel(
-            _merge.Repo, "a.txt", conflicts, _dispatcher, _bus, _loc);
         var closed = false;
-        vm.CloseRequested += () => closed = true;
+        var vm = new MarkResolvedDialogViewModel(
+            _merge.Repo, "a.txt", conflicts, _dispatcher, _bus, _loc, () => closed = true);
 
         vm.MarkResolved.Execute();
         Settle(() => !vm.MarkResolved.IsRunning.Value);

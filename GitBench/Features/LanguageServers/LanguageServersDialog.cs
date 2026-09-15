@@ -30,7 +30,6 @@ internal sealed record LanguageServersDialog : Widget
         {
             Title = s.LanguageServersTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             CancelLabel = s.CommonClose,
             Action = (s.LanguageServersReload, DialogButtonRole.Primary),

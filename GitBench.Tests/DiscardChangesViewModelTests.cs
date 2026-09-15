@@ -35,8 +35,8 @@ public sealed class DiscardChangesViewModelTests
             GitStatusSummary.Unknown);
 
         var vm = new DiscardChangesViewModel(
-            new DiscardChangesRequest(Repo, Array.Empty<string>()),
-            snapshot, git, dispatcher, new MessageBus(), loc);
+            Repo, Array.Empty<string>(),
+            snapshot, git, dispatcher, new MessageBus(), loc, () => { });
 
         // No read fired (ThrowOnReads would have thrown; the counters stay zero).
         Assert.Equal(0, git.GetLocalChangesCalls);
@@ -52,8 +52,8 @@ public sealed class DiscardChangesViewModelTests
         var (git, loc, dispatcher) = Env();
 
         var vm = new DiscardChangesViewModel(
-            new DiscardChangesRequest(Repo, Array.Empty<string>()),
-            LocalChangesSnapshot.Empty(Repo.Id), git, dispatcher, new MessageBus(), loc);
+            Repo, Array.Empty<string>(),
+            LocalChangesSnapshot.Empty(Repo.Id), git, dispatcher, new MessageBus(), loc, () => { });
 
         Assert.Equal(0, git.GetLocalChangesCalls);
         Assert.Empty(vm.Files.Value);

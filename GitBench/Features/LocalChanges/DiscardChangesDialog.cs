@@ -30,17 +30,18 @@ internal sealed record DiscardChangesDialog : Widget
     {
         var snapshot = LocalChangesProjection.ActiveSnapshot(ctx.Require<IRepoSnapshotStore>(), Repo);
         var vm = new DiscardChangesViewModel(
-            new DiscardChangesRequest(Repo, Paths),
+            Repo,
+            Paths,
             snapshot,
             ctx.Require<IGitWorkingTreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Localization());
+            ctx.Localization(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            ViewModel = vm,
             Title = s.LocalchangesDiscardDialogTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
@@ -64,7 +65,7 @@ internal sealed record DiscardChangesDialog : Widget
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
             ],
-        };
+        }.BindVm(vm);
     }
 
     private static View BuildFileList(Context ctx, DiscardChangesViewModel vm)
@@ -99,5 +100,3 @@ internal sealed record DiscardChangesDialog : Widget
         return new DialogScrollList { Content = column }.BuildView(ctx);
     }
 }
-
-public readonly record struct DiscardChangesRequest(Repo Repo, IReadOnlyList<string> Paths);

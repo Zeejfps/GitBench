@@ -11,40 +11,42 @@ namespace GitBench.Features.LocalChanges;
 
 internal sealed record DiscardFileRow(string Path, FileChange Display);
 
-internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesState>, IDialogViewModel
+internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesState>
 {
     private readonly Repo _repo;
     private readonly IGitWorkingTreeOperations _gitService;
     private readonly IMessageBus _bus;
     private readonly string _doneToast;
+    private readonly Action _onClose;
 
     public IReadable<IReadOnlyList<DiscardFileRow>> Files { get; }
     public IReadable<IReadOnlySet<string>> CheckedPaths { get; }
     public IReadable<string> FilesHeader { get; }
     public AsyncCommand Discard { get; }
 
-    public event Action? CloseRequested;
-
     // The pivot a Shift-click extends a range from; moves to the row of every plain/toggle click.
     private int _anchorIndex = -1;
 
     public DiscardChangesViewModel(
-        DiscardChangesRequest request,
+        Repo repo,
+        IReadOnlyList<string> paths,
         LocalChangesSnapshot snapshot,
         IGitWorkingTreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        Action onClose)
         : base(dispatcher, DiscardChangesState.Initial)
     {
-        _repo = request.Repo;
+        _repo = repo;
         _gitService = gitService;
         _bus = bus;
+        _onClose = onClose;
         var strings = loc.Strings.Value;
         _doneToast = strings.ToastChangesDiscarded;
 
         var rows = BuildRows(snapshot);
-        var preChecked = ComputePreChecked(rows, request.Paths);
+        var preChecked = ComputePreChecked(rows, paths);
         Update(s => s with
         {
             Files = rows,
@@ -114,7 +116,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
     {
         _bus.Broadcast(new WorkingTreeChangedMessage(_repo.Id));
         _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_doneToast)));
-        CloseRequested?.Invoke();
+        _onClose();
     }
 
     private static IReadOnlyList<DiscardFileRow> BuildRows(LocalChangesSnapshot snapshot)

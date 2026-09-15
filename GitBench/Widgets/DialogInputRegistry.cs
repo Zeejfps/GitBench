@@ -7,8 +7,7 @@ namespace GitBench.Widgets;
 /// body. The dialog registers one of these on a child build scope; <see cref="LabeledInput"/>
 /// (and future input widgets) resolve it and register their inner <see cref="TextInputView"/>.
 /// After the body is built, the dialog wires Enter-submits/Esc-cancels across the registered
-/// inputs and focuses the first one on mount — the widget-land equivalent of
-/// <c>DialogShell.SubmitFrom</c> + <c>BeginEditing</c>.
+/// inputs and focuses the first one on mount.
 /// </summary>
 internal sealed class DialogInputRegistry
 {

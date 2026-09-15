@@ -108,7 +108,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
     {
         TypeInto("a.txt");
         var guard = new PendingUnsavedEditsGuard();
-        using var vm = CreateDialog(guard);
+        var vm = CreateDialog(guard);
         vm.StartPoint.Value = Sha("HEAD");
 
         vm.Create.Execute();
@@ -126,7 +126,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
     {
         TypeInto("a.txt");
         var guard = new PendingUnsavedEditsGuard();
-        using var vm = CreateDialog(guard);
+        var vm = CreateDialog(guard);
 
         vm.Create.Execute();
         _dispatcher.Drain();
@@ -140,7 +140,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
     {
         TypeInto("a.txt");
         var guard = new PendingUnsavedEditsGuard();
-        using var vm = CreateDialog(guard);
+        var vm = CreateDialog(guard);
         vm.StartPoint.Value = Sha("HEAD");
         vm.Checkout.Value = false;
 
@@ -179,10 +179,13 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
     }
 
     private MoveBranchDialogViewModel MoveDialog() => new(
-        new MoveBranchRequest(_repo, "old", Sha("HEAD")),
+        _repo,
+        "old",
+        Sha("HEAD"),
         _git,
         new RepoHeadStore(_git, _bus, _loc, _dispatcher, RealGuard()),
-        _loc);
+        _loc,
+        () => { });
 
     private BranchesViewModel Branches(IUnsavedEditsGuard guard)
     {
@@ -216,6 +219,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
         _bus,
         new RepoHeadStore(_git, _bus, _loc, _dispatcher, RealGuard()),
         _loc,
+        () => { },
         guard);
 
     private void TypeInto(string name) => TypeInto(_repo.Id, Path.Combine(_repoPath, name));
@@ -331,6 +335,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
         public IReadable<RepoOperations> Active => _active;
         public bool HasUnseenError(Guid repoId) => false;
         public bool IsBusy(Guid repoId) => false;
+        public event Action<Repo>? PullDiverged { add { } remove { } }
         public void Push(Repo repo, bool force = false) { }
         public void Pull(Repo repo, PullStrategy? strategy = null) { }
         public void Fetch(Repo repo) { }

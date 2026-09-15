@@ -113,7 +113,7 @@ public sealed class CloneRepoIdentityTests : IDisposable
     {
         var profiles = new IdentityProfileService(seed, Path.Combine(_root, "profiles.json"));
         var identity = new GitIdentityService(new StubReader(), profiles, _bus, _registry);
-        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc);
+        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc, () => { });
     }
 
     private void RunClone(CloneRepoDialogViewModel vm)

@@ -28,17 +28,19 @@ internal sealed record MoveBranchDialog : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = new MoveBranchDialogViewModel(
-            new MoveBranchRequest(Repo, BranchName, Sha),
+            Repo,
+            BranchName,
+            Sha,
             ctx.Require<IGitBranchOperations>(),
             ctx.Require<IRepoHeadStore>(),
-            ctx.Localization());
+            ctx.Localization(),
+            OnClose);
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.BranchesMoveTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Action = (s.BranchesMoveAction, DialogButtonRole.Destructive, vm.Move),
             ConfirmKeys = true,

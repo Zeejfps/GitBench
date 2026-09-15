@@ -27,13 +27,14 @@ internal sealed record StashDialog : Widget
     {
         var snapshot = LocalChangesProjection.ActiveSnapshot(ctx.Require<IRepoSnapshotStore>(), Repo);
         var vm = new StashDialogViewModel(
-            new StashRequest(Repo),
+            Repo,
             snapshot,
             ctx.Require<IGitStashOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<LocalChangesSelectionStore>(),
-            ctx.Localization());
+            ctx.Localization(),
+            OnClose);
 
         var message = new State<string>(vm.Message.Value);
         message.Changed += vm.SetMessage;
@@ -46,7 +47,6 @@ internal sealed record StashDialog : Widget
         {
             Title = s.StashTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Height = 520f,
             BodyGap = 10,
@@ -72,7 +72,7 @@ internal sealed record StashDialog : Widget
                     Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
-        };
+        }.BindVm(vm);
     }
 
     private static View BuildFileList(Context ctx, StashDialogViewModel vm)

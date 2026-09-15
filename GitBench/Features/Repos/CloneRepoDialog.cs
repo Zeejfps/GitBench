@@ -33,6 +33,7 @@ internal sealed record CloneRepoDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Localization(),
+            OnClose,
             TargetGroupId);
 
         var s = ctx.Localization().Strings.Value;
@@ -92,7 +93,6 @@ internal sealed record CloneRepoDialog : Widget
         {
             Title = s.ReposCloneTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Action = (s.ReposCloneAction, DialogButtonRole.Primary),
             Command = vm.Clone,
             Body = [.. body],

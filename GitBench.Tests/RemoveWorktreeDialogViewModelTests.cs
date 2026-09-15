@@ -28,10 +28,9 @@ public sealed class RemoveWorktreeDialogViewModelTests
 
     private (RemoveWorktreeDialogViewModel Vm, bool Closed) Run()
     {
-        var vm = new RemoveWorktreeDialogViewModel(
-            new RemoveWorktreeRequest(_primary, _worktree), _git, _dispatcher, _bus, _shell, _loc);
         var closed = false;
-        vm.CloseRequested += () => closed = true;
+        var vm = new RemoveWorktreeDialogViewModel(
+            _primary, _worktree, _git, _dispatcher, _bus, _shell, _loc, () => closed = true);
 
         vm.Remove.Execute();
         // Drain until the command settles rather than until something is queued: under a loaded

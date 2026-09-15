@@ -49,6 +49,7 @@ internal sealed record CreateBranchDialog : Widget
             ctx.Require<IMessageBus>(),
             ctx.Require<IRepoHeadStore>(),
             ctx.Require<ILocalizationService>(),
+            OnClose,
             ctx.Get<IUnsavedEditsGuard>());
 
         var s = ctx.Localization().Strings.Value;
@@ -56,7 +57,6 @@ internal sealed record CreateBranchDialog : Widget
         {
             Title = s.BranchesCreateTitle,
             OnClose = OnClose,
-            ViewModel = vm,
             Action = (s.CommonCreate, DialogButtonRole.Primary),
             Command = vm.Create,
             Body =

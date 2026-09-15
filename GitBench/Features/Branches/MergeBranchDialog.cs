@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -14,6 +15,12 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
+internal readonly record struct MergeBranchRequest(
+    Repo Repo,
+    string SourceRef,
+    string SourceDisplay,
+    string TargetBranch);
+
 internal sealed record MergeBranchDialog : Widget
 {
     public required MergeBranchRequest Request { get; init; }
@@ -21,35 +28,56 @@ internal sealed record MergeBranchDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new MergeBranchDialogViewModel(
-            Request,
-            ctx.Require<IGitIntegrationOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+        var request = Request;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitIntegrationOperations>();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var strategy = new State<MergeStrategy>(MergeStrategy.Default);
+        var previewState = new State<MergePreviewState>(MergePreviewState.Unknown);
+
+        var merge = AsyncCommand.ForOutcome(
+            dispatcher,
+            work: () => gitService.Merge(request.Repo, request.SourceRef, strategy.Value),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(request.Repo.Id));
+                bus.Broadcast(new WorkingTreeChangedMessage(request.Repo.Id));
+                onClose();
+            });
+
+        Task.Run(() =>
+        {
+            MergePreviewResult result;
+            try { result = gitService.PreviewMerge(request.Repo, request.SourceRef); }
+            catch (Exception ex) { result = new MergePreviewResult(MergePreviewState.Unknown, ex.Message); }
+
+            dispatcher.Post(() => previewState.Value = result.State);
+        });
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.BranchesMergeTitle,
-            OnClose = OnClose,
+            OnClose = onClose,
             Width = DialogFrame.WidthWide,
             Action = (s.CommonMerge, DialogButtonRole.Primary),
-            Command = vm.Merge,
+            Command = merge,
             ConfirmKeys = true,
-            ViewModel = vm,
-            FooterLead = PreviewChip(vm, s),
+            FooterLead = PreviewChip(previewState, s),
             Body =
             [
                 BuildLabeledRow(s.BranchesMergeSourceLabel, BuildBranchChip(Request.SourceDisplay)),
                 BuildLabeledRow(s.BranchesMergeTargetLabel, BuildBranchChip(Request.TargetBranch)),
-                BuildLabeledRow(s.BranchesMergeStrategyLabel, new MergeOptionDropdown { Selected = vm.Strategy }),
+                BuildLabeledRow(s.BranchesMergeStrategyLabel, new MergeOptionDropdown { Selected = strategy }),
             ],
         };
     }
 
-    private static IWidget PreviewChip(MergeBranchDialogViewModel vm, Strings s)
+    private static IWidget PreviewChip(IReadable<MergePreviewState> previewState, Strings s)
     {
-        Func<ThemeStyles, uint> color = t => vm.PreviewState.Value == MergePreviewState.Conflicts
+        Func<ThemeStyles, uint> color = t => previewState.Value == MergePreviewState.Conflicts
             ? t.BranchPreview.Conflict
             : t.BranchPreview.Clean;
         return new Row
@@ -63,7 +91,7 @@ internal sealed record MergeBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(ps => ps switch
+                    Value = previewState.Bind(ps => ps switch
                     {
                         MergePreviewState.Clean => LucideIcons.CheckSquare,
                         MergePreviewState.Conflicts => LucideIcons.CloudOff,
@@ -74,7 +102,7 @@ internal sealed record MergeBranchDialog : Widget
                 new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(ps => ps switch
+                    Value = previewState.Bind(ps => ps switch
                     {
                         MergePreviewState.Clean => s.BranchesMergePreviewClean,
                         MergePreviewState.Conflicts => s.BranchesMergePreviewConflicts,

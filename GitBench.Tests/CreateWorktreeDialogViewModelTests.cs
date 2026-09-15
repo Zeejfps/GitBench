@@ -22,8 +22,10 @@ public sealed class CreateWorktreeDialogViewModelTests
 
     private static readonly string Root = OperatingSystem.IsWindows() ? "C:\\" : "/";
 
+    private bool _closed;
+
     private CreateWorktreeDialogViewModel Vm(params string[] existingDirectories)
-        => new(new CreateWorktreeRequest(_primary), _git, _dispatcher, _bus, _loc,
+        => new(_primary, _git, _dispatcher, _bus, _loc, () => _closed = true,
             p => existingDirectories.Contains(p));
 
     private static readonly string Parent = Path.Combine(Root, "repos");
@@ -127,11 +129,9 @@ public sealed class CreateWorktreeDialogViewModelTests
         _bus.Subscribe<ShowOperationErrorMessage>(errors.Add);
 
         var vm = Vm();
-        var closed = false;
-        vm.CloseRequested += () => closed = true;
         Run(vm);
 
-        Assert.True(closed);
+        Assert.True(_closed);
         Assert.Single(refreshed);
         Assert.Null(vm.Create.Error.Value);
         Assert.Equal("fatal: could not read Username", Assert.Single(errors).Message);

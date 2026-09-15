@@ -10,17 +10,16 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
 
-internal readonly record struct StashRequest(Repo Repo);
-
 internal sealed record StashFileRow(string Path, FileChange Display, bool IsUntracked);
 
-internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, IDialogViewModel
+internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
 {
     private readonly Repo _repo;
     private readonly IGitStashOperations _gitService;
     private readonly IMessageBus _bus;
     private readonly HashSet<string> _untrackedPaths = new();
     private readonly string _doneToast;
+    private readonly Action _onClose;
 
     public IReadable<IReadOnlyList<StashFileRow>> Files { get; }
     public IReadable<IReadOnlySet<string>> CheckedPaths { get; }
@@ -29,25 +28,25 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
     public IReadable<bool> KeepStaged { get; }
     public AsyncCommand Stash { get; }
 
-    public event Action? CloseRequested;
-    public event Action? FocusMessageRequested;
 
     // The pivot a Shift-click extends a range from; moves to the row of every plain/toggle click.
     private int _anchorIndex = -1;
 
     public StashDialogViewModel(
-        StashRequest request,
+        Repo repo,
         LocalChangesSnapshot snapshot,
         IGitStashOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         LocalChangesSelectionStore selectionStore,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        Action onClose)
         : base(dispatcher, StashDialogState.Initial)
     {
-        _repo = request.Repo;
+        _repo = repo;
         _gitService = gitService;
         _bus = bus;
+        _onClose = onClose;
         var strings = loc.Strings.Value;
         _doneToast = strings.ToastChangesStashed;
 
@@ -116,8 +115,6 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         });
     }
 
-    public void RequestFocusMessage() => FocusMessageRequested?.Invoke();
-
     private GitOutcome DoStash()
     {
         var state = State.Value;
@@ -138,7 +135,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         _bus.Broadcast(new RefsChangedMessage(_repo.Id));
         _bus.Broadcast(new WorkingTreeChangedMessage(_repo.Id));
         _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_doneToast)));
-        CloseRequested?.Invoke();
+        _onClose();
     }
 
     private static IReadOnlyList<StashFileRow> BuildRows(LocalChangesSnapshot snapshot, HashSet<string> untracked)

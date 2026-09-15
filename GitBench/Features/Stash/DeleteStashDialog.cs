@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
@@ -23,22 +24,29 @@ internal sealed record DeleteStashDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new DropStashViewModel(
-            Repo,
-            Index,
-            ctx.Require<IGitStashOperations>(),
+        var repo = Repo;
+        var index = Index;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitStashOperations>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var drop = AsyncCommand.ForOutcome(
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            work: () => gitService.DropStash(repo, index),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                onClose();
+            });
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.StashDeleteTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Width = DialogFrame.WidthCompact,
             Action = (s.CommonDelete, DialogButtonRole.Destructive),
-            Command = vm.Drop,
+            Command = drop,
             ConfirmKeys = true,
             Body =
             [

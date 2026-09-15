@@ -3,17 +3,17 @@ using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
 
-namespace GitBench.Features.Branches;
+namespace GitBench.Controls.Dialogs;
 
-internal sealed class CheckoutDialogKbmController : BaseTextInputKbmController
+internal sealed class DialogTextInputKbmController : BaseTextInputKbmController
 {
     private readonly Action _onSubmit;
     private readonly Action _onCancel;
 
-    public CheckoutDialogKbmController(
+    public DialogTextInputKbmController(
         TextInputView input,
         InputSystem inputSystem,
-        ZGF.Gui.IClipboard? clipboard,
+        ZGF.Gui.IClipboard clipboard,
         Action onSubmit,
         Action onCancel) : base(input, inputSystem, clipboard)
     {

@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -13,6 +14,12 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
+internal readonly record struct RebaseBranchRequest(
+    Repo Repo,
+    string SourceBranch,
+    string TargetRef,
+    string TargetDisplay);
+
 internal sealed record RebaseBranchDialog : Widget
 {
     public required RebaseBranchRequest Request { get; init; }
@@ -20,23 +27,44 @@ internal sealed record RebaseBranchDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new RebaseBranchDialogViewModel(
-            Request,
-            ctx.Require<IGitIntegrationOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+        var request = Request;
+        var onClose = OnClose;
+        var gitService = ctx.Require<IGitIntegrationOperations>();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+        var bus = ctx.Require<IMessageBus>();
+
+        var autostash = new State<bool>(false);
+        var previewState = new State<RebasePreviewState>(RebasePreviewState.Unknown);
+
+        var rebase = AsyncCommand.ForOutcome(
+            dispatcher,
+            work: () => gitService.Rebase(request.Repo, request.TargetRef, autostash.Value),
+            onSuccess: () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(request.Repo.Id));
+                bus.Broadcast(new WorkingTreeChangedMessage(request.Repo.Id));
+                onClose();
+            });
+
+        Task.Run(() =>
+        {
+            RebasePreviewResult result;
+            try { result = gitService.PreviewRebase(request.Repo, request.TargetRef); }
+            catch (Exception ex) { result = new RebasePreviewResult(RebasePreviewState.Unknown, ex.Message); }
+
+            dispatcher.Post(() => previewState.Value = result.State);
+        });
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             Title = s.BranchesRebaseTitle,
-            OnClose = OnClose,
-            ViewModel = vm,
+            OnClose = onClose,
             Width = DialogFrame.WidthWide,
             Action = (s.CommonRebase, DialogButtonRole.Primary),
-            Command = vm.Rebase,
+            Command = rebase,
             ConfirmKeys = true,
-            FooterLead = PreviewChip(vm, s),
+            FooterLead = PreviewChip(previewState, s),
             Body =
             [
                 new Text
@@ -51,16 +79,16 @@ internal sealed record RebaseBranchDialog : Widget
                 BuildLabeledRow("", new CheckboxWidget
                 {
                     Label = s.BranchesRebaseAutostashLabel,
-                    Checked = vm.Autostash,
+                    Checked = autostash,
                     Height = 24,
                 }.WithController<KbmController>()),
             ],
         };
     }
 
-    private static IWidget PreviewChip(RebaseBranchDialogViewModel vm, Strings s)
+    private static IWidget PreviewChip(IReadable<RebasePreviewState> previewState, Strings s)
     {
-        Func<ThemeStyles, uint> color = t => vm.PreviewState.Value == RebasePreviewState.Conflicts
+        Func<ThemeStyles, uint> color = t => previewState.Value == RebasePreviewState.Conflicts
             ? t.BranchPreview.Conflict
             : t.BranchPreview.Clean;
         return new Row
@@ -74,7 +102,7 @@ internal sealed record RebaseBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(ps => ps switch
+                    Value = previewState.Bind(ps => ps switch
                     {
                         RebasePreviewState.Clean => LucideIcons.CheckSquare,
                         RebasePreviewState.Conflicts => LucideIcons.CloudOff,
@@ -85,7 +113,7 @@ internal sealed record RebaseBranchDialog : Widget
                 new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(ps => ps switch
+                    Value = previewState.Bind(ps => ps switch
                     {
                         RebasePreviewState.Clean => s.BranchesRebasePreviewClean,
                         RebasePreviewState.Conflicts => s.BranchesRebasePreviewConflicts,
