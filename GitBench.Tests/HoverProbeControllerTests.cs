@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.LanguageServers;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;
@@ -259,9 +260,9 @@ public sealed class HoverProbeControllerTests
 
     private sealed class Surface(Fixture fixture) : IHoverSurface
     {
-        public FilePositionHit? HitTestFilePosition(PointF point) =>
+        public TextPosition? HitTestFilePosition(PointF point) =>
             fixture.Positions.TryGetValue((point.X, point.Y), out var line)
-                ? new FilePositionHit(new FileLine(line), new RawColumn(0))
+                ? new TextPosition(new FileLine(line), new RawColumn(0))
                 : null;
 
         public IReadOnlyList<Diagnostic> DiagnosticsOn(FileLine line) =>

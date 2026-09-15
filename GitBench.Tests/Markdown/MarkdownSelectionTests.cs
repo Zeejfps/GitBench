@@ -1,3 +1,4 @@
+using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
@@ -113,6 +114,7 @@ public class MarkdownSelectionTests
         ctx.AddService(clipboard);
         ctx.AddService(shell);
         ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
+        ctx.AddService<ISyntaxHighlighter>(new PlainText());
     }
 
     /// <summary>The point at character offset <paramref name="charOffset"/> on

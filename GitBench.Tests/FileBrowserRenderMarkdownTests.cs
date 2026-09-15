@@ -50,6 +50,7 @@ public class FileBrowserRenderMarkdownTests : IDisposable
         FileBrowserFakes.NoIgnore,
         FileBrowserFakes.EmptyCatalog,
         new UnparsedFiles(),
+        new PlainText(),
         _dispatcher,
         restored,
         _persisted.Add,

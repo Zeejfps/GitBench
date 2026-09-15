@@ -30,7 +30,7 @@ internal sealed record DiffPreviewRequest(
 /// lane, which drops the result of a load whose file the reader has already navigated away from.
 /// </remarks>
 internal sealed class DiffPreviewLoader(
-    IGitDiffReader git, IGitConflictOperations conflicts, ISymbolExtractor extractor)
+    IGitDiffReader git, IGitConflictOperations conflicts, ISymbolExtractor extractor, ISyntaxHighlighter highlighter)
 {
     /// <summary>The finished render. Never null: everything that cannot be drawn comes back as a
     /// <see cref="DiffRenderState.Placeholder"/> saying why.</summary>
@@ -60,7 +60,7 @@ internal sealed class DiffPreviewLoader(
 
         return mode == DiffViewMode.Diff
             ? new DiffRenderState.Loaded(
-                diff, DiffAnnotationCoordinator.Compute(extractor, git, repo, diff, commitSha, baseSha))
+                diff, DiffAnnotationCoordinator.Compute(extractor, highlighter, git, repo, diff, commitSha, baseSha))
             : BuildFullFile(request, diff);
     }
 
@@ -142,6 +142,6 @@ internal sealed class DiffPreviewLoader(
 
         return new DiffRenderState.FullFile(
             target.Path, lines, added, target.Side, truncated, emphasis,
-            DiffAnnotationCoordinator.ComputeNewSide(extractor, diff, text));
+            DiffAnnotationCoordinator.ComputeNewSide(extractor, highlighter, diff, text));
     }
 }

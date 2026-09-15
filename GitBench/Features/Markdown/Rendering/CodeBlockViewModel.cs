@@ -18,10 +18,7 @@ internal sealed record CodeBlockState(IReadOnlyList<IReadOnlyList<TokenSpan>>? S
 /// </summary>
 internal sealed class CodeBlockViewModel : ViewModelBase<CodeBlockState>
 {
-    /// <param name="highlighter">Overrides the shared highlighter. Left null by the app so the
-    /// shared instance is first touched on the worker rather than during the build.</param>
-    public CodeBlockViewModel(
-        CodeBlock block, IUiDispatcher dispatcher, ISyntaxHighlighter? highlighter = null)
+    public CodeBlockViewModel(CodeBlock block, IUiDispatcher dispatcher, ISyntaxHighlighter highlighter)
         : base(dispatcher, new CodeBlockState(null))
     {
         Spans = Slice(s => s.Spans);
@@ -31,16 +28,14 @@ internal sealed class CodeBlockViewModel : ViewModelBase<CodeBlockState>
     /// <summary>Per-line token spans in tab-expanded column space; null while the block is plain.</summary>
     public IReadable<IReadOnlyList<IReadOnlyList<TokenSpan>>?> Spans { get; }
 
-    private void BeginTokenize(CodeBlock block, ISyntaxHighlighter? highlighter)
+    private void BeginTokenize(CodeBlock block, ISyntaxHighlighter highlighter)
     {
-        if (!block.IsClosed || block.Language is not { } language) return;
+        if (!block.IsClosed || block.Language is not { } name) return;
 
-        // The shared highlighter is reached inside the job, never before it: its first touch builds
-        // the TextMate registry and compiles the tree-sitter queries, which is exactly the cost
-        // this lane keeps off the UI thread.
+        var language = FileLanguage.Named(name);
         RunBackground<Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>>>(
             work: () => new Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>>.Ok(
-                (highlighter ?? RoutedSyntaxHighlighter.Shared).Highlight(block.Text, language)),
+                highlighter.Highlight(block.Text, language)),
             onResult: spans =>
             {
                 if (spans is Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>>.Ok ok)

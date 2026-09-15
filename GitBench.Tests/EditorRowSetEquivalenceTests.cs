@@ -98,8 +98,8 @@ public sealed class EditorRowSetEquivalenceTests(CodeIntelFixture fixture)
                 var document = TextDocument.FromText(text);
                 var editor = new EditorRowSet(document, loc) { UsageLensRows = true };
                 editor.SetFolds(folds);
-                Assert.True(editor.SetAnnotations(new Revised<EditorAnnotations>(
-                    DocumentRevision.Of(document), new EditorAnnotations(null, outline))));
+                Assert.True(editor.SetAnnotations(new Revised<DiffAnnotations>(
+                    DocumentRevision.Of(document), new DiffAnnotations(null, outline, null))));
 
                 AssertSameStream(path, text, lines, viewer, editor, folds);
                 folded++;

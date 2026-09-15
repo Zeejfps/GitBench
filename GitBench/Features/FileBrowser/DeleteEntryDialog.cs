@@ -63,12 +63,7 @@ internal sealed record DeleteEntryDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = Body(s, Name, isDirectory, toTrash),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = Body(s, Name, isDirectory, toTrash) },
             ],
         };
     }

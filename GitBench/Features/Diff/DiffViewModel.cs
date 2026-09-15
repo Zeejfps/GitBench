@@ -168,6 +168,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         ILocalizationService loc,
         LocalChangesViewModel localChanges,
         DiffWindowsViewModel windows,
@@ -181,7 +182,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _gitDiff = gitDiff;
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
-        _loader = new DiffPreviewLoader(gitDiff, gitConflicts, extractor);
+        _loader = new DiffPreviewLoader(gitDiff, gitConflicts, extractor, highlighter);
         _bus = bus;
         _loc = loc;
         _localChanges = localChanges;

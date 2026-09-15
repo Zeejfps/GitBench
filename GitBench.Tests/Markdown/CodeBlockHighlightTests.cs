@@ -27,16 +27,17 @@ public class CodeBlockHighlightTests
 {
     private sealed class CountingHighlighter : ISyntaxHighlighter
     {
+        private readonly SyntaxHighlighter _textMate = new();
         private int _calls;
 
         public int CallThreadId;
         public int Calls => Volatile.Read(ref _calls);
 
-        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, string languageId)
+        public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language)
         {
             CallThreadId = Environment.CurrentManagedThreadId;
             Interlocked.Increment(ref _calls);
-            return SyntaxHighlighter.Shared.Highlight(fileText, languageId);
+            return _textMate.Highlight(fileText, language);
         }
     }
 

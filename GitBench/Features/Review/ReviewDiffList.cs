@@ -2056,11 +2056,4 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             HorizontalScrollPositionChanged?.Invoke(normalizedX);
         }
     }
-
-    private sealed class ActionDisposable : IDisposable
-    {
-        private readonly Action _dispose;
-        public ActionDisposable(Action dispose) => _dispose = dispose;
-        public void Dispose() => _dispose();
-    }
 }

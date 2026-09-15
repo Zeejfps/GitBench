@@ -16,8 +16,9 @@ internal static class DiffAnnotationCoordinator
 {
     /// <summary>Colors and outlines, for a surface that renders the diff.</summary>
     public static DiffAnnotations? Compute(
-        ISymbolExtractor extractor, IGitDiffReader git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
-        => Compute(extractor, git, repo, diff, commitSha, baseSha, HighlightLanguage(diff), StructureLanguage(diff));
+        ISymbolExtractor extractor, ISyntaxHighlighter highlighter, IGitDiffReader git, Repo repo,
+        DiffResult diff, string? commitSha, string? baseSha = null)
+        => Compute(extractor, highlighter, git, repo, diff, commitSha, baseSha, FileLanguage.Detect(diff.Path));
 
     /// <summary>
     /// The new side alone, from text the caller already holds. For the full-file view, which draws
@@ -25,16 +26,16 @@ internal static class DiffAnnotationCoordinator
     /// and parse it would buy a highlight nobody renders and an outline whose hunk contexts that
     /// view has no separators to show.
     /// </summary>
-    public static DiffAnnotations? ComputeNewSide(ISymbolExtractor extractor, DiffResult diff, string newText)
+    public static DiffAnnotations? ComputeNewSide(
+        ISymbolExtractor extractor, ISyntaxHighlighter highlighter, DiffResult diff, string newText)
     {
         if (diff.IsBinary || diff.ErrorMessage != null || diff.Hunks.Count == 0) return null;
 
-        var languageId = HighlightLanguage(diff);
-        var language = StructureLanguage(diff);
-        if (languageId == null && language == null) return null;
+        var language = FileLanguage.Detect(diff.Path);
+        if (language is FileLanguage.None) return null;
 
-        var spans = languageId == null ? null : RoutedSyntaxHighlighter.Shared.Highlight(newText, languageId);
-        var outline = language is { } l ? extractor.Extract(newText, l) : null;
+        var spans = highlighter.Highlight(newText, language);
+        var outline = Outline(extractor, language, newText);
         if (spans == null && outline == null) return null;
 
         return new DiffAnnotations(spans == null ? null : new DiffHighlight(null, spans), outline, null);
@@ -44,20 +45,17 @@ internal static class DiffAnnotationCoordinator
     /// tokenizing it never draws.</summary>
     public static DiffAnnotations? ComputeOutlines(
         ISymbolExtractor extractor, IGitDiffReader git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
-        => Compute(extractor, git, repo, diff, commitSha, baseSha, languageId: null, StructureLanguage(diff));
+        => Compute(extractor, highlighter: null, git, repo, diff, commitSha, baseSha, FileLanguage.Detect(diff.Path));
 
-    // The two outputs are detected separately: TextMate recognises languages tree-sitter has no
-    // grammar for and the reverse is possible too. A file gets colors, or contexts, or both.
-    private static string? HighlightLanguage(DiffResult diff) => LanguageRegistry.DetectLanguageId(diff.Path);
-
-    private static CodeLanguage? StructureLanguage(DiffResult diff) => CodeLanguages.Detect(diff.Path);
+    private static FileOutline? Outline(ISymbolExtractor extractor, FileLanguage language, string? text) =>
+        language is FileLanguage.TreeSitter(var parsed) && text != null ? extractor.Extract(text, parsed) : null;
 
     private static DiffAnnotations? Compute(
-        ISymbolExtractor extractor, IGitDiffReader git, Repo repo, DiffResult diff,
-        string? commitSha, string? baseSha, string? languageId, CodeLanguage? language)
+        ISymbolExtractor extractor, ISyntaxHighlighter? highlighter, IGitDiffReader git, Repo repo, DiffResult diff,
+        string? commitSha, string? baseSha, FileLanguage language)
     {
         if (diff.IsBinary || diff.ErrorMessage != null || diff.Hunks.Count == 0) return null;
-        if (languageId == null && language == null) return null;
+        if (language is FileLanguage.None) return null;
 
         // Only fetch the side(s) the diff actually shows: a pure-add diff has no removed rows
         // (skip the old blob), a pure-delete no added/context rows (skip the new blob).
@@ -67,9 +65,9 @@ internal static class DiffAnnotationCoordinator
         var newText = needNew ? SideText(git, repo, diff, commitSha, baseSha, oldSide: false) : null;
         if (oldText == null && newText == null) return null;
 
-        var highlight = languageId == null ? null : Tokenize(oldText, newText, languageId);
-        var oldOutline = language is { } l && oldText != null ? extractor.Extract(oldText, l) : null;
-        var newOutline = language is { } n && newText != null ? extractor.Extract(newText, n) : null;
+        var highlight = highlighter == null ? null : Tokenize(highlighter, oldText, newText, language);
+        var oldOutline = Outline(extractor, language, oldText);
+        var newOutline = Outline(extractor, language, newText);
         if (highlight == null && oldOutline == null && newOutline == null) return null;
 
         return new DiffAnnotations(highlight, newOutline, oldOutline);
@@ -98,11 +96,11 @@ internal static class DiffAnnotationCoordinator
         return git.GetFileText(repo, path, diff.Side, oldSide, commitSha, baseSha);
     }
 
-    private static DiffHighlight? Tokenize(string? oldText, string? newText, string languageId)
+    private static DiffHighlight? Tokenize(
+        ISyntaxHighlighter highlighter, string? oldText, string? newText, FileLanguage language)
     {
-        var highlighter = RoutedSyntaxHighlighter.Shared;
-        var oldSpans = oldText == null ? null : highlighter.Highlight(oldText, languageId);
-        var newSpans = newText == null ? null : highlighter.Highlight(newText, languageId);
+        var oldSpans = oldText == null ? null : highlighter.Highlight(oldText, language);
+        var newSpans = newText == null ? null : highlighter.Highlight(newText, language);
         return oldSpans == null && newSpans == null ? null : new DiffHighlight(oldSpans, newSpans);
     }
 }

@@ -52,6 +52,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly IFileSystemReader _files;
     private readonly Func<IReadOnlyList<string>, IReadOnlySet<string>> _ignored;
     private readonly ISymbolExtractor _extractor;
+    private readonly ISyntaxHighlighter _highlighter;
     private readonly IUiDispatcher _dispatcher;
     private readonly Action<FileBrowserUiState> _persist;
     private readonly IRepoDocuments _documents;
@@ -95,6 +96,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         Func<IReadOnlyList<string>, IReadOnlySet<string>> ignored,
         Func<IReadOnlyList<string>> listFiles,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         IUiDispatcher dispatcher,
         FileBrowserUiState restored,
         Action<FileBrowserUiState> persist,
@@ -107,6 +109,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _files = files;
         _ignored = ignored;
         _extractor = extractor;
+        _highlighter = highlighter;
         _dispatcher = dispatcher;
         _persist = persist;
         _documents = documents;
@@ -979,7 +982,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
             FilePreview result;
             try
             {
-                result = FileContentLoader.Load(target, _extractor, token);
+                result = FileContentLoader.Load(target, _extractor, _highlighter, token);
             }
             catch (OperationCanceledException)
             {

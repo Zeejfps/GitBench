@@ -21,7 +21,7 @@ namespace GitBench.Features.Editor;
 /// The UI thread posts two immutable values per edit — the revision the document reached, and the
 /// edit that would undo it — and never touches a tree, a node or the parse bytes. The revision
 /// travels with the message because only a document can mint one, and it is what
-/// <see cref="EditorBuffer.Apply"/> checks the answer against: by the time a parse comes back the
+/// <see cref="EditorRowSet.SetAnnotations"/> checks the answer against: by the time a parse comes back the
 /// reader may have typed again, and a parse of what they typed a moment ago is worse than none.
 /// </para>
 /// <para>
@@ -39,6 +39,7 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
 
     private readonly IDocumentStore _store;
     private readonly IUiDispatcher _dispatcher;
+    private readonly TreeSitterGrammars _grammars;
     private readonly TreeSitterSyntaxHighlighter _highlighter;
     private readonly TreeSitterSymbolExtractor _extractor;
     private readonly TimeSpan _debounce;
@@ -68,21 +69,24 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
     public DocumentAnnotations(
         IDocumentStore store,
         IUiDispatcher dispatcher,
+        TreeSitterGrammars grammars,
         TreeSitterSyntaxHighlighter highlighter,
         TreeSitterSymbolExtractor extractor)
-        : this(store, dispatcher, highlighter, extractor, Debounce)
+        : this(store, dispatcher, grammars, highlighter, extractor, Debounce)
     {
     }
 
     internal DocumentAnnotations(
         IDocumentStore store,
         IUiDispatcher dispatcher,
+        TreeSitterGrammars grammars,
         TreeSitterSyntaxHighlighter highlighter,
         TreeSitterSymbolExtractor extractor,
         TimeSpan debounce)
     {
         _store = store;
         _dispatcher = dispatcher;
+        _grammars = grammars;
         _highlighter = highlighter;
         _extractor = extractor;
         _debounce = debounce;
@@ -108,14 +112,13 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
 
     private void Track(EditorBuffer buffer)
     {
-        if (LanguageRegistry.DetectLanguageId(buffer.Path) is not { } languageId) return;
+        if (FileLanguage.Detect(buffer.Path) is not FileLanguage.TreeSitter(var language)) return;
         // The tree-sitter engine's own answer, not the routed one's: a file it declines is coloured
         // by TextMate, and publishing an annotation with no highlight in it would blank that out.
-        if (!_highlighter.Supports(languageId)) return;
+        if (!_highlighter.Supports(language)) return;
 
         var id = ++_nextId;
-        var outline = CodeLanguages.Detect(buffer.Path);
-        var following = new Following(id, buffer, languageId, outline);
+        var following = new Following(id, buffer, language);
         _following[id] = following;
 
         following.OnEdited = edit => Post(new Message.Edited(id, edit.At, edit.Inverse, edit.Inserted));
@@ -147,15 +150,14 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
 
     private static Message.Loaded Load(Following following) => new(
         following.Id,
-        following.LanguageId,
-        following.Outline,
+        following.Language,
         following.Buffer.Session.Document.Text,
         DocumentRevision.Of(following.Buffer.Session.Document));
 
-    private void Publish(int id, DocumentRevision at, EditorAnnotations annotations)
+    private void Publish(int id, DocumentRevision at, DiffAnnotations annotations)
     {
         if (!_following.TryGetValue(id, out var following)) return;
-        following.Buffer.Apply(new Revised<EditorAnnotations>(at, annotations));
+        following.Buffer.Rows.SetAnnotations(new Revised<DiffAnnotations>(at, annotations));
     }
 
     private void Post(Message message)
@@ -228,7 +230,7 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
                 if (_parses.Remove(loaded.Id, out var previous)) previous.Dispose();
 
                 var parse = new DocumentParse(
-                    _highlighter, _extractor, loaded.LanguageId, loaded.Outline, loaded.Text);
+                    _grammars, _highlighter, _extractor, loaded.Language, loaded.Text);
                 if (!parse.Tracks)
                 {
                     parse.Dispose();
@@ -277,7 +279,7 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
         {
             if (!_parses.TryGetValue(id, out var parse)) continue;
 
-            EditorAnnotations annotations;
+            DiffAnnotations annotations;
             try
             {
                 annotations = parse.Read();
@@ -324,15 +326,13 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
         _stopping.Dispose();
     }
 
-    private sealed class Following(int id, EditorBuffer buffer, string languageId, CodeLanguage? outline)
+    private sealed class Following(int id, EditorBuffer buffer, CodeLanguage language)
     {
         public int Id { get; } = id;
 
         public EditorBuffer Buffer { get; } = buffer;
 
-        public string LanguageId { get; } = languageId;
-
-        public CodeLanguage? Outline { get; } = outline;
+        public CodeLanguage Language { get; } = language;
 
         public Action<DocumentEdit>? OnEdited { get; set; }
     }
@@ -340,8 +340,7 @@ internal sealed class DocumentAnnotations : IHostedService, IDisposable
     private abstract record Message
     {
         /// <summary>A file to start following, or to start over from.</summary>
-        public sealed record Loaded(
-            int Id, string LanguageId, CodeLanguage? Outline, string Text, DocumentRevision At) : Message;
+        public sealed record Loaded(int Id, CodeLanguage Language, string Text, DocumentRevision At) : Message;
 
         public sealed record Edited(int Id, DocumentRevision At, TextEdit Inverse, string Inserted) : Message;
 

@@ -14,7 +14,7 @@ internal sealed record HunkRowRange(int HunkIndex, int FirstRow, int LastRow);
 /// <see cref="DiffContentView"/> (the single-file pane) and the review window's stacked list,
 /// so both flatten a diff identically.
 /// </summary>
-internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
+internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows, IAnchoredRows
 {
     public static readonly DiffRowSet Empty = new();
 
@@ -35,8 +35,6 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
     // instead of being truncated by DiffRowPainter.FitHeader.
     private const int SeparatorChromeCells = 6;
     private const int ExpanderColumnCells = 4;
-
-    public const int UsageLensCells = 16;
 
     // Full-file mode draws a single (new-side) line-number gutter and no hunk chrome. Diff mode
     // leaves this false and renders the old|new two-gutter layout.
@@ -94,32 +92,13 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
         return null;
     }
 
-    /// <summary>Where a row sits, in terms that survive this stream being rebuilt.</summary>
-    public DiffRowAnchor? AnchorAt(RowIndex row)
-    {
-        if (row.Value < 0 || row.Value >= _rows.Count) return null;
-        for (var i = row.Value; i >= 0; i--)
-            if (KeyAt(i) is { } key) return new DiffRowAnchor(key, row.Value - i);
-        return new DiffRowAnchor(null, row.Value + 1);
-    }
+    public DiffRowAnchor? AnchorAt(RowIndex row) => DiffRowAnchors.AnchorAt(this, row);
 
-    /// <summary>The row an anchor names here, or null when this stream does not have it.</summary>
-    public RowIndex? RowAt(DiffRowAnchor anchor)
-    {
-        if (_rows.Count == 0) return null;
+    public RowIndex? RowAt(DiffRowAnchor anchor) => DiffRowAnchors.RowAt(this, anchor);
 
-        var line = -1;
-        if (anchor.Line is { } key)
-        {
-            if (RowFor(key) is not { } row) return null;
-            if (anchor.RowsBelow == 0) return row;
-            line = row.Value;
-        }
+    int IAnchoredRows.RowCount => _rows.Count;
 
-        var run = 0;
-        while (line + 1 + run < _rows.Count && KeyAt(line + 1 + run) is null) run++;
-        return new RowIndex(Math.Max(0, line + Math.Min(anchor.RowsBelow, run)));
-    }
+    DiffRowKey? IAnchoredRows.KeyAt(int row) => KeyAt(row);
 
     private DiffRowKey? KeyAt(int index)
     {
@@ -394,7 +373,7 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
         SingleGutter = true;
         FoldColumn = folds != null;
         GlyphColumn = ff.AddedLineNumbers.Count > 0;
-        GutterDigits = Math.Max(1, DigitCount(ff.Lines.Count));
+        GutterDigits = FullFileRow.GutterDigits(ff.Lines.Count);
 
         var plan = FoldPlan.Build(ff.Annotations?.NewSide, folds, usageLens, ff.Lines);
         var emphasis = ff.Emphasis;
@@ -406,24 +385,17 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
             if (plan.LensAt(lineNumber) is { } lens)
             {
                 _rows.Add(lens);
-                var lensCells = lens.Indent + UsageLensCells;
+                var lensCells = FullFileRow.LensCells(lens);
                 if (lensCells > MaxRowCells) MaxRowCells = lensCells;
             }
 
             var kind = ff.AddedLineNumbers.Contains(lineNumber) ? DiffLineKind.Added : DiffLineKind.Context;
-            var text = DiffLineText.Of(ff.Lines[i]);
-            // Context kind drives ForLine to the new-side spans for every row (added or not),
-            // which is exactly what the full after-side file needs.
-            var spans = ff.Annotations?.Highlight?.ForLine(DiffLineKind.Context, null, lineNumber);
-            if (spans != null && spans.Count == 0) spans = null;
             IReadOnlyList<CharRange>? em = null;
             emphasis?.TryGetValue(lineNumber, out em);
-            var mark = plan.MarkAt(lineNumber);
-            _rows.Add(new DiffRow.Line(
-                kind, DiffGutterNumber.None, Gutter(lineNumber), text, spans, em, mark));
+            var row = FullFileRow.Line(kind, lineNumber, ff.Lines[i], ff.Annotations?.Highlight, em, plan.MarkAt(lineNumber));
+            _rows.Add(row);
 
-            var cells = DiffText.VisualCells(text.Expanded);
-            if (mark is { Chip: true }) cells += DiffText.VisualCells(FoldChipText);
+            var cells = DiffText.VisualCells(row.Text.Expanded) + FullFileRow.ChipCells(row.Fold);
             if (cells > MaxRowCells) MaxRowCells = cells;
 
             if (plan.SwallowedAt(lineNumber) is { } swallowed)
@@ -433,10 +405,6 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
         if (ff.Truncated)
             AddBanner(_loc.Strings.Value.DiffFileTruncated(ff.Lines.Count));
     }
-
-    /// <summary>What a collapsed fold leaves behind, appended to the declaration's own last line —
-    /// the whole body including its braces, so a folded declaration reads as one line.</summary>
-    public const string FoldChipText = "{...}";
 
     private void AddBanner(string text)
     {
@@ -449,14 +417,6 @@ internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
     // own types.
     private static DiffGutterNumber Gutter(int? lineNumber) =>
         DiffGutterNumber.Of(lineNumber is int n ? new FileLine(n) : null);
-
-    private static int DigitCount(int n)
-    {
-        if (n <= 0) return 1;
-        var d = 0;
-        while (n > 0) { d++; n /= 10; }
-        return d;
-    }
 
     private static string FormatMode(int? mode)
         => mode is int m ? Convert.ToString(m, 8).PadLeft(6, '0') : "-";

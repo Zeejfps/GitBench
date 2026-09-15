@@ -103,7 +103,7 @@ public class DiffPreviewLoaderTests(CodeIntelFixture fixture)
     private DiffRenderState Load(DiffViewMode mode, StubDiffReader? git = null)
     {
         var loader = new DiffPreviewLoader(
-            git ?? new StubDiffReader(NewSource, OldSource, DiffOf()), new NoConflicts(), fixture.Extractor);
+            git ?? new StubDiffReader(NewSource, OldSource, DiffOf()), new NoConflicts(), fixture.Extractor, fixture.Colors);
         return loader.Load(new DiffPreviewRequest(
             new Repo(Guid.NewGuid(), "/repo", "repo"),
             new DiffTarget("AuthService.cs", DiffSide.Unstaged),

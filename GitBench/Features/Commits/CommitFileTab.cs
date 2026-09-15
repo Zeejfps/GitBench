@@ -45,11 +45,12 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         ILocalizationService loc,
         LocalChangesViewModel localChanges,
         DiffWindowsViewModel windows,
         IPlatformShell shell)
-        => new(path, repoId, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, localChanges, windows, shell);
+        => new(path, repoId, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, highlighter, loc, localChanges, windows, shell);
 
     private CommitFileTab(
         string path,
@@ -61,6 +62,7 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         ILocalizationService loc,
         LocalChangesViewModel localChanges,
         DiffWindowsViewModel windows,
@@ -70,7 +72,7 @@ internal sealed class CommitFileTab : IDisposable
         FileName = LastSegment(path);
         Sha = WorkingTreeSha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.WorkingTree));
-        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, localChanges, windows, shell, repoId);
+        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, highlighter, loc, localChanges, windows, shell, repoId);
     }
 
     public CommitFileTab(
@@ -84,6 +86,7 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         ILocalizationService loc,
         LocalChangesViewModel localChanges,
         DiffWindowsViewModel windows,
@@ -98,7 +101,7 @@ internal sealed class CommitFileTab : IDisposable
         _target = new State<DiffTarget?>(baseSha == null
             ? new DiffTarget(path, DiffSide.Commit, sha)
             : new DiffTarget(path, DiffSide.Range, sha, baseSha));
-        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, localChanges, windows, shell, repoId);
+        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, highlighter, loc, localChanges, windows, shell, repoId);
     }
 
     public void Dispose()

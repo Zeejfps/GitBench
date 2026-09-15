@@ -1,5 +1,6 @@
 using GitBench.Platform;
 using System.Reflection;
+using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
@@ -99,6 +100,7 @@ public class ThemeMarkdownStylesTests
                 ctx.AddService<IClipboard>(new NoopClipboard());
                 ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
+                ctx.AddService<ISyntaxHighlighter>(new PlainText());
             });
         return (harness, themeMode);
     }

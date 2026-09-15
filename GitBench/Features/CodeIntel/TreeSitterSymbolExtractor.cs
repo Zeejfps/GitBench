@@ -6,92 +6,44 @@ using TreeSitter;
 
 namespace GitBench.Features.CodeIntel;
 
-internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
+internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
 {
-    /// <summary>Matches <c>FileContentLoader.MaxTextBytes</c>: every file the editor will open is
-    /// also parsed.</summary>
-    public const int MaxFileBytes = 2 * 1024 * 1024;
-
-    private const string GrammarLibrary = "tree-sitter-grammars";
-    private const string DefinitionCapturePrefix = "def.";
-    private const string NameCapture = "name";
-    private const string BodyCapture = "body";
-    private const string ExtentCapture = "extent";
-
-    private readonly Dictionary<CodeLanguage, CompiledLanguage>? _compiled;
+    private readonly TreeSitterGrammars _grammars;
     private readonly Action<string>? _log;
     private int _parseFailureLogged;
 
-    public TreeSitterSymbolExtractor(
-        Action<string>? log = null,
-        int? poolCapacity = null,
-        Func<CodeLanguage, string>? queryText = null)
+    public TreeSitterSymbolExtractor(TreeSitterGrammars grammars, Action<string>? log = null)
     {
+        _grammars = grammars;
         _log = log;
-
-        var capacity = poolCapacity ?? Environment.ProcessorCount;
-        var read = queryText ?? ReadEmbeddedQuery;
-        var compiled = new Dictionary<CodeLanguage, CompiledLanguage>();
-        string? firstFailure = null;
-
-        foreach (var language in CodeLanguages.All)
-        {
-            try
-            {
-                compiled.Add(language, CompiledLanguage.Create(language, capacity, read(language)));
-            }
-            catch (Exception error)
-            {
-                firstFailure ??= error.Message;
-                _log?.Invoke($"Code intelligence unavailable for {language}: {error}");
-            }
-        }
-
-        if (compiled.Count > 0)
-        {
-            _compiled = compiled;
-            Availability = CodeIntelAvailability.Ready.Instance;
-            return;
-        }
-
-        _compiled = null;
-        Availability = new CodeIntelAvailability.Unavailable(firstFailure ?? "No language loaded.");
+        Availability = grammars.OutlinesAny
+            ? CodeIntelAvailability.Ready.Instance
+            : new CodeIntelAvailability.Unavailable(grammars.OutlineFailure ?? "No language loaded.");
     }
 
     public CodeIntelAvailability Availability { get; }
 
-    internal bool Supports(CodeLanguage language) => _compiled?.ContainsKey(language) == true;
+    internal bool Supports(CodeLanguage language) => _grammars.Get(language)?.Outline is not null;
 
     public FileOutline? Extract(string text, CodeLanguage language)
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        if (_compiled is null || !_compiled.TryGetValue(language, out var compiled)) return null;
-        if (text.Length > MaxFileBytes) return null;
-
-        var normalized = NormalizeNewlines(text);
-        if (Encoding.UTF8.GetByteCount(normalized) > MaxFileBytes) return null;
-        var utf8 = Encoding.UTF8.GetBytes(normalized);
+        if (_grammars.Get(language) is not { Outline: { } outline } grammar) return null;
+        if (ParseText.Of(text) is not { } input) return null;
 
         try
         {
-            return compiled.Pool.Use(
-                (compiled, normalized, utf8),
-                static (session, s) => Walk(session, s.compiled, s.normalized, s.utf8));
+            return grammar.Pool.Use(
+                (outline, input),
+                static (session, s) => Walk(session, s.outline, s.input.Normalized, s.input.Utf8));
         }
         catch (Exception error)
         {
-            LogOnce(ref _parseFailureLogged, $"Code intelligence failed to parse a {language} file: {error}");
+            LogOnce($"Code intelligence failed to parse a {language} file: {error}");
             return null;
         }
     }
-
-    /// <summary>A tree this extractor will keep across one open file's edits, or null for a language
-    /// it holds no query for.</summary>
-    internal MaintainedTree? Track(CodeLanguage language) =>
-        _compiled is not null && _compiled.TryGetValue(language, out var compiled)
-            ? new MaintainedTree(compiled.Pool)
-            : null;
 
     /// <summary>What a file declares, read off a tree already parsed for it — the incremental path,
     /// where the tree is maintained across edits rather than built per call.</summary>
@@ -102,60 +54,35 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         ArgumentNullException.ThrowIfNull(normalized);
         ArgumentNullException.ThrowIfNull(root);
 
-        if (_compiled is null || !_compiled.TryGetValue(language, out var compiled)) return null;
-        if (utf8.Length > MaxFileBytes) return null;
+        if (_grammars.Get(language) is not { Outline: { } outline } grammar) return null;
+        if (utf8.Length > ParseText.MaxFileBytes) return null;
 
         try
         {
-            return compiled.Pool.Use(
-                (compiled, normalized, byteCount: utf8.Length, root),
-                static (session, s) => WalkTree(session, s.compiled, s.normalized, s.byteCount, s.root.RootNode));
+            return grammar.Pool.Use(
+                (outline, normalized, byteCount: utf8.Length, root),
+                static (session, s) => WalkTree(session, s.outline, s.normalized, s.byteCount, s.root.RootNode));
         }
         catch (Exception error)
         {
-            LogOnce(ref _parseFailureLogged, $"Code intelligence failed to parse a {language} file: {error}");
+            LogOnce($"Code intelligence failed to parse a {language} file: {error}");
             return null;
         }
     }
 
-    public void Dispose()
+    private void LogOnce(string message)
     {
-        if (_compiled is null) return;
-        foreach (var entry in _compiled.Values)
-        {
-            entry.Dispose();
-        }
+        if (Interlocked.Exchange(ref _parseFailureLogged, 1) == 0) _log?.Invoke(message);
     }
 
-    private void LogOnce(ref int flag, string message)
-    {
-        if (Interlocked.Exchange(ref flag, 1) == 0)
-        {
-            _log?.Invoke(message);
-        }
-    }
-
-    public static string ReadEmbeddedQuery(CodeLanguage language)
-    {
-        var resource = language.QueryResourceName();
-        var assembly = typeof(TreeSitterSymbolExtractor).Assembly;
-        using var stream = assembly.GetManifestResourceStream(resource)
-            ?? throw new InvalidOperationException($"Embedded tree-sitter query '{resource}' is missing.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
-
-    private static string NormalizeNewlines(string text) =>
-        text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n') : text;
-
-    private static FileOutline? Walk(ParseSession session, CompiledLanguage compiled, string text, byte[] utf8)
+    private static FileOutline? Walk(ParseSession session, OutlineQuery compiled, string text, byte[] utf8)
     {
         using var tree = session.Parser.Parse(utf8);
         return WalkTree(session, compiled, text, utf8.Length, tree.RootNode);
     }
 
     private static FileOutline? WalkTree(
-        ParseSession session, CompiledLanguage compiled, string text, int byteCount, Node root)
+        ParseSession session, OutlineQuery compiled, string text, int byteCount, Node root)
     {
         var found = new List<Pending>();
         var seen = new HashSet<(uint Start, uint End)>();
@@ -368,157 +295,5 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         public uint ExtentEndByte { get; } = pending.ExtentEndByte;
 
         public List<Draft> Children { get; } = [];
-    }
-
-    private sealed class CompiledLanguage : IDisposable
-    {
-        private readonly Dictionary<uint, SymbolKind> _definitionCaptures;
-
-        private CompiledLanguage(
-            Query query,
-            ParseSessionPool pool,
-            Dictionary<uint, SymbolKind> definitionCaptures,
-            uint nameCaptureId,
-            uint bodyCaptureId,
-            bool hasBodyCapture,
-            uint extentCaptureId,
-            bool hasExtentCapture,
-            IReadOnlyList<string> leadingDecorations)
-        {
-            Query = query;
-            Pool = pool;
-            _definitionCaptures = definitionCaptures;
-            NameCaptureId = nameCaptureId;
-            BodyCaptureId = bodyCaptureId;
-            HasBodyCapture = hasBodyCapture;
-            ExtentCaptureId = extentCaptureId;
-            HasExtentCapture = hasExtentCapture;
-            LeadingDecorations = leadingDecorations;
-        }
-
-        public Query Query { get; }
-
-        public ParseSessionPool Pool { get; }
-
-        public uint NameCaptureId { get; }
-
-        public uint BodyCaptureId { get; }
-
-        public bool HasBodyCapture { get; }
-
-        public uint ExtentCaptureId { get; }
-
-        public bool HasExtentCapture { get; }
-
-        public IReadOnlyList<string> LeadingDecorations { get; }
-
-        public static CompiledLanguage Create(CodeLanguage language, int poolCapacity, string queryText)
-        {
-            var grammar = Language.Load(GrammarLibrary, language.GrammarName());
-            var query = Query.Compile(grammar, queryText);
-
-            try
-            {
-                var definitionCaptures = new Dictionary<uint, SymbolKind>();
-                uint nameCaptureId = 0;
-                var hasNameCapture = false;
-                uint bodyCaptureId = 0;
-                var hasBodyCapture = false;
-                uint extentCaptureId = 0;
-                var hasExtentCapture = false;
-
-                for (var id = 0u; id < query.CaptureCount; id++)
-                {
-                    var name = query.CaptureName(id);
-
-                    if (name.StartsWith(DefinitionCapturePrefix, StringComparison.Ordinal))
-                    {
-                        var suffix = name.AsSpan(DefinitionCapturePrefix.Length);
-                        if (!SymbolKinds.TryParseCaptureSuffix(suffix, out var kind))
-                        {
-                            throw new InvalidOperationException(
-                                $"The {language} query captures '@{name}', but '{suffix}' is not a symbol kind. " +
-                                $"Legal kinds: {string.Join(", ", SymbolKinds.CaptureSuffixes)}.");
-                        }
-
-                        definitionCaptures.Add(id, kind);
-                    }
-                    else if (name == NameCapture)
-                    {
-                        nameCaptureId = id;
-                        hasNameCapture = true;
-                    }
-                    else if (name == BodyCapture)
-                    {
-                        bodyCaptureId = id;
-                        hasBodyCapture = true;
-                    }
-                    else if (name == ExtentCapture)
-                    {
-                        extentCaptureId = id;
-                        hasExtentCapture = true;
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException(
-                            $"The {language} query captures '@{name}', which is not part of the capture protocol. " +
-                            $"Use '@{DefinitionCapturePrefix}<kind>', '@{NameCapture}', '@{BodyCapture}' " +
-                            $"or '@{ExtentCapture}'.");
-                    }
-                }
-
-                if (definitionCaptures.Count == 0)
-                {
-                    throw new InvalidOperationException(
-                        $"The {language} query declares no '@{DefinitionCapturePrefix}<kind>' capture, " +
-                        "so it can never produce an outline node.");
-                }
-
-                if (!hasNameCapture)
-                {
-                    throw new InvalidOperationException(
-                        $"The {language} query declares no '@{NameCapture}' capture, " +
-                        "so every match would be discarded.");
-                }
-
-                return new CompiledLanguage(
-                    query,
-                    new ParseSessionPool(grammar, poolCapacity),
-                    definitionCaptures,
-                    nameCaptureId,
-                    bodyCaptureId,
-                    hasBodyCapture,
-                    extentCaptureId,
-                    hasExtentCapture,
-                    language.LeadingDecorationNodeTypes());
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
-        }
-
-        public bool TryReadDefinition(QueryMatch match, out Node definition, out SymbolKind kind)
-        {
-            for (var i = 0; i < match.CaptureCount; i++)
-            {
-                if (_definitionCaptures.TryGetValue(match.CaptureIdAt(i), out kind))
-                {
-                    definition = match.NodeAt(i);
-                    return true;
-                }
-            }
-
-            definition = default;
-            kind = default;
-            return false;
-        }
-
-        public void Dispose()
-        {
-            Pool.Dispose();
-            Query.Dispose();
-        }
     }
 }

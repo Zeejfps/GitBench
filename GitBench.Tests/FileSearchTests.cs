@@ -335,6 +335,7 @@ public class FileSearchPreviewTests : IDisposable
             FileBrowserFakes.NoIgnore,
             FileBrowserFakes.EmptyCatalog,
             new UnparsedFiles(),
+            new PlainText(),
             _dispatcher,
             new FileBrowserUiState(),
             _ => { },

@@ -51,6 +51,7 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
     private readonly IGitConflictOperations _gitConflicts;
     private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly ISymbolExtractor _extractor;
+    private readonly ISyntaxHighlighter _highlighter;
     private readonly IRepoSnapshotStore _snapshots;
     private readonly IReviewProgressStore _reviewProgress;
     private readonly IUiDispatcher _dispatcher;
@@ -81,6 +82,7 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
         IGitConflictOperations gitConflicts,
         IGitSubmoduleOperations gitSubmodules,
         ISymbolExtractor extractor,
+        ISyntaxHighlighter highlighter,
         IRepoSnapshotStore snapshots,
         IReviewProgressStore reviewProgress,
         IUiDispatcher dispatcher,
@@ -99,6 +101,7 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
         _gitConflicts = gitConflicts;
         _gitSubmodules = gitSubmodules;
         _extractor = extractor;
+        _highlighter = highlighter;
         _snapshots = snapshots;
         _reviewProgress = reviewProgress;
         _dispatcher = dispatcher;
@@ -124,7 +127,7 @@ internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposabl
         // The window's own commit-details VM, opted out of the selection bus so the History pane's
         // selection never drives this window's right pane.
         var details = new CommitDetailsViewModel(
-            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _extractor, _registry, _dispatcher, _bus, _loc, _preferences,
+            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _extractor, _highlighter, _registry, _dispatcher, _bus, _loc, _preferences,
             _localChanges, _diffWindows, _shell, subscribeToSelection: false);
         Windows.Add(new ReviewWindowViewModel(
             session, _source, _dispatcher, details, _loc, _bus, _snapshots, _reviewProgress));

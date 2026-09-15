@@ -83,7 +83,7 @@ internal sealed class DocumentStore : IDocumentStore, IHostedService, IDisposabl
     private readonly ILocalizationService _loc;
 
     private readonly Dictionary<Guid, RepoDocuments> _repos = new();
-    private readonly int _thread = Environment.CurrentManagedThreadId;
+    private readonly OwningThread _thread = OwningThread.Current();
 
     private IDisposable? _reposSub;
     private bool _started;
@@ -150,14 +150,7 @@ internal sealed class DocumentStore : IDocumentStore, IHostedService, IDisposabl
 
     private void RaiseClosed(EditorBuffer buffer) => Closed?.Invoke(buffer);
 
-    private void AssertThread()
-    {
-        if (Environment.CurrentManagedThreadId == _thread) return;
-        throw new InvalidOperationException(
-            $"Edited files belong to the thread that opened them (thread {_thread}); this is thread " +
-            $"{Environment.CurrentManagedThreadId}. An off-thread reader hops through the UI " +
-            "dispatcher first.");
-    }
+    private void AssertThread() => _thread.Assert("An edited file");
 
     private void DropClosedRepos()
     {
@@ -189,7 +182,7 @@ internal sealed class RepoDocuments : IRepoDocuments, IDisposable
     private readonly ILocalizationService _loc;
     private readonly Dictionary<string, Entry> _open = new(PathKey.Comparer);
     private readonly List<string> _order = [];
-    private readonly int _thread = Environment.CurrentManagedThreadId;
+    private readonly OwningThread _thread = OwningThread.Current();
 
     private readonly State<int> _changes = new(0);
 
@@ -315,14 +308,7 @@ internal sealed class RepoDocuments : IRepoDocuments, IDisposable
         Edited?.Invoke(key);
     }
 
-    private void AssertThread()
-    {
-        if (Environment.CurrentManagedThreadId == _thread) return;
-        throw new InvalidOperationException(
-            $"Edited files belong to the thread that opened them (thread {_thread}); this is thread " +
-            $"{Environment.CurrentManagedThreadId}. An off-thread reader hops through the UI " +
-            "dispatcher first.");
-    }
+    private void AssertThread() => _thread.Assert("An edited file");
 
     public void Dispose()
     {

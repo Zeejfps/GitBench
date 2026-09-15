@@ -10,15 +10,15 @@ namespace GitBench.Tests;
 /// Injected languages: the regions a grammar hands to another one, which is what Markdown and HTML
 /// are almost entirely made of.
 /// </summary>
-[Collection(nameof(TreeSitterHighlightCollection))]
-public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
+[Collection(nameof(CodeIntelCollection))]
+public class TreeSitterInjectionTests(CodeIntelFixture fixture)
 {
     [Fact]
     public void AScriptBodyIsColoredAsJavaScript()
     {
         const string source = "<p>hi</p>\n<script>\nconst total = 42;\n</script>";
 
-        var spans = fixture.Highlighter.Highlight(source, "html");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Html);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "const"));
@@ -31,7 +31,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "<style>\n.card { color: red; }\n</style>";
 
-        var spans = fixture.Highlighter.Highlight(source, "html");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Html);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Variable, TreeSitterHighlightTests.SlotOf(source, spans, "color"));
@@ -47,7 +47,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
             "<script>\nconst total = 42;\n</script>\n" +
             "<script lang=\"ts\">\nlet count: number = 1;\n</script>";
 
-        var spans = fixture.Highlighter.Highlight(source, "svelte");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Svelte);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "const"));
@@ -61,7 +61,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "<style>\n.card { color: red; }\n</style>";
 
-        var spans = fixture.Highlighter.Highlight(source, "svelte");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Svelte);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Variable, TreeSitterHighlightTests.SlotOf(source, spans, "color"));
@@ -72,7 +72,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "{#if total > 42}<p>{name.toUpperCase()}</p>{/if}";
 
-        var spans = fixture.Highlighter.Highlight(source, "svelte");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Svelte);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Number, TreeSitterHighlightTests.SlotOf(source, spans, "42"));
@@ -84,7 +84,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "text\n\n```csharp\nclass Box { }\n```\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "class"));
@@ -99,7 +99,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         var source = $"```{info}\nconst total = 42;\n```\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "const"));
@@ -110,7 +110,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "```brainfuck\n+++[->+++<]\n```\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
         Assert.Equal(TokenColorSlot.Code, TreeSitterHighlightTests.SlotOf(source, spans, "+++["));
     }
@@ -120,7 +120,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "A **bold** word, an *emphasized* one, some `code` and a [link](http://x.dev).\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Emphasis, TreeSitterHighlightTests.SlotOf(source, spans, "**bold**"));
@@ -134,7 +134,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "# Title\n\n> quoted\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Heading, TreeSitterHighlightTests.SlotOf(source, spans, "Title"));
@@ -145,7 +145,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "<div>\n<script>\nconst total = 42;\n</script>\n</div>\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "const"));
@@ -156,7 +156,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "---\ntitle: Post\n---\n\nBody text.\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Variable, TreeSitterHighlightTests.SlotOf(source, spans, "title"));
@@ -167,7 +167,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "Héllo wörld 🎉 and more\n\n```json\n{ \"a\": 12 }\n```\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         Assert.Equal(TokenColorSlot.Number, TreeSitterHighlightTests.SlotOf(source, spans, "12"));
@@ -178,7 +178,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     {
         const string source = "# Title\n\n```html\n<script>const a = 1;</script>\n```\n\n*done* — `x`\n";
 
-        var spans = fixture.Highlighter.Highlight(source, "markdown");
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
 
         var lines = source.Split('\n');
@@ -203,10 +203,11 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     [Fact]
     public void InjectionsRunOnAPoolOfOne()
     {
-        using var highlighter = new TreeSitterSyntaxHighlighter(poolCapacity: 1);
+        using var grammars = new TreeSitterGrammars(poolCapacity: 1);
+        var highlighter = new TreeSitterSyntaxHighlighter(grammars);
         const string source = "```csharp\nclass Box { }\n```\n";
 
-        var spans = highlighter.Highlight(source, "markdown");
+        var spans = highlighter.Highlight(source, CodeLanguage.Markdown);
         Assert.NotNull(spans);
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "class"));
     }
@@ -216,12 +217,13 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     public void EveryBundledInjectionQueryCompiled()
     {
         var log = new List<string>();
-        using var highlighter = new TreeSitterSyntaxHighlighter(log.Add);
+        using var grammars = new TreeSitterGrammars(log.Add);
+        var highlighter = new TreeSitterSyntaxHighlighter(grammars);
 
         Assert.Empty(log);
-        Assert.True(highlighter.Supports("markdown"));
-        Assert.True(highlighter.Supports("html"));
-        Assert.True(highlighter.Supports("svelte"));
+        Assert.True(highlighter.Supports(CodeLanguage.Markdown));
+        Assert.True(highlighter.Supports(CodeLanguage.Html));
+        Assert.True(highlighter.Supports(CodeLanguage.Svelte));
     }
 
     [Fact]

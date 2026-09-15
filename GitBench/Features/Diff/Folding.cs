@@ -74,9 +74,6 @@ internal sealed class FoldPlan
 
     public bool IsEmpty => _marks.Count == 0 && _lenses.Count == 0 && _hidden.Count == 0;
 
-    /// <summary>The collapsed line ranges, ordered and disjoint.</summary>
-    public IReadOnlyList<(int From, int To)> Hidden => _hidden;
-
     /// <summary>The declaration whose collapsed body swallowed a line, or null where the line is visible.</summary>
     public string? CollapsedOver(int line)
     {

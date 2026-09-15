@@ -185,7 +185,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private float? _pendingScrollY;
     private int _pendingScrollFrames;
     private FileLine? _pendingScrollLine;
-    private FileSearchMatch? _pendingSearchReveal;
+    private FileSpan? _pendingSearchReveal;
     private FileLine? _lastTopLine;
     private bool _topLinePublished;
     private FoldState? _foldState;
@@ -318,15 +318,15 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private DiffBody Opened(Features.Editor.EditorBuffer document, DiffRenderState state)
     {
         var annotations = AnnotationsOf(state);
-        document.FoldExpanded = path => OnToggleFold?.Invoke(path);
-        // Through ApplyRead, not Apply: this render state was built from a read of the file on
+        document.Rows.FoldExpanded = path => OnToggleFold?.Invoke(path);
+        // Through ApplyRead, not Rows.SetAnnotations: this render state was built from a read of the file on
         // disk, so it describes whatever revision that read found — which is the revision the
         // buffer was opened at only until someone types. Stamping it with the opening revision
         // regardless refuses a re-read that is in fact current, and would overwrite a parse of the
         // buffer with a parse of the file.
-        document.ApplyRead(new Features.Editor.EditorAnnotations(annotations?.Highlight, annotations?.NewSide));
-        document.SetFolds(FoldsFor(state));
-        document.UsageLensRows = _usageLensRows;
+        document.ApplyRead(annotations ?? new DiffAnnotations(null, null, null));
+        document.Rows.SetFolds(FoldsFor(state));
+        document.Rows.UsageLensRows = _usageLensRows;
         return new DiffBody.Edited(document);
     }
 
@@ -343,7 +343,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         var topLine = TopVisibleNewLine();
         var remap = SelectionRemap();
-        if (Document is { } document) document.SetFolds(FoldsFor(_renderState));
+        if (Document is { } document) document.Rows.SetFolds(FoldsFor(_renderState));
         else _body = new DiffBody.Viewer(
             DiffRowSet.Build(_renderState, _loc, FoldsFor(_renderState), _usageLensRows));
         _selection.Remap(remap);
@@ -476,7 +476,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// Brings a hit into view on both axes, and only as far as it has to: stepping through hits
     /// that are already on screen must leave the text where the reader is reading it.
     /// </summary>
-    public void RevealSearchMatch(FileSearchMatch match)
+    public void RevealSearchMatch(FileSpan match)
     {
         _pendingSearchReveal = match;
         ApplyPendingSearchReveal();
@@ -501,7 +501,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         EnsureVisible(SpanRect(line.Text, match, rowRect));
     }
 
-    private RectF SpanRect(DiffLineText text, FileSearchMatch match, RectF rowRect)
+    private RectF SpanRect(DiffLineText text, FileSpan match, RectF rowRect)
     {
         var origin = DiffRowPainter.LineTextOriginX(
             _list.Position.Left - _scrollX, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn,
@@ -793,7 +793,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             if (Document is not { } document) { SetRenderState(_renderState, null); return; }
 
             var remap = SelectionRemap();
-            document.UsageLensRows = value;
+            document.Rows.UsageLensRows = value;
             _selection.Remap(remap);
             _hoveredLensRow = -1;
             ReconcileRows();
@@ -1468,7 +1468,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// both are silent when wrong: a row is not a line number, and a screen column is not a file
     /// column wherever the line contains a tab.
     /// </remarks>
-    public FilePositionHit? HitTestFilePosition(PointF point) => FilePositionUnder(point)?.At;
+    public Features.Editor.TextPosition? HitTestFilePosition(PointF point) => FilePositionUnder(point)?.At;
 
     /// <summary>The identifier under a pixel, for the link a held modifier draws over one. Null
     /// wherever <see cref="HitTestFilePosition"/> is, and also over punctuation and whitespace.</summary>
@@ -1495,7 +1495,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
-    private (DiffLineText Text, FilePositionHit At)? FilePositionUnder(PointF point)
+    private (DiffLineText Text, Features.Editor.TextPosition At)? FilePositionUnder(PointF point)
     {
         if (_lineHeight <= 0 || !_list.Position.ContainsPoint(point)) return null;
 
@@ -1504,7 +1504,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
 
         var column = line.Text.ToRaw(CharIndexAt(line.Text.Expanded, point.X), TabEdge.Before);
-        return (line.Text, new FilePositionHit(fileLine, column));
+        return (line.Text, new Features.Editor.TextPosition(fileLine, column));
     }
 
     DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)

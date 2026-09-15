@@ -106,7 +106,7 @@ public sealed class DocumentSaveConflictTests : IDisposable
     private static (TextDocument Document, FileEncoding Encoding) Read(string path)
     {
         var preview = Assert.IsType<FilePreview.Text>(
-            FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None));
+            FileContentLoader.Load(path, new UnparsedFiles(), new PlainText(), CancellationToken.None));
         return (
             TextDocument.FromText(preview.Lines.Text),
             Assert.IsType<FileWriteBack.Reversible>(preview.WriteBack).Encoding);

@@ -58,7 +58,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
         using var annotations = Producer(documents, posted);
 
         var buffer = Open(documents, "Widget.cs", Source);
-        buffer.SetFolds(FoldState.Open("Widget.cs"));
+        buffer.Rows.SetFolds(FoldState.Open("Widget.cs"));
         Quiet(annotations, posted);
 
         // Only the class is foldable to start with: the one method is a single line.
@@ -176,11 +176,11 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
         var documents = new TestDocuments.Empty();
         var buffer = Open(documents, "Widget.cs", Source);
 
-        Assert.True(buffer.ApplyRead(new EditorAnnotations(null, fixture.Outline(Source))));
+        Assert.True(buffer.ApplyRead(new DiffAnnotations(null, fixture.Outline(Source), null)));
 
         buffer.Session.Type(SelectionRange.At(TextPosition.At(1, 0)), "// ");
 
-        Assert.False(buffer.ApplyRead(new EditorAnnotations(null, fixture.Outline(Source))));
+        Assert.False(buffer.ApplyRead(new DiffAnnotations(null, fixture.Outline(Source), null)));
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
         var edited = buffer.Session.Document.Text;
 
         // A parse of the file as it was opened describes it no longer, and is refused.
-        Assert.False(buffer.ApplyRead(new EditorAnnotations(null, fixture.Outline(edited))));
+        Assert.False(buffer.ApplyRead(new DiffAnnotations(null, fixture.Outline(edited), null)));
 
         // The save lands and the echo that follows it re-reads a file that now says what the
         // document does. Stamping that read with the revision the buffer was opened at refuses a
@@ -208,7 +208,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
 
         Assert.Same(buffer, reopened);
         Assert.False(buffer.Opened.Describes(buffer.Session.Document));
-        Assert.True(buffer.ApplyRead(new EditorAnnotations(null, fixture.Outline(edited))));
+        Assert.True(buffer.ApplyRead(new DiffAnnotations(null, fixture.Outline(edited), null)));
     }
 
     // ---- Helpers -----------------------------------------------------------------------------
@@ -216,7 +216,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     private DocumentAnnotations Producer(IDocumentStore documents, IUiDispatcher dispatcher)
     {
         var annotations = new DocumentAnnotations(
-            documents, dispatcher, fixture.Highlighter, fixture.Symbols, TimeSpan.Zero);
+            documents, dispatcher, fixture.Grammars, fixture.Highlighter, fixture.Symbols, TimeSpan.Zero);
         annotations.Start();
         return annotations;
     }

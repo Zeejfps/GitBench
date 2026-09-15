@@ -139,7 +139,7 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
 
         Assert.Equal(DiffText.VisualCells("    void Logout() => Done();"), open.MaxRowCells);
         Assert.Equal(
-            DiffText.VisualCells("class AuthService") + DiffText.VisualCells(DiffRowSet.FoldChipText),
+            DiffText.VisualCells("class AuthService") + DiffText.VisualCells(FullFileRow.FoldChipText),
             folded.MaxRowCells);
     }
 
@@ -163,8 +163,8 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
 
         Assert.Equal(
             Math.Max(
-                DiffText.VisualCells("class AuthService") + DiffText.VisualCells(DiffRowSet.FoldChipText),
-                DiffRowSet.UsageLensCells),
+                DiffText.VisualCells("class AuthService") + DiffText.VisualCells(FullFileRow.FoldChipText),
+                FullFileRow.UsageLensCells),
             rows.MaxRowCells);
     }
 
@@ -340,9 +340,9 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
         return (document, rows);
     }
 
-    private Revised<EditorAnnotations> Annotations(TextDocument document) =>
+    private Revised<DiffAnnotations> Annotations(TextDocument document) =>
         new(DocumentRevision.Of(document),
-            new EditorAnnotations(null, fixture.Outline(string.Join('\n', Source))));
+            new DiffAnnotations(null, fixture.Outline(string.Join('\n', Source)), null));
 
     private static FoldState Collapsed(string declaration) =>
         FoldState.Open(Path).Toggled(declaration == "AuthService" ? "AuthService" : $"AuthService.{declaration}");

@@ -36,12 +36,7 @@ internal sealed record LanguageServersDialog : Widget
             Command = vm.ReloadCommand,
             Body =
             [
-                new Text
-                {
-                    Value = s.LanguageServersDescription,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.LanguageServersDescription },
                 new Box
                 {
                     Background = Theme.Color(t => t.Palette.SurfaceSunken),

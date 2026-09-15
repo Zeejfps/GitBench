@@ -36,7 +36,8 @@ namespace GitBench.Tests.Markdown;
 //   click writes CodeBlock.Text to IClipboard.
 // - TableBlock is a Step 6 placeholder: a document containing a table renders its other blocks
 //   and never throws; what (if anything) the table itself draws is deliberately NOT pinned here.
-public class MarkdownWidgetTests
+[Collection(nameof(CodeIntelCollection))]
+public class MarkdownWidgetTests(CodeIntelFixture fixture)
 {
     private sealed class FakeClipboard : IClipboard
     {
@@ -56,14 +57,14 @@ public class MarkdownWidgetTests
 
     private static MarkdownDocument Parse(string markdown) => new BasicMarkdownParser().Parse(markdown);
 
-    private static (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell) Create(
+    private (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell) Create(
         string markdown, int width = 800, int height = 600, ThemeMode mode = ThemeMode.Dark)
     {
         var (harness, clipboard, shell, _) = CreateWithDispatcher(markdown, width, height, mode);
         return (harness, clipboard, shell);
     }
 
-    private static (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell, QueuedDispatcher Dispatcher)
+    private (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell, QueuedDispatcher Dispatcher)
         CreateWithDispatcher(
             string markdown, int width = 800, int height = 600, ThemeMode mode = ThemeMode.Dark)
     {
@@ -82,6 +83,7 @@ public class MarkdownWidgetTests
                 ctx.AddService<IClipboard>(clipboard);
                 ctx.AddService<IPlatformShell>(shell);
                 ctx.AddService<IUiDispatcher>(dispatcher);
+                ctx.AddService<ISyntaxHighlighter>(fixture.Colors);
             });
         return (harness, clipboard, shell, dispatcher);
     }
@@ -623,7 +625,7 @@ public class MarkdownWidgetTests
         Assert.Equal(narrow, wide, 3);
     }
 
-    private static float CodeBlockBoxHeight(string markdown)
+    private float CodeBlockBoxHeight(string markdown)
     {
         var (h, _, _) = Create(markdown);
         using (h)

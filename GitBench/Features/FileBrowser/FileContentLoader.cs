@@ -71,7 +71,7 @@ internal static class FileContentLoader
     private const int SniffBytes = 8 * 1024;
 
     public static FilePreview Load(
-        string absolutePath, ISymbolExtractor extractor, CancellationToken cancellation)
+        string absolutePath, ISymbolExtractor extractor, ISyntaxHighlighter highlighter, CancellationToken cancellation)
     {
         try
         {
@@ -89,12 +89,13 @@ internal static class FileContentLoader
             if (IsBinary(bytes)) return new FilePreview.Unavailable(absolutePath, FilePreviewRefusal.Binary);
 
             var (text, writeBack) = FileTextDecoder.Decode(bytes, truncated);
+            var language = FileLanguage.Detect(absolutePath);
             return new FilePreview.Text(
                 absolutePath,
                 new FileText(text, dropLastPartialLine: truncated),
                 writeBack,
-                Highlight(absolutePath, text, truncated),
-                Outline(absolutePath, text, extractor),
+                Highlight(highlighter, language, text, truncated),
+                Outline(extractor, language, text),
                 Markdown(absolutePath, text, truncated));
         }
         catch (OperationCanceledException)
@@ -168,20 +169,16 @@ internal static class FileContentLoader
         }
     }
 
-    private static FileOutline? Outline(string path, string text, ISymbolExtractor extractor)
-    {
-        if (CodeLanguages.Detect(path) is not { } language) return null;
-        return extractor.Extract(text, language);
-    }
+    private static FileOutline? Outline(ISymbolExtractor extractor, FileLanguage language, string text) =>
+        language is FileLanguage.TreeSitter(var parsed) ? extractor.Extract(text, parsed) : null;
 
     private static MarkdownRender? Markdown(string path, string text, bool truncated) =>
         MarkdownFile.IsMarkdownPath(path) ? MarkdownFile.Render(text, truncated) : null;
 
-    private static DiffHighlight? Highlight(string path, string text, bool truncated)
+    private static DiffHighlight? Highlight(ISyntaxHighlighter highlighter, FileLanguage language, string text, bool truncated)
     {
         if (truncated) return null;
-        if (LanguageRegistry.DetectLanguageId(path) is not { } languageId) return null;
-        var spans = RoutedSyntaxHighlighter.Shared.Highlight(text, languageId);
+        var spans = highlighter.Highlight(text, language);
         return spans is null ? null : new DiffHighlight(null, spans);
     }
 }

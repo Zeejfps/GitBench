@@ -1,3 +1,4 @@
+using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
@@ -54,6 +55,7 @@ public class MarkdownPreviewTests
                 ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new FakeShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
+                ctx.AddService<ISyntaxHighlighter>(new PlainText());
             });
 
         var canvas = h.Render();

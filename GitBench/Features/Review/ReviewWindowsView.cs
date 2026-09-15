@@ -1,143 +1,40 @@
 using GitBench.App;
-using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.Features.Review;
 
-/// <summary>
-/// Headless host that reflects <see cref="ReviewWindowsViewModel.Windows"/> into real, decorated
-/// OS windows — the review-window analogue of <c>DiffWindowsView</c>. It draws nothing itself
-/// (zero-sized); it exists so the review-windows view model is created and bound through the
-/// standard <c>UseViewModel</c> flow. On Added it opens a window hosting a
-/// <see cref="ReviewWindowRootView"/> bound to the entry's <see cref="ReviewWindowViewModel"/>; on
-/// Removed/Cleared it tears the window down. Native title-bar closes route back through the view
-/// model so its observable list stays the single source of truth.
-/// </summary>
 internal sealed record ReviewWindowsView : Widget
 {
-    protected override View CreateView(Context ctx) => new Core(ctx);
-
-    private sealed class Core : ContainerView
+    protected override IWidget Build(Context ctx)
     {
-        private readonly Dictionary<ReviewWindowViewModel, ISecondaryWindow> _windows = new();
-        private readonly ReviewWindowsViewModel _vm;
-        private readonly ISecondaryWindowFactory _windowFactory;
-        private readonly PreferencesService _preferences;
-
-        // Native title-bar theming (Windows/macOS). Resolved from the build context; null on
-        // platforms without a window-chrome implementation (e.g. Linux), in which case title-bar
-        // theming is skipped.
-        private readonly IWindowChrome? _windowChrome;
-        private readonly State<ThemeMode>? _themeMode;
-
-        public Core(Context ctx)
+        var vm = ctx.Require<ReviewWindowsViewModel>();
+        var preferences = ctx.Require<PreferencesService>();
+        return new SecondaryWindowsHost<ReviewWindowViewModel>
         {
-            // Logic-only view: it never paints or takes input, so pin it to zero size.
-            Width = 0;
-            Height = 0;
-
-            _windowFactory = ctx.Require<ISecondaryWindowFactory>();
-            _preferences = ctx.Require<PreferencesService>();
-            _windowChrome = ctx.Get<IWindowChrome>();
-            _themeMode = ctx.Get<State<ThemeMode>>();
-
-            // The registry is an app singleton (the assistant's review tools reach windows through
-            // it), so it outlives this view rather than being owned by it.
-            var vm = ctx.Require<ReviewWindowsViewModel>();
-            _vm = vm;
-            this.Use(() => vm.Windows.Subscribe(OnWindowsChanged));
-
-            // Focus-existing: a repeat open request for an already-open review raises this instead
-            // of adding a window; bring its OS window forward (and restore it if minimized).
-            this.Use(() =>
+            Windows = vm.Windows,
+            Close = vm.Close,
+            Request = w => new SecondaryWindowRequest
             {
-                void OnFocus(ReviewWindowViewModel w) => FocusExisting(w);
-                vm.FocusRequested += OnFocus;
-                return new ActionDisposable(() => vm.FocusRequested -= OnFocus);
-            });
-
-            // Match every open window's native title bar to the active theme, like the main window
-            // (see Program.cs). The binding fires immediately, then on each toggle, re-theming all
-            // open windows.
-            if (_windowChrome != null && _themeMode != null)
-                this.Bind(_themeMode, _ =>
-                {
-                    foreach (var win in _windows.Values) ApplyTitleBarTheme(win);
-                });
-        }
-
-        private void ApplyTitleBarTheme(ISecondaryWindow win)
-        {
-            if (_windowChrome == null || _themeMode == null) return;
-            _windowChrome.SetTitleBarTheme(win.Window, _themeMode.Value == ThemeMode.Dark);
-        }
-
-        private void OnWindowsChanged(ListChange<ReviewWindowViewModel> change)
-        {
-            switch (change.Kind)
+                BuildRoot = c => Direction.Wrap(new ReviewWindowRootView { Model = w }).BuildView(c),
+                Title = w.Title,
+                Width = preferences.Current.ReviewWindowWidth,
+                Height = preferences.Current.ReviewWindowHeight,
+                X = preferences.Current.ReviewWindowX,
+                Y = preferences.Current.ReviewWindowY,
+            },
+            Opened = win =>
             {
-                case ListChangeKind.Added:
-                    Open(change.Item!);
-                    break;
-                case ListChangeKind.Removed:
-                    CloseOsWindow(change.OldItem!);
-                    break;
-                case ListChangeKind.Cleared:
-                case ListChangeKind.Reset:
-                    foreach (var win in _windows.Values) win.Close();
-                    _windows.Clear();
-                    break;
-            }
-        }
-
-        private void Open(ReviewWindowViewModel windowVm)
-        {
-            if (_windows.ContainsKey(windowVm)) return;
-
-            var win = _windowFactory.Open(new SecondaryWindowRequest
+                win.Window.OnResize += (w, h) => preferences.Update(p => p with { ReviewWindowWidth = w, ReviewWindowHeight = h });
+                win.Window.OnMove += (x, y) => preferences.Update(p => p with { ReviewWindowX = x, ReviewWindowY = y });
+            },
+            FocusRequests = focus =>
             {
-                BuildRoot = ctx => Direction.Wrap(new ReviewWindowRootView { Model = windowVm }).BuildView(ctx),
-                Title = windowVm.Title,
-                Width = _preferences.Current.ReviewWindowWidth,
-                Height = _preferences.Current.ReviewWindowHeight,
-                X = _preferences.Current.ReviewWindowX,
-                Y = _preferences.Current.ReviewWindowY,
-            });
-            // Native close → drive removal through the view model so its list stays authoritative;
-            // that removal calls CloseOsWindow below (idempotent if the window is already gone).
-            win.Closed += () => _vm.Close(windowVm);
-            // Persist geometry like the main window; all review windows share one remembered
-            // size/position (last resized/moved wins).
-            win.Window.OnResize += (w, h) => _preferences.Update(p => p with { ReviewWindowWidth = w, ReviewWindowHeight = h });
-            win.Window.OnMove += (x, y) => _preferences.Update(p => p with { ReviewWindowX = x, ReviewWindowY = y });
-            _windows[windowVm] = win;
-            ApplyTitleBarTheme(win);
-        }
-
-        private void CloseOsWindow(ReviewWindowViewModel windowVm)
-        {
-            if (_windows.Remove(windowVm, out var win))
-                win.Close();
-        }
-
-        private void FocusExisting(ReviewWindowViewModel windowVm)
-        {
-            if (!_windows.TryGetValue(windowVm, out var win)) return;
-            win.Window.Show();
-            win.Window.Focus();
-        }
-
-        private sealed class ActionDisposable : IDisposable
-        {
-            private readonly Action _dispose;
-            public ActionDisposable(Action dispose) => _dispose = dispose;
-            public void Dispose() => _dispose();
-        }
+                vm.FocusRequested += focus;
+                return new ActionDisposable(() => vm.FocusRequested -= focus);
+            },
+        };
     }
 }

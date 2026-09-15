@@ -10,24 +10,13 @@ internal readonly record struct FileSearchQuery(string Text, bool MatchCase, boo
 }
 
 /// <summary>
-/// One hit, in the file's own coordinates: the line it sits on and its half-open span in that
-/// line's raw characters.
-/// </summary>
-/// <remarks>
-/// Raw rather than tab-expanded, because a hit is a fact about the file while the expansion belongs
-/// to whatever is drawing it — <see cref="DiffSearchOverlay"/> converts one to the other for the
-/// painter.
-/// </remarks>
-internal readonly record struct FileSearchMatch(FileLine Line, RawColumn Start, RawColumn End);
-
-/// <summary>
 /// What a query found in one file: every hit in reading order, and which one the reader is standing
 /// on. One value rather than three slices, so nothing can read a hit list against another file's
 /// path or against a cursor that moved after it was built.
 /// </summary>
 internal sealed record FileSearchHits(
     string Path,
-    IReadOnlyList<FileSearchMatch> Matches,
+    IReadOnlyList<FileSpan> Matches,
     int Current,
     bool Capped)
 {
@@ -38,7 +27,7 @@ internal sealed record FileSearchHits(
     /// <summary>The cursor's 1-based place in the list, or 0 when it stands on nothing.</summary>
     public int Ordinal => Current < 0 ? 0 : Current + 1;
 
-    public FileSearchMatch? At => Current >= 0 && Current < Matches.Count ? Matches[Current] : null;
+    public FileSpan? At => Current >= 0 && Current < Matches.Count ? Matches[Current] : null;
 }
 
 /// <summary>Plain-text search over a file's lines: the whole of what "find in file" means, with no
@@ -64,7 +53,7 @@ internal static class FileSearch
         if (query.IsEmpty) return new FileSearchHits(path, [], -1, false);
 
         var comparison = query.MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        var matches = new List<FileSearchMatch>();
+        var matches = new List<FileSpan>();
         var capped = false;
 
         for (var i = 0; i < lines.Count && !capped; i++)
@@ -79,7 +68,7 @@ internal static class FileSearch
                 var end = at + query.Text.Length;
                 if (!query.WholeWord || IsWholeWord(text, at, end))
                 {
-                    matches.Add(new FileSearchMatch(
+                    matches.Add(new FileSpan(
                         new FileLine(i + 1), new RawColumn(at), new RawColumn(end)));
                     if (matches.Count >= MaxMatches)
                     {
@@ -97,7 +86,7 @@ internal static class FileSearch
         return new FileSearchHits(path, matches, CursorAt(matches, anchor), capped);
     }
 
-    private static int CursorAt(IReadOnlyList<FileSearchMatch> matches, FileLine anchor)
+    private static int CursorAt(IReadOnlyList<FileSpan> matches, FileLine anchor)
     {
         for (var i = 0; i < matches.Count; i++)
             if (matches[i].Line.Value >= anchor.Value) return i;

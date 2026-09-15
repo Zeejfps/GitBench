@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
+using GitBench.Infrastructure;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Fonts;
@@ -33,10 +34,8 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
     /// <summary>The code block to render.</summary>
     public required CodeBlock Block { get; init; }
 
-    // The highlighter is an optional context override so tests can count tokenize passes; the app
-    // registers none, which leaves the shared instance to be resolved on the worker.
     protected override CodeBlockViewModel CreateState(Context ctx) =>
-        new(Block, ctx.Require<IUiDispatcher>(), ctx.Get<ISyntaxHighlighter>());
+        new(Block, ctx.Require<IUiDispatcher>(), ctx.Require<ISyntaxHighlighter>());
 
     protected override IWidget Build(Context ctx, CodeBlockViewModel vm)
     {
@@ -46,7 +45,7 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
         // Tab-expanded display lines, because token spans arrive in tab-expanded column space
         // (the highlighter expands the same way — see DiffText). Copy still uses the verbatim
         // Block.Text.
-        var lines = SplitLines(block.Text);
+        var lines = TextLines.SplitKeepingLast(block.Text).ConvertAll(DiffText.ExpandTabs);
 
         return new Box
         {
@@ -155,7 +154,7 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
                 if (start > cursor)
                     runs.Add(Run(line[cursor..start], plain));
                 if (end > start)
-                    runs.Add(Run(line[start..end], SlotColor(span.Slot, theme.DiffContent.Syntax, plain)));
+                    runs.Add(Run(line[start..end], theme.DiffContent.Syntax.Of(span.Slot, plain)));
                 cursor = end;
             }
             if (cursor < line.Length)
@@ -163,47 +162,5 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
         }
 
         return runs;
-    }
-
-    // Slot → theme color, mirroring DiffRowPainter.SlotColor so markdown code and diff code
-    // always agree; Default falls back to the block's plain text color.
-    private static uint SlotColor(TokenColorSlot slot, DiffSyntaxStyles syntax, uint fallback) => slot switch
-    {
-        TokenColorSlot.Keyword => syntax.Keyword,
-        TokenColorSlot.String => syntax.String,
-        TokenColorSlot.Comment => syntax.Comment,
-        TokenColorSlot.Number => syntax.Number,
-        TokenColorSlot.Type => syntax.Type,
-        TokenColorSlot.Function => syntax.Function,
-        TokenColorSlot.Variable => syntax.Variable,
-        TokenColorSlot.Operator => syntax.Operator,
-        TokenColorSlot.Punctuation => syntax.Punctuation,
-        TokenColorSlot.Constant => syntax.Constant,
-        TokenColorSlot.Heading => syntax.Heading,
-        TokenColorSlot.Emphasis => syntax.Emphasis,
-        TokenColorSlot.Link => syntax.Link,
-        TokenColorSlot.Code => syntax.Code,
-        TokenColorSlot.Quote => syntax.Quote,
-        _ => fallback,
-    };
-
-    // Splits like the highlighter does ('\n', tolerating '\r\n', always a final element), then
-    // tab-expands each line so display columns line up 1:1 with the spans' column space.
-    private static IReadOnlyList<string> SplitLines(string text)
-    {
-        var lines = new List<string>();
-        var start = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] != '\n')
-                continue;
-            var end = i;
-            if (end > start && text[end - 1] == '\r')
-                end--;
-            lines.Add(DiffText.ExpandTabs(text[start..end]));
-            start = i + 1;
-        }
-        lines.Add(DiffText.ExpandTabs(text[start..]));
-        return lines;
     }
 }

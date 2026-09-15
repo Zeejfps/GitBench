@@ -20,4 +20,26 @@ internal static class TextLines
         if (start < text.Length && !dropLastPartialLine) lines.Add(text[start..]);
         return lines;
     }
+
+    /// <summary>Splits on '\n', tolerating '\r\n', and always keeps a final element so 1-based
+    /// source line numbers index straight into the result (a file ending in a newline yields a
+    /// trailing empty line, matching how the diff numbers its lines).</summary>
+    public static List<string> SplitKeepingLast(string text)
+    {
+        var lines = new List<string>();
+        var start = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '\n') continue;
+            var end = i;
+            if (end > start && text[end - 1] == '\r') end--;
+            lines.Add(text[start..end]);
+            start = i + 1;
+        }
+        lines.Add(text[start..]);
+        return lines;
+    }
+
+    public static string NormalizeNewlines(string text) =>
+        text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n') : text;
 }

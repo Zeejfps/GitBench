@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;
 using ZGF.Geometry;
@@ -7,7 +8,7 @@ namespace GitBench.Features.LanguageServers;
 
 internal interface IFilePositionSurface
 {
-    FilePositionHit? HitTestFilePosition(PointF point);
+    TextPosition? HitTestFilePosition(PointF point);
 }
 
 internal interface IHoverSurface : IFilePositionSurface

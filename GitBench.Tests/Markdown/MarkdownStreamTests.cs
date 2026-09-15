@@ -68,6 +68,7 @@ public class MarkdownStreamTests
                 ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new FakeShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
+                ctx.AddService<ISyntaxHighlighter>(new PlainText());
             });
         return (harness, list!);
     }

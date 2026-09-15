@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Lsp;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -18,8 +19,8 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
     private readonly Func<(string Root, string Path)?> _document;
     private readonly ProbeSlot _probe;
 
-    private FilePositionHit? _asking;
-    private FilePositionHit? _showing;
+    private TextPosition? _asking;
+    private TextPosition? _showing;
     private PointF _anchor;
 
     public HoverProbeController(
@@ -70,7 +71,7 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
     private void Ask(
         string repoRoot,
         string path,
-        FilePositionHit at,
+        TextPosition at,
         PointF anchor,
         IReadOnlyList<Diagnostic> problems)
     {
