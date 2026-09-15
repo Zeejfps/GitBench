@@ -180,11 +180,12 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     // a newer resolve starts, or the VM is disposed — so out-of-order completions can't clobber
     // the current label.
     private void ResolveIdentity(string repoPath)
-        => RunBackground<(string? Text, bool Warning)>(
-            () => (LabelFor(_identity.Resolve(repoPath)), (string?)null),
-            (label, _) =>
+        => RunBackground<Fetched<(string? Text, bool Warning)>>(
+            () => LabelFor(_identity.Resolve(repoPath)),
+            label =>
             {
-                if (label is { } l) Update(s => s with { IdentityText = l.Text, IdentityIsWarning = l.Warning });
+                if (label is Fetched<(string? Text, bool Warning)>.Ok { Value: var l })
+                    Update(s => s with { IdentityText = l.Text, IdentityIsWarning = l.Warning });
             },
             _identityLane);
 

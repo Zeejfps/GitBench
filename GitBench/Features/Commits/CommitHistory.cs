@@ -115,7 +115,7 @@ internal sealed class HistoryView : ContainerView
         var newWidth = Math.Clamp(_detailsWidth - mouseDeltaX, MinDetailsWidth, MaxDetailsWidthForLayout());
         if (Math.Abs(newWidth - _detailsWidth) < 0.0001f) return;
         _detailsWidth = newWidth;
-        _preferences?.SetCommitDetailsWidth(newWidth);
+        _preferences?.Update(p => p with { CommitDetailsWidth = newWidth });
         SetDirty();
     }
 }

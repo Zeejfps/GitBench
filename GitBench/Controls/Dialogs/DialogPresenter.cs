@@ -8,33 +8,27 @@ public sealed class DialogPresenter : IViewBehavior
 {
     private readonly DialogSurfaceView _dialogSurfaceView;
     private readonly Context _windowContext;
-    private IMessageBus? _bus;
-    private Action<ShowDialogMessage>? _onShowDialog;
+    private readonly IMessageBus _bus;
+    private readonly Action<ShowDialogMessage> _onShowDialog;
 
     public DialogPresenter(Context ctx, DialogSurfaceView dialogSurfaceView)
     {
         _windowContext = ctx;
         _dialogSurfaceView = dialogSurfaceView;
+        _bus = ctx.Require<IMessageBus>();
+        _onShowDialog = m => ShowDialog(m.CreateDialog(OnDialogClosed).BuildView(_windowContext));
     }
 
     public void Attach(View view)
     {
-        var bus = _windowContext.Get<IMessageBus>();
-        if (bus is null) return;
-
-        _bus = bus;
-        _onShowDialog = m => ShowDialog(m.CreateDialog(OnDialogClosed).BuildView(_windowContext));
-        bus.Subscribe(_onShowDialog);
-        bus.Subscribe<ShowOperationErrorMessage>(OnShowOperationError);
+        _bus.Subscribe(_onShowDialog);
+        _bus.Subscribe<ShowOperationErrorMessage>(OnShowOperationError);
     }
 
     public void Detach(View view)
     {
-        if (_bus is null) return;
-        if (_onShowDialog != null) _bus.Unsubscribe(_onShowDialog);
+        _bus.Unsubscribe(_onShowDialog);
         _bus.Unsubscribe<ShowOperationErrorMessage>(OnShowOperationError);
-        _bus = null;
-        _onShowDialog = null;
     }
 
     private void OnShowOperationError(ShowOperationErrorMessage m)

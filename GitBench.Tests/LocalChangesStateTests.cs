@@ -15,7 +15,7 @@ public sealed class LocalChangesStateTests
     [Fact]
     public void Loading_with_empty_lists_is_cold()
     {
-        var state = LocalChangesState.Initial with { HasRepo = true, IsLoading = true };
+        var state = LocalChangesState.Initial with { Load = new LocalChangesLoad.Loading() };
 
         Assert.True(state.IsColdLoad);
         Assert.Equal(LocalChangesState.LoadingPlaceholder, state.Placeholder);
@@ -24,7 +24,7 @@ public sealed class LocalChangesStateTests
     [Fact]
     public void Loading_with_files_on_screen_is_not_cold()
     {
-        var state = LocalChangesState.Initial with { HasRepo = true, IsLoading = true, Unstaged = OneFile };
+        var state = LocalChangesState.Initial with { Load = new LocalChangesLoad.Loading(), Unstaged = OneFile };
 
         Assert.False(state.IsColdLoad);
         Assert.Null(state.Placeholder);
@@ -33,7 +33,7 @@ public sealed class LocalChangesStateTests
     [Fact]
     public void Settled_empty_tree_is_not_cold()
     {
-        var state = LocalChangesState.Initial with { HasRepo = true };
+        var state = LocalChangesState.Initial with { Load = new LocalChangesLoad.Ready() };
 
         Assert.False(state.IsColdLoad);
     }
@@ -41,7 +41,7 @@ public sealed class LocalChangesStateTests
     [Fact]
     public void Load_failure_is_not_cold()
     {
-        var state = LocalChangesState.Initial with { HasRepo = true, IsLoading = true, LoadError = "boom" };
+        var state = LocalChangesState.Initial with { Load = new LocalChangesLoad.Failed("boom", "boom") };
 
         Assert.False(state.IsColdLoad);
         Assert.Equal("boom", state.Placeholder);

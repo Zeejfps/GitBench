@@ -220,12 +220,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         return ids.Count == 0 || ids[ids.Count - 1] == repo.Id;
     }
 
-    private Repo? FindRepo(Guid id)
-    {
-        foreach (var r in _registry.Repos)
-            if (r.Id == id) return r;
-        return null;
-    }
+    private Repo? FindRepo(Guid id) => _registry.Find(id);
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems() => Kind switch
     {

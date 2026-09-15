@@ -114,8 +114,8 @@ internal sealed record ReviewWindowsView : Widget
             win.Closed += () => _vm.Close(windowVm);
             // Persist geometry like the main window; all review windows share one remembered
             // size/position (last resized/moved wins).
-            win.Window.OnResize += _preferences.SetReviewWindowSize;
-            win.Window.OnMove += _preferences.SetReviewWindowPosition;
+            win.Window.OnResize += (w, h) => _preferences.Update(p => p with { ReviewWindowWidth = w, ReviewWindowHeight = h });
+            win.Window.OnMove += (x, y) => _preferences.Update(p => p with { ReviewWindowX = x, ReviewWindowY = y });
             _windows[windowVm] = win;
             ApplyTitleBarTheme(win);
         }

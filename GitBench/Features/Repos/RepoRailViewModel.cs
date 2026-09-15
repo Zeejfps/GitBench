@@ -75,8 +75,7 @@ internal sealed class RailSectionViewModel : IDisposable
         {
             var active = registry.Active.Value;
             if (active is null) return false;
-            var primaryId = active.ParentRepoId ?? active.Id;
-            return group.RepoIds.Contains(primaryId);
+            return group.RepoIds.Contains(active.PrimaryId);
         });
         _badge = new Derived<RepoRowBadge>(() =>
         {

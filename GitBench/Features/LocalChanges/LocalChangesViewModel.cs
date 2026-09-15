@@ -167,7 +167,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         // and the view reads LoadErrorDetail imperatively from inside its Placeholder bind —
         // declared the other way round it would read the pre-update (stale) detail and never
         // attach the error-action buttons.
-        LoadErrorDetail = Slice(s => s.LoadErrorDetail);
+        LoadErrorDetail = Slice(s => (s.Load as LocalChangesLoad.Failed)?.Detail);
         Placeholder = Slice(s => s.Placeholder);
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
@@ -341,9 +341,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // shows the one-line headline inline — this is the on-demand path to the whole block.
     public void ShowLoadError()
     {
-        var detail = State.Value.LoadErrorDetail;
-        if (string.IsNullOrEmpty(detail)) return;
-        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, detail));
+        if (State.Value.Load is not LocalChangesLoad.Failed failed) return;
+        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, failed.Detail));
     }
 
     // Explicit retry after a failed status load: re-kicks every slice of the active repo (plus the
@@ -553,7 +552,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private void DoToggleViewMode()
     {
         var next = State.Value.ViewMode == FileViewMode.Flat ? FileViewMode.Tree : FileViewMode.Flat;
-        _preferences.SetFileViewMode(next);
+        _preferences.Update(p => p with { FileViewMode = next });
         Update(s =>
         {
             // Collapse the selection down to its file leaves as individual file rows: a
@@ -748,9 +747,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             Init: init,
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
-        var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
         RunMutation(
-            MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(primaryId),
+            MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(repo.PrimaryId),
             work: () => _gitSubmodules.UpdateSubmodules(repo, req),
             onResult: outcome => ReportFailure(outcome, s => s.LocalchangesErrorSubmoduleUpdateFailed));
     }
@@ -947,19 +945,18 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             return;
         }
 
-        if (fetched == null)
+        switch (fetched)
         {
-            ApplyLoadingState(isCrossRepoSwitch);
-            return;
+            case null:
+                ApplyLoadingState(isCrossRepoSwitch);
+                break;
+            case Fetched<LocalChangesData>.Failed failed:
+                ApplyLoadFailure(failed);
+                break;
+            case Fetched<LocalChangesData>.Ok ok:
+                ApplyLoadedData(ok.Value, active, isCrossRepoSwitch);
+                break;
         }
-
-        if (fetched is Fetched<LocalChangesData>.Failed failed)
-        {
-            ApplyLoadFailure(failed);
-            return;
-        }
-
-        ApplyLoadedData(((Fetched<LocalChangesData>.Ok)fetched).Value, active, isCrossRepoSwitch);
     }
 
     private void ApplyNoRepoState()
@@ -969,10 +966,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         _renderedRepoId = null;
         Update(s => s with
         {
-            HasRepo = false,
-            IsLoading = false,
-            LoadError = null,
-            LoadErrorDetail = null,
+            Load = new LocalChangesLoad.NoRepo(),
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
@@ -987,10 +981,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     {
         Update(s => s with
         {
-            HasRepo = true,
-            IsLoading = true,
-            LoadError = null,
-            LoadErrorDetail = null,
+            Load = new LocalChangesLoad.Loading(),
             Staged = isCrossRepoSwitch ? Empty : s.Staged,
             Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
             Selection = isCrossRepoSwitch ? LocalChanges.Selection.Empty : s.Selection,
@@ -1002,10 +993,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         _stagedFromIndex = Empty;
         Update(s => s with
         {
-            HasRepo = true,
-            IsLoading = false,
-            LoadError = failed.Message,
-            LoadErrorDetail = failed.Detail ?? failed.Message,
+            Load = new LocalChangesLoad.Failed(failed.Message, failed.Detail ?? failed.Message),
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
@@ -1021,8 +1009,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         // applying (ApplySnapshot's reload-style path would otherwise try to carry it forward).
         if (isCrossRepoSwitch && State.Value.Selection.Count > 0)
             Update(s => s with { Selection = LocalChanges.Selection.Empty });
-
-        Update(s => s.HasRepo ? s : s with { HasRepo = true });
 
         HandleMergeState(data.MergeMessage, isCrossRepoSwitch);
 
@@ -1051,12 +1037,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // active repo* and *still Amending* so a repo switch or toggling amend off mid-flight no-ops.
     private void RefreshAmendStaged(Repo repo)
     {
-        RunBackground<IReadOnlyList<FileChange>>(
-            work: () => (_gitStatus.GetAmendStagedFiles(repo), null),
-            onResult: (stagedFiles, _) =>
+        RunBackground<Fetched<IReadOnlyList<FileChange>>>(
+            work: () => new Fetched<IReadOnlyList<FileChange>>.Ok(_gitStatus.GetAmendStagedFiles(repo)),
+            onResult: fetched =>
             {
                 if (_registry.Active.Value?.Id != repo.Id) return;
-                if (State.Value.Editor is not EditorMode.Amending amending || stagedFiles == null) return;
+                if (State.Value.Editor is not EditorMode.Amending amending) return;
+                if (fetched is not Fetched<IReadOnlyList<FileChange>>.Ok { Value: var stagedFiles }) return;
                 amending.Session.UpdateStagedFiles(stagedFiles);
                 Update(s =>
                 {
@@ -1154,9 +1141,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             var staged = ComputeDisplayedStaged(s.Editor);
             return s with
             {
-                IsLoading = false,
-                LoadError = null,
-                LoadErrorDetail = null,
+                Load = new LocalChangesLoad.Ready(),
                 Unstaged = snap.Unstaged,
                 Staged = staged,
                 Selection = selectionFor(s, staged),

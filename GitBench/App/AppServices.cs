@@ -47,7 +47,7 @@ internal static class AppServices
         // reads from it, so a binding is decided in one table.
         var keyMap = new KeyMap(preferences.Current.KeyBindings);
         // Lives as long as the app, like the map it follows.
-        _ = keyMap.Version.Subscribe(_ => preferences.SetKeyBindings(keyMap.Overrides));
+        _ = keyMap.Version.Subscribe(_ => preferences.Update(p => p with { KeyBindings = keyMap.Overrides }));
         context.AddService<IKeyMap>(keyMap);
         context.AddService<IKeyBindingsStore>(keyMap);
 
@@ -63,23 +63,15 @@ internal static class AppServices
 
         // How the Changes tab presents the working tree. Shared: the toolbar toggles it, the pane
         // switches on it, and the commit bar shows staging progress only in the Diff layout.
-        var workingChangesLayout = new State<WorkingChangesLayout>(preferences.Current.WorkingChangesLayout);
-        workingChangesLayout.Changed += preferences.SetWorkingChangesLayout;
-        context.AddService(workingChangesLayout);
+        context.Bind(preferences, p => p.WorkingChangesLayout, (p, v) => p with { WorkingChangesLayout = v });
 
-        var themeMode = new State<ThemeMode>(preferences.Current.Theme);
-        themeMode.Changed += preferences.SetTheme;
-        context.AddService(themeMode);
+        context.Bind(preferences, p => p.Theme, (p, v) => p with { Theme = v });
         context.AddSingleton<IThemeService<ThemeStyles>, ThemeService>();
 
-        var uiScale = new State<UiScale>(preferences.Current.UiScale);
-        uiScale.Changed += preferences.SetUiScale;
-        context.AddService(uiScale);
+        var uiScale = context.Bind(preferences, p => p.UiScale, (p, v) => p with { UiScale = v });
         context.AddService<IUiScale>(new PreferredUiScale(uiScale));
 
-        var locale = new State<Locale>(preferences.Current.Language);
-        locale.Changed += preferences.SetLanguage;
-        context.AddService(locale);
+        context.Bind(preferences, p => p.Language, (p, v) => p with { Language = v });
         context.AddSingleton<ILocalizationService, LocalizationService>();
         // One loader so decoded markdown images are shared across every surface that shows them.
         context.AddSingleton<IMarkdownImageLoader>(ctx => new MarkdownImageLoader(ctx.Require<IUiDispatcher>()));
@@ -87,9 +79,7 @@ internal static class AppServices
         // The one source of truth for the opt-in core.untrackedCache setting: the status-bar
         // settings toggle writes it and GitUntrackedCacheService reads it, so the two can't
         // disagree about the current value.
-        var enableUntrackedCache = new State<bool>(preferences.Current.EnableUntrackedCache);
-        enableUntrackedCache.Changed += preferences.SetEnableUntrackedCache;
-        context.AddService(enableUntrackedCache);
+        context.Bind(preferences, p => p.EnableUntrackedCache, (p, v) => p with { EnableUntrackedCache = v });
 
         var crashLogPath = AppPaths.AppDataPath("crash.log");
         // Registered under its own type as well as the interface: the document annotator keeps a
@@ -138,7 +128,7 @@ internal static class AppServices
         // git invocation gets the right per-repo name/email/SSH key injected without touching repo
         // config.
         context.AddHostedService<GitIdentityService>();
-        context.AddSingleton<IDragController, DragController>();
+        context.AddSingleton<DragController>();
         context.AddSingleton<RepoHoverState>();
         context.AddSingleton<RepoBarCollapseState>();
         context.AddSingleton<RepoNodeFactory>();
@@ -268,14 +258,18 @@ internal static class AppServices
         // built by the store rather than registered on its own: it needs a live read of the
         // connection the store resolves off the UI thread, which a plain registration would make
         // circular. Which provider that is survives restarts the way the theme and language do.
-        var assistantSettings = new State<AssistantSettings>(AssistantSettings.From(
-            preferences.Current.AssistantProviderId,
-            preferences.Current.AssistantProviderPreferences
-                .Select(c => (c.ProviderId, c.Model, c.BaseUrl))));
-        assistantSettings.Changed += s => preferences.SetAssistantProvider(
-            s.ProviderId,
-            s.Choices.Select(c => new AssistantProviderPreference(c.Key, c.Value.Model, c.Value.BaseUrl)).ToArray());
-        context.AddService(assistantSettings);
+        context.Bind(
+            preferences,
+            p => AssistantSettings.From(
+                p.AssistantProviderId,
+                p.AssistantProviderPreferences.Select(c => (c.ProviderId, c.Model, c.BaseUrl))),
+            (p, s) => p with
+            {
+                AssistantProviderId = s.ProviderId,
+                AssistantProviderPreferences = s.Choices
+                    .Select(c => new AssistantProviderPreference(c.Key, c.Value.Model, c.Value.BaseUrl))
+                    .ToArray(),
+            });
         context.AddSingleton(ctx => new AssistantCredentials(ctx.Require<ISecretStore>()));
         context.AddHostedService<IAssistantSessionStore, AssistantSessionStore>(ctx => new AssistantSessionStore(
             ctx.Require<IRepoRegistry>(),
@@ -291,8 +285,9 @@ internal static class AppServices
             ctx.Require<ReviewWindowsViewModel>(),
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IDocumentStore>(),
-            connection => new AssistantBackendRouter(AssistantHttp, connection)));
+            connection => new HttpAssistantBackend(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
+        context.AddSingleton<AssistantMarkImage>();
         context.AddSingleton<AssistantViewModel>();
 
         // Local agents over MCP. The preference is one value so the server sees enabled, port and
@@ -301,7 +296,12 @@ internal static class AppServices
         // because the server is the app's. The write surface here is the same hop the assistant's
         // session store builds for itself: a record over shared services, not state of its own.
         var agentConnections = new State<AgentConnectionSettings>(AgentConnectionSettings.From(preferences.Current));
-        agentConnections.Changed += s => preferences.SetAgentConnections(s.Enabled, s.Port, s.Token);
+        agentConnections.Changed += s => preferences.Update(p => p with
+        {
+            AgentConnectionsEnabled = s.Enabled,
+            AgentConnectionsPort = s.Port,
+            AgentConnectionsToken = s.Token,
+        });
         context.AddService(agentConnections);
         context.AddService(new State<AgentConnectionState>(new AgentConnectionState.Off()));
         context.AddSingleton(ctx => new AssistantWriteSurface(
@@ -348,5 +348,19 @@ internal static class AppServices
         // (registry, git service, the enable-untracked-cache observable) are all registered above,
         // so plain reflective ctor injection resolves it.
         context.AddHostedService<GitUntrackedCacheService>();
+    }
+
+    // A preference exposed as app-wide observable state: seeded from the stored value, written back
+    // on every change.
+    private static State<T> Bind<T>(
+        this Context context,
+        PreferencesService preferences,
+        Func<Preferences, T> select,
+        Func<Preferences, T, Preferences> apply)
+    {
+        var state = new State<T>(select(preferences.Current));
+        state.Changed += v => preferences.Update(p => apply(p, v));
+        context.AddService(state);
+        return state;
     }
 }

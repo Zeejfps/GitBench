@@ -32,6 +32,7 @@ public interface IRepoRegistry
     // re-derives its digit. The slot map itself is read through RepoForHotkey / HotkeyFor.
     State<int> HotkeysChanged { get; }
     OpenRepoOutcome Open(string path, Guid? groupId = null);
+    Repo? Find(Guid id);
     void SetActive(Guid id);
 
     // Persisted, so a sidebar dot survives a restart without re-probing every repo.

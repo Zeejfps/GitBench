@@ -69,7 +69,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
     private void OnActiveChanged(Repo? active)
     {
         if (active is null) return;
-        ScheduleSync(active.ParentRepoId ?? active.Id);
+        ScheduleSync(active.PrimaryId);
     }
 
     private void OnSubmodulesChanged(SubmodulesChangedMessage msg) => ScheduleSync(msg.PrimaryRepoId);

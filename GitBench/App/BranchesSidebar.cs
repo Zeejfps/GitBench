@@ -49,7 +49,7 @@ internal sealed record BranchesSidebar : Widget
                 ],
             },
             InitialWidth = preferences.Current.BranchesWidth,
-            OnWidthChanged = preferences.SetBranchesWidth,
+            OnWidthChanged = w => preferences.Update(p => p with { BranchesWidth = w }),
         };
     }
 }

@@ -21,8 +21,8 @@ internal static class AppHostSetup
     {
         public void UseWindowGeometry(PreferencesService preferences)
         {
-            appHost.OnWindowResized += preferences.SetWindowSize;
-            appHost.OnWindowMoved += preferences.SetWindowPosition;
+            appHost.OnWindowResized += (w, h) => preferences.Update(p => p with { WindowWidth = w, WindowHeight = h });
+            appHost.OnWindowMoved += (x, y) => preferences.Update(p => p with { WindowX = x, WindowY = y });
         }
 
         /// <summary>
@@ -148,7 +148,7 @@ internal static class AppHostSetup
             try
             {
                 appHost.MakeMainContextCurrent();
-                AssistantMark.ImageId.Value = appHost.LoadImage("Assets/assistant_mark.png");
+                appHost.Context.Require<AssistantMarkImage>().Id.Value = appHost.LoadImage("Assets/assistant_mark.png");
             }
             catch (Exception ex) { Console.WriteLine($"[AssistantMark] mark load failed: {ex.Message}"); }
         }

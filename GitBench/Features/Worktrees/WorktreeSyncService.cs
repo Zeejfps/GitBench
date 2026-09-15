@@ -65,7 +65,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     private void OnActiveChanged(Repo? active)
     {
         if (active is null) return;
-        ScheduleSync(active.ParentRepoId ?? active.Id);
+        ScheduleSync(active.PrimaryId);
     }
 
     private void OnWorktreesChanged(WorktreesChangedMessage msg) => ScheduleSync(msg.PrimaryRepoId);
@@ -84,7 +84,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
         }
         if (source is null) return;
 
-        var primaryId = source.ParentRepoId ?? source.Id;
+        var primaryId = source.PrimaryId;
         ScheduleSync(primaryId);
 
         if (source.IsPrimary)

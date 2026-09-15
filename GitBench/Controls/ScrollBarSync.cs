@@ -1,21 +1,19 @@
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 
 namespace GitBench.Controls;
 
 /// <summary>
-/// Shared helpers for the scroll-sync controllers that mirror a scrollable source view
-/// (ScrollPane, DiffContentView, CommitsView) to a stand-alone scroll bar. Collapses the
-/// bar's preferred extent to zero when content fits so the parent BorderLayout reclaims
-/// the saved space for the center pane.
+/// Mirrors a scrollable source's extent onto a stand-alone bar. A bar whose content fits is hidden
+/// outright, so the layout slot holding it (BorderLayout edge, flex row) collapses and the content
+/// reclaims the gutter.
 /// </summary>
 internal static class ScrollBarSync
 {
     public const float Thickness = 12f;
 
-    public static void ApplyVertical(VerticalScrollBarView bar, float scale, float normalized)
+    public static void ApplyVertical(VerticalScrollBar bar, float scale, float normalized)
     {
-        bar.Width = scale < 1f ? Thickness : 0f;
+        bar.IsVisible = scale < 1f;
         bar.Scale = scale;
         bar.SetNormalizedScrollPosition(normalized);
     }

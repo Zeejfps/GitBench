@@ -237,6 +237,6 @@ public sealed class MutationRunnerTests : IDisposable
             => RunMutation(effects, work, _ => throw new InvalidOperationException("continuation blew up"));
 
         public void Load(string label, Func<string> work)
-            => RunBackground<string>(() => (work(), null), (_, _) => Delivered.Add(label));
+            => RunBackground<Fetched<string>>(() => work(), _ => Delivered.Add(label));
     }
 }

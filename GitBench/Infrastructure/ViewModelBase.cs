@@ -46,9 +46,10 @@ internal abstract class ViewModelBase<TState> : IDisposable
     /// <summary>
     /// Creates an independent generation lane. Use a dedicated lane per concern (a load, a
     /// highlight pass, a lazy fetch) and pass it to <see cref="RunBackground"/> so an op in one
-    /// lane never drops an in-flight continuation in another.
+    /// lane never drops an in-flight continuation in another. An exclusive lane refuses to start
+    /// a second op while one is in flight instead of superseding it.
     /// </summary>
-    protected GenerationGuard CreateLane() => new();
+    protected GenerationGuard CreateLane(bool exclusive = false) => new(exclusive);
 
     /// <summary>
     /// Declares a per-field projection over <see cref="State"/>. Tracked for disposal in
@@ -70,41 +71,28 @@ internal abstract class ViewModelBase<TState> : IDisposable
     /// <paramref name="onResult"/> to the UI thread. The continuation is dropped if
     /// <paramref name="lane"/> (defaulting to <see cref="Gen"/>) has advanced since this call
     /// started — repo switched, newer op in the same lane started, or the VM was disposed — so
-    /// stale results never clobber fresher state. Pass a dedicated lane (see
-    /// <see cref="CreateLane"/>) to isolate a stream of work from unrelated ops. The work
-    /// tuple lets callers report in-band errors without throwing; a thrown exception is
-    /// captured as its <c>Message</c>.
+    /// stale results never clobber fresher state. A thrown exception folds into the outcome's
+    /// own failure case. On an exclusive lane, returns false without starting while a previous
+    /// op is still in flight; the in-flight flag clears when the continuation posts even if the
+    /// result went stale, so a dropped result can never wedge the lane shut.
     ///
     /// This is load semantics: a newer answer to the same question supersedes an older one. A git
     /// mutation is not a load and must not run here — see <see cref="RunMutation"/>.
     /// </summary>
-    protected void RunBackground<T>(
-        Func<(T? Result, string? Error)> work,
-        Action<T?, string?> onResult,
-        GenerationGuard? lane = null)
+    protected bool RunBackground<T>(Func<T> work, Action<T> onResult, GenerationGuard? lane = null)
+        where T : IOutcome<T>
     {
         lane ??= Gen;
+        if (lane.Exclusive && lane.InFlight) return false;
+        lane.InFlight = true;
         var gen = lane.Bump();
-        var dispatcher = Dispatcher;
-        Task.Run(() =>
+        Dispatch(work, outcome =>
         {
-            T? result = default;
-            string? errorMsg = null;
-            try
-            {
-                (result, errorMsg) = work();
-            }
-            catch (Exception ex)
-            {
-                errorMsg = ex.Message;
-            }
-
-            dispatcher.Post(() =>
-            {
-                if (_disposed || lane.IsStale(gen)) return;
-                onResult(result, errorMsg);
-            });
+            lane.InFlight = false;
+            if (_disposed || lane.IsStale(gen)) return;
+            onResult(outcome);
         });
+        return true;
     }
 
     /// <summary>
@@ -125,6 +113,20 @@ internal abstract class ViewModelBase<TState> : IDisposable
     /// </summary>
     protected void RunMutation<T>(MutationEffects effects, Func<T> work, Action<T> onResult)
         where T : IOutcome<T>
+        => Dispatch(work, outcome =>
+        {
+            try
+            {
+                if (!_disposed) onResult(outcome);
+            }
+            finally
+            {
+                effects.Broadcast();
+            }
+        });
+
+    private void Dispatch<T>(Func<T> work, Action<T> continuation)
+        where T : IOutcome<T>
     {
         var dispatcher = Dispatcher;
         Task.Run(() =>
@@ -139,78 +141,9 @@ internal abstract class ViewModelBase<TState> : IDisposable
                 outcome = T.Fail(ex.Message);
             }
 
-            dispatcher.Post(() =>
-            {
-                try
-                {
-                    if (!_disposed) onResult(outcome);
-                }
-                finally
-                {
-                    effects.Broadcast();
-                }
-            });
+            dispatcher.Post(() => continuation(outcome));
         });
     }
-
-    /// <summary>
-    /// Outcome-typed variant of <see cref="RunBackground"/>: a thread-level failure folds
-    /// into the outcome's own Failed case, so <paramref name="onResult"/> always receives
-    /// one non-null outcome to switch on.
-    /// </summary>
-    protected void RunOutcome<T>(Func<T> work, Action<T> onResult, GenerationGuard? lane = null)
-        where T : IOutcome<T>
-        => RunBackground<T>(
-            () => (work(), null),
-            (outcome, error) => onResult(outcome ?? T.Fail(error ?? "Operation failed.")),
-            lane);
-
-    /// <summary>
-    /// Exclusive variant of <see cref="RunBackground"/>: returns false without starting when
-    /// a previous op on <paramref name="lane"/> is still in flight — the re-entrancy guard
-    /// VMs used to hand-roll as boolean fields. The in-flight flag always clears when the
-    /// continuation posts, even if a lane bump made the result stale, so a dropped result
-    /// can never wedge the lane shut.
-    /// </summary>
-    protected bool TryRunBackground<T>(
-        GenerationGuard lane,
-        Func<(T? Result, string? Error)> work,
-        Action<T?, string?> onResult)
-    {
-        if (lane.InFlight) return false;
-        lane.InFlight = true;
-        var gen = lane.Bump();
-        var dispatcher = Dispatcher;
-        Task.Run(() =>
-        {
-            T? result = default;
-            string? errorMsg = null;
-            try
-            {
-                (result, errorMsg) = work();
-            }
-            catch (Exception ex)
-            {
-                errorMsg = ex.Message;
-            }
-
-            dispatcher.Post(() =>
-            {
-                lane.InFlight = false;
-                if (_disposed || lane.IsStale(gen)) return;
-                onResult(result, errorMsg);
-            });
-        });
-        return true;
-    }
-
-    /// <summary>Exclusive, outcome-typed: <see cref="TryRunBackground"/> + <see cref="RunOutcome"/>.</summary>
-    protected bool TryRunOutcome<T>(GenerationGuard lane, Func<T> work, Action<T> onResult)
-        where T : IOutcome<T>
-        => TryRunBackground<T>(
-            lane,
-            () => (work(), null),
-            (outcome, error) => onResult(outcome ?? T.Fail(error ?? "Operation failed.")));
 
     public virtual void Dispose()
     {

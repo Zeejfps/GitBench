@@ -40,10 +40,9 @@ internal sealed class GroupSectionViewModel : IDisposable
         {
             var active = _registry.Active.Value;
             if (active is null) return result;
-            var primaryId = active.ParentRepoId ?? active.Id;
             foreach (var repoId in _group.RepoIds)
             {
-                if (repoId == primaryId && reposById.TryGetValue(repoId, out var repo))
+                if (repoId == active.PrimaryId && reposById.TryGetValue(repoId, out var repo))
                     result.Add(repo);
             }
             return result;

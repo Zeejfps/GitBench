@@ -128,7 +128,7 @@ public sealed class UiScalePreferenceTests : IDisposable
         var path = Path.Combine(_dir.Path, "roundtrip.json");
         var service = new PreferencesService(Preferences.Default, path);
 
-        service.SetUiScale(new UiScale(1.25f));
+        service.Update(p => p with { UiScale = new UiScale(1.25f) });
         service.Dispose();
 
         Assert.Equal(1.25f, PreferencesStore.Load(path).UiScale.Factor);

@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Assistant;
 using GitBench.Features.Diff;
+using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Widgets;
 using ZGF.Gui;

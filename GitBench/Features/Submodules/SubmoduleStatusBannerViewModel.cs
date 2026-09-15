@@ -69,31 +69,26 @@ internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleSt
 
         var repoId = repo.Id;
         var service = _gitService;
-        RunBackground<int>(
+        RunBackground<Fetched<int>>(
             () =>
             {
-                try
+                var outdated = 0;
+                foreach (var info in service.ListSubmodules(repo))
                 {
-                    var infos = service.ListSubmodules(repo);
-                    var outdated = 0;
-                    foreach (var info in infos)
-                    {
-                        // Modified = checked-out SHA differs from the parent's recorded pointer;
-                        // MergeConflict = unresolved conflict in the submodule. Both mean the
-                        // submodule isn't where the main repo says it should be. NotInitialized
-                        // is intentionally excluded — a deliberately-uninitialized submodule
-                        // shouldn't nag on every refresh.
-                        if (info.Status is SubmoduleStatus.Modified or SubmoduleStatus.MergeConflict)
-                            outdated++;
-                    }
-                    return (outdated, null);
+                    // Modified = checked-out SHA differs from the parent's recorded pointer;
+                    // MergeConflict = unresolved conflict in the submodule. Both mean the
+                    // submodule isn't where the main repo says it should be. NotInitialized
+                    // is intentionally excluded — a deliberately-uninitialized submodule
+                    // shouldn't nag on every refresh.
+                    if (info.Status is SubmoduleStatus.Modified or SubmoduleStatus.MergeConflict)
+                        outdated++;
                 }
-                catch { return (0, null); }
+                return outdated;
             },
-            (outdated, _) =>
+            fetched =>
             {
                 if (_registry.Active.Value?.Id != repoId) return;
-                Update(_ => new SubmoduleStatusBannerState(outdated));
+                Update(_ => new SubmoduleStatusBannerState((fetched as Fetched<int>.Ok)?.Value ?? 0));
             });
     }
 }

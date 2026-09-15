@@ -233,14 +233,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public Repo? Repo => ResolveRepo();
 
-    private Repo? ResolveRepo()
-    {
-        var active = _registry.Active.Value;
-        if (active != null && active.Id == _pinnedRepoId) return active;
-        foreach (var r in _registry.Repos)
-            if (r.Id == _pinnedRepoId) return r;
-        return null;
-    }
+    private Repo? ResolveRepo() => _registry.Find(_pinnedRepoId);
 
     private void OnWorkingTreeChanged(WorkingTreeChangedMessage msg)
     {
@@ -326,11 +319,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (target.Path != diff.Path || target.Side != diff.Side) return;
 
         var loader = _loader;
-        RunBackground<List<string>>(
-            work: () => (loader.NewSideLines(repo, target), null),
-            onResult: (lines, _) =>
+        RunBackground<Fetched<List<string>?>>(
+            work: () => loader.NewSideLines(repo, target),
+            onResult: fetched =>
             {
-                if (lines == null) return; // no new side (deleted underneath us) — nothing to expand
+                // No new side (deleted underneath us) — nothing to expand.
+                if (fetched is not Fetched<List<string>?>.Ok { Value: { } lines }) return;
                 if (State.Value.Render is not DiffRenderState.Loaded cur || !ReferenceEquals(cur.Result, diff)) return;
                 var truncated = lines.Count > DiffOptions.TruncationLineCap;
                 if (truncated) lines.RemoveRange(DiffOptions.TruncationLineCap, lines.Count - DiffOptions.TruncationLineCap);
@@ -745,12 +739,17 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             _loc.Strings.Value.DiffNoCurrentVersion);
         var loader = _loader;
 
-        RunBackground<DiffRenderState>(work: () => (loader.Load(request), null), onResult: OnDiffLoaded);
+        RunBackground<Fetched<DiffRenderState>>(work: () => loader.Load(request), onResult: OnDiffLoaded);
     }
 
-    private void OnDiffLoaded(DiffRenderState? result, string? error)
+    private void OnDiffLoaded(Fetched<DiffRenderState> fetched)
     {
-        var render = error != null ? new DiffRenderState.Placeholder(error) : result!;
+        DiffRenderState render = fetched switch
+        {
+            Fetched<DiffRenderState>.Ok ok => ok.Value,
+            Fetched<DiffRenderState>.Failed failed => new DiffRenderState.Placeholder(failed.Message),
+            _ => throw new System.Diagnostics.UnreachableException(),
+        };
         Update(s => s with { Render = render });
         if (render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
             RefreshWorkingTreeHunkStates();

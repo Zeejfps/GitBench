@@ -22,8 +22,8 @@ public sealed record DialogCopyButton : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var clipboard = ctx.Get<IClipboard>();
-        var dispatcher = ctx.Get<IUiDispatcher>();
+        var clipboard = ctx.Require<IClipboard>();
+        var dispatcher = ctx.Require<IUiDispatcher>();
         var icon = new State<string?>(LucideIcons.Copy);
         var feedbackGen = 0;
 
@@ -36,13 +36,13 @@ public sealed record DialogCopyButton : Widget
             Task.Run(async () =>
             {
                 await Task.Delay(FeedbackMs);
-                dispatcher?.Post(() => { if (gen == feedbackGen) icon.Value = LucideIcons.Copy; });
+                dispatcher.Post(() => { if (gen == feedbackGen) icon.Value = LucideIcons.Copy; });
             });
         }
 
         return new IconButtonWidget
         {
-            Command = new Command(() => { clipboard?.SetText(GetText()); ShowFeedback(); }),
+            Command = new Command(() => { clipboard.SetText(GetText()); ShowFeedback(); }),
             Icon = icon,
             Width = DialogFrame.CloseButtonSize,
             Height = DialogFrame.CloseButtonSize,

@@ -23,8 +23,8 @@ internal sealed record LanguageServersDialog : Widget
             ctx.Require<ILanguageServerStore>(),
             ctx.Require<ILocalizationService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Get<IMessageBus>(),
-            ctx.Get<IClipboard>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IClipboard>());
 
         return new Dialog
         {

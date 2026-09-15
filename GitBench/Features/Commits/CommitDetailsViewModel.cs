@@ -125,7 +125,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private void DoToggleViewMode()
     {
         var next = State.Value.ViewMode == FileViewMode.Flat ? FileViewMode.Tree : FileViewMode.Flat;
-        _preferences.SetFileViewMode(next);
+        _preferences.Update(p => p with { FileViewMode = next });
         Update(s => s with { ViewMode = next });
     }
 
@@ -352,24 +352,13 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Render = new CommitDetailsRenderState.Loading(),
         });
 
-        RunBackground<CommitDetailsRenderState>(
-            work: () =>
+        RunBackground(
+            work: () => _gitHistory.LoadDetails(repo, sha).Map(details =>
             {
-                var fetched = _gitHistory.LoadDetails(repo, sha);
-                if (fetched is Fetched<CommitDetails>.Failed failed)
-                    return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
-
-                var details = ((Fetched<CommitDetails>.Ok)fetched).Value;
                 var pointerChanges = _gitSubmodules.GetSubmodulePointerChanges(repo, sha);
-                if (pointerChanges.Count > 0)
-                    details = MergePointerChanges(details, pointerChanges);
-                return (new CommitDetailsRenderState.Loaded(details), null);
-            },
-            onResult: (result, error) =>
-                Update(s => s with
-                {
-                    Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
-                }));
+                return pointerChanges.Count > 0 ? MergePointerChanges(details, pointerChanges) : details;
+            }),
+            onResult: fetched => Update(s => s with { Render = RenderOf(fetched) }));
     }
 
     /// <summary>
@@ -394,22 +383,18 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Render = new CommitDetailsRenderState.Loading(),
         });
 
-        RunBackground<CommitDetailsRenderState>(
-            work: () =>
-            {
-                var fetched = _gitDiff.LoadRangeFiles(repo, baseSha, headSha);
-                if (fetched is Fetched<IReadOnlyList<FileChange>>.Failed failed)
-                    return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
-
-                var files = ((Fetched<IReadOnlyList<FileChange>>.Ok)fetched).Value;
-                return (new CommitDetailsRenderState.Loaded(BuildRangeDetails(repoId, baseSha, headSha, files)), null);
-            },
-            onResult: (result, error) =>
-                Update(s => s with
-                {
-                    Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
-                }));
+        RunBackground(
+            work: () => _gitDiff.LoadRangeFiles(repo, baseSha, headSha)
+                .Map(files => BuildRangeDetails(repoId, baseSha, headSha, files)),
+            onResult: fetched => Update(s => s with { Render = RenderOf(fetched) }));
     }
+
+    private static CommitDetailsRenderState RenderOf(Fetched<CommitDetails> fetched) => fetched switch
+    {
+        Fetched<CommitDetails>.Ok ok => new CommitDetailsRenderState.Loaded(ok.Value),
+        Fetched<CommitDetails>.Failed failed => new CommitDetailsRenderState.Placeholder(failed.Message),
+        _ => throw new System.Diagnostics.UnreachableException(),
+    };
 
     /// <summary>
     /// Shows the working tree's changed files as one list, for the working-tree review surface.
@@ -471,14 +456,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Files: files);
     }
 
-    private Repo? ResolveRepo(Guid repoId)
-    {
-        var active = _registry.Active.Value;
-        if (active != null && active.Id == repoId) return active;
-        foreach (var r in _registry.Repos)
-            if (r.Id == repoId) return r;
-        return null;
-    }
+    private Repo? ResolveRepo(Guid repoId) => _registry.Find(repoId);
 
     private static CommitDetails MergePointerChanges(CommitDetails details, IReadOnlyList<SubmodulePointerChange> changes)
     {

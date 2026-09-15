@@ -98,8 +98,7 @@ internal sealed record CreateWorktreeDialog : Widget
 
     private static void PickPath(Context ctx, CreateWorktreeDialogViewModel vm)
     {
-        var picker = ctx.Get<IFilePicker>();
-        picker?.PickFolder(
+        ctx.Require<IFilePicker>().PickFolder(
             ctx.Localization().Strings.Value.WorktreesCreatePickerTitle,
             WorktreePathDefaults.NearestExistingDirectory(vm.ParentDir.Value, Directory.Exists),
             picked => vm.ParentDir.Value = picked);
