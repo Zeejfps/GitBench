@@ -75,12 +75,7 @@ internal sealed record CheckoutBranchDialog : Widget
             Command = checkout,
             Body =
             [
-                new Text
-                {
-                    Value = s.BranchesCheckoutDescription(RemoteName, RemoteBranchName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.BranchesCheckoutDescription(RemoteName, RemoteBranchName) },
                 new LabeledInput
                 {
                     Label = s.BranchesCheckoutLocalNameLabel,

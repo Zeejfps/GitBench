@@ -50,12 +50,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.SubmodulesDeinitConfirm(Submodule.DisplayName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.SubmodulesDeinitConfirm(Submodule.DisplayName) },
                 new Text
                 {
                     Value = s.SubmodulesDeinitDesc,

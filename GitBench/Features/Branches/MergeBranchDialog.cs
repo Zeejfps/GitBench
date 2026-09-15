@@ -1,6 +1,5 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -8,7 +7,6 @@ using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -70,7 +68,17 @@ internal sealed record MergeBranchDialog : Widget
             [
                 BuildLabeledRow(s.BranchesMergeSourceLabel, BuildBranchChip(Request.SourceDisplay)),
                 BuildLabeledRow(s.BranchesMergeTargetLabel, BuildBranchChip(Request.TargetBranch)),
-                BuildLabeledRow(s.BranchesMergeStrategyLabel, new MergeOptionDropdown { Selected = strategy }),
+                BuildLabeledRow(s.BranchesMergeStrategyLabel, new OptionDropdown<MergeStrategy>
+                {
+                    Selected = strategy,
+                    Options =
+                    [
+                        (MergeStrategy.Default, s.BranchesMergeStrategyDefault, s.BranchesMergeStrategyDefaultDetail),
+                        (MergeStrategy.NoFastForward, s.BranchesMergeStrategyNoFf, s.BranchesMergeStrategyNoFfDetail),
+                        (MergeStrategy.FastForwardOnly, s.BranchesMergeStrategyFfOnly, s.BranchesMergeStrategyFfOnlyDetail),
+                        (MergeStrategy.Squash, s.BranchesMergeStrategySquash, s.BranchesMergeStrategySquashDetail),
+                    ],
+                }),
             ],
         };
     }
@@ -162,70 +170,4 @@ internal sealed record MergeBranchDialog : Widget
             },
         ],
     };
-}
-
-internal sealed record MergeOptionDropdown : Widget
-{
-    public required State<MergeStrategy> Selected { get; init; }
-
-    protected override IWidget Build(Context ctx)
-    {
-        var s = ctx.Localization().Strings.Value;
-        (MergeStrategy Strategy, string Label, string Detail)[] options =
-        {
-            (MergeStrategy.Default, s.BranchesMergeStrategyDefault, s.BranchesMergeStrategyDefaultDetail),
-            (MergeStrategy.NoFastForward, s.BranchesMergeStrategyNoFf, s.BranchesMergeStrategyNoFfDetail),
-            (MergeStrategy.FastForwardOnly, s.BranchesMergeStrategyFfOnly, s.BranchesMergeStrategyFfOnlyDetail),
-            (MergeStrategy.Squash, s.BranchesMergeStrategySquash, s.BranchesMergeStrategySquashDetail),
-        };
-
-        string LookupLabel(MergeStrategy strategy)
-        {
-            foreach (var o in options) if (o.Strategy == strategy) return o.Label;
-            return string.Empty;
-        }
-
-        string LookupDetail(MergeStrategy strategy)
-        {
-            foreach (var o in options) if (o.Strategy == strategy) return o.Detail;
-            return string.Empty;
-        }
-
-        List<RepoBarContextMenu.Item> BuildItems()
-        {
-            var items = new List<RepoBarContextMenu.Item>(options.Length);
-            foreach (var opt in options)
-            {
-                var strategy = opt.Strategy;
-                items.Add(new RepoBarContextMenu.Item(
-                    $"{opt.Label} — {opt.Detail}",
-                    () => Selected.Value = strategy));
-            }
-            return items;
-        }
-
-        return new DropdownWidget
-        {
-            Height = 30,
-            Gap = Spacing.Lg,
-            Children =
-            [
-                new Text
-                {
-                    VAlign = TextAlignment.Center,
-                    Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
-                    Color = Theme.Color(t => t.DialogFrame.TitleText),
-                },
-                new Grow
-                {
-                    Child = new Text
-                    {
-                        VAlign = TextAlignment.Center,
-                        Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
-                        Color = Theme.Color(t => t.DialogBody.RowTextMissing),
-                    },
-                },
-            ],
-        }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
-    }
 }

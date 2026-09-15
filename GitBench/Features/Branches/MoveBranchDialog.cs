@@ -46,12 +46,7 @@ internal sealed record MoveBranchDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.BranchesMoveDescription(BranchName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.BranchesMoveDescription(BranchName) },
                 new Clipped
                 {
                     Child = new Text

@@ -76,12 +76,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
         var s = loc.Strings.Value;
         var body = new List<IWidget>
         {
-            new Text
-            {
-                Value = s.BranchesDeleteLocalTitle(BranchName),
-                Wrap = TextWrap.Wrap,
-                Color = Theme.Color(t => t.DialogBody.BodyText),
-            },
+            new DialogBodyText { Value = s.BranchesDeleteLocalTitle(BranchName) },
             new CheckboxWidget
             {
                 Label = s.BranchesDeleteLocalForceLabel,

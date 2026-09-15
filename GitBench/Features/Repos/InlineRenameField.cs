@@ -9,17 +9,17 @@ using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Repos;
 
-// Inline editor for a primary repo's display name, swapped in for the row's name label while
-// renaming. Shares the group rename field's themed input styling.
-internal sealed record RepoRenameField : Widget
+// Inline editor swapped in for a repo/group row's name label while renaming. Enter, focus loss and
+// a click outside commit; Escape cancels.
+internal sealed record InlineRenameField : Widget
 {
-    public required Guid RepoId { get; init; }
     public required string InitialName { get; init; }
     public required float RowHeight { get; init; }
+    public required Action<string> OnCommit { get; init; }
+    public required Action OnCancel { get; init; }
 
     protected override View CreateView(Context ctx)
     {
-        var registry = ctx.Require<IRepoRegistry>();
         var theme = ctx.Theme();
         var inputSystem = ctx.Require<InputSystem>();
 
@@ -53,7 +53,7 @@ internal sealed record RepoRenameField : Widget
         var root = new ContainerView { Height = RowHeight };
         root.Children.Add(box);
 
-        root.UseController(inputSystem, () => new RepoRenameKbmController(input, inputSystem, ctx.Require<IClipboard>(), RepoId, registry));
+        root.UseController(inputSystem, () => new InlineRenameKbmController(input, inputSystem, ctx.Require<IClipboard>(), OnCommit, OnCancel));
         return root;
     }
 }

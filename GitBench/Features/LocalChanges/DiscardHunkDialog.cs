@@ -48,12 +48,7 @@ internal sealed record DiscardHunkDialog : Widget
             [
                 new Grow
                 {
-                    Child = new Text
-                    {
-                        Value = s.LocalchangesDiscardHunkBody(Path),
-                        Wrap = TextWrap.Wrap,
-                        Color = Theme.Color(t => t.DialogBody.BodyText),
-                    },
+                    Child = new DialogBodyText { Value = s.LocalchangesDiscardHunkBody(Path) },
                 },
             ],
         };

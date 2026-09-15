@@ -87,12 +87,7 @@ internal sealed record ConfirmPasteDialog : Widget
             },
             Body =
             [
-                new Text
-                {
-                    Value = s.TerminalPasteConfirmBody,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.TerminalPasteConfirmBody },
                 new Text
                 {
                     Value = s.TerminalPasteConfirmFirstLine(FirstLine),

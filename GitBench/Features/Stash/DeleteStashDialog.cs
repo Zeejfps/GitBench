@@ -50,12 +50,7 @@ internal sealed record DeleteStashDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.StashDeleteBody(Subject),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.StashDeleteBody(Subject) },
             ],
         };
     }

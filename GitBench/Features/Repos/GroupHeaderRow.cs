@@ -46,7 +46,7 @@ internal sealed record GroupHeaderRow : Widget
                                     Width = Sizes.Icon,
                                     Color = Theme.Color(s => s.GroupHeaderRow.ChevronText),
                                 },
-                                new Grow { Child = NameSlot(vm) },
+                                new Grow { Child = NameSlot(ctx.Require<IRepoRegistry>(), vm) },
                                 AddRepoButton(ctx, vm, isHovered),
                             ],
                         },
@@ -81,10 +81,20 @@ internal sealed record GroupHeaderRow : Widget
             .WithMenuController(rect =>
                 RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenu.Items(ctx, vm.Group.Id)));
 
-    private static IWidget NameSlot(GroupHeaderRowViewModel vm) => new Show
+    private static IWidget NameSlot(IRepoRegistry registry, GroupHeaderRowViewModel vm) => new Show
     {
         When = vm.IsRenaming,
-        Then = () => new GroupRenameField { Group = vm.Group },
+        Then = () => new InlineRenameField
+        {
+            InitialName = vm.Group.Name.Value,
+            RowHeight = Sizes.RowHeight,
+            OnCommit = name =>
+            {
+                registry.RenameGroup(vm.Group.Id, name);
+                registry.EndRenameGroup();
+            },
+            OnCancel = registry.EndRenameGroup,
+        },
         Else = () => new Text
         {
             Value = Prop.Bind<string?>(() => vm.Group.Name.Value?.ToUpperInvariant()),

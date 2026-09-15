@@ -79,12 +79,7 @@ internal sealed record CreateTagDialog : Widget
             BindActionLabel = new Derived<string>(() => pushToAllRemotes.Value ? s.CommitsCreateTagPushAction : s.CommonCreate),
             Body =
             [
-                new Text
-                {
-                    Value = s.CommitsCreateTagDesc,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.CommitsCreateTagDesc },
                 new LabeledRow { Label = s.CommitsCreateTagLocationLabel, Value = CommitValue(ctx, ShortSha, Summary) },
                 new LabeledInput
                 {

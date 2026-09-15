@@ -53,12 +53,7 @@ internal sealed record DropStashDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.StashDropBody(Subject),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.StashDropBody(Subject) },
             ],
         };
     }

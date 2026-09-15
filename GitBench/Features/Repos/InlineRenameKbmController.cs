@@ -1,22 +1,22 @@
-﻿using ZGF.Gui;
+using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class GroupRenameKbmController : BaseTextInputKbmController
+internal sealed class InlineRenameKbmController : BaseTextInputKbmController
 {
     private readonly TextInputView _input;
-    private readonly Guid _groupId;
-    private readonly IRepoRegistry _registry;
+    private readonly Action<string> _onCommit;
+    private readonly Action _onCancel;
     private bool _finished;
 
-    public GroupRenameKbmController(TextInputView input, InputSystem inputSystem, IClipboard clipboard, Guid groupId, IRepoRegistry registry) : base(input, inputSystem, clipboard)
+    public InlineRenameKbmController(TextInputView input, InputSystem inputSystem, IClipboard clipboard, Action<string> onCommit, Action onCancel) : base(input, inputSystem, clipboard)
     {
         _input = input;
-        _groupId = groupId;
-        _registry = registry;
+        _onCommit = onCommit;
+        _onCancel = onCancel;
         // Not StartEditing + StealFocus by hand: BeginEditing also turns the IME on, without which
         // the rename field cannot type CJK.
         BeginEditing();
@@ -71,8 +71,7 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
         // which EndEditing discards.
         var newName = new string(_input.Text);
         EndEditing();
-        _registry.RenameGroup(_groupId, newName);
-        _registry.EndRenameGroup();
+        _onCommit(newName);
     }
 
     private void Cancel()
@@ -80,6 +79,6 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
         if (_finished) return;
         _finished = true;
         EndEditing();
-        _registry.EndRenameGroup();
+        _onCancel();
     }
 }

@@ -31,6 +31,7 @@ internal sealed record RepoRowShell : Widget
     {
         var vm = ctx.Require<RepoNodeViewModel>();
         var selectionBar = ctx.Require<TreeSelectionBar<Guid>>();
+        var registry = ctx.Require<IRepoRegistry>();
 
         // Loading gives way to the dot rather than sitting beside it: the dot reports what the last
         // read found, and while the next one is outstanding that is the thing in flux.
@@ -73,11 +74,16 @@ internal sealed record RepoRowShell : Widget
                 Child = new Show
                 {
                     When = vm.IsRenaming,
-                    Then = () => new RepoRenameField
+                    Then = () => new InlineRenameField
                     {
-                        RepoId = vm.RepoId,
                         InitialName = vm.DisplayName.Value,
                         RowHeight = RowHeight,
+                        OnCommit = name =>
+                        {
+                            registry.RenameRepo(vm.RepoId, name);
+                            registry.EndRenameRepo();
+                        },
+                        OnCancel = registry.EndRenameRepo,
                     },
                     Else = () => new Row
                     {

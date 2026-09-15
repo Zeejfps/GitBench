@@ -53,12 +53,7 @@ internal sealed record ReconcilePullDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.OperationsReconcileDesc(Repo.DisplayName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.OperationsReconcileDesc(Repo.DisplayName) },
                 new Text
                 {
                     Value = s.CommonStrategy,

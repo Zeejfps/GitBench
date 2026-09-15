@@ -45,13 +45,10 @@ public sealed class StashDialogViewModelTests
 
         Assert.Equal(0, git.GetLocalChangesCalls);
 
-        var rows = vm.Files.Value;
-        Assert.Equal(new[] { "mod.txt", "newfile.txt", "staged.txt" }, rows.Select(r => r.Path).ToArray());
+        Assert.Equal(new[] { "mod.txt", "newfile.txt", "staged.txt" }, vm.Files.Files.Select(r => r.Path).ToArray());
 
         // The untracked flag is set exactly for the Status == Added row.
-        Assert.True(rows.Single(r => r.Path == "newfile.txt").IsUntracked);
-        Assert.False(rows.Single(r => r.Path == "mod.txt").IsUntracked);
-        Assert.False(rows.Single(r => r.Path == "staged.txt").IsUntracked);
+        Assert.Equal(new[] { "newfile.txt" }, vm.UntrackedPaths);
     }
 
     [Fact]
@@ -62,7 +59,7 @@ public sealed class StashDialogViewModelTests
         var vm = Build(LocalChangesSnapshot.Empty(Repo.Id), git, loc, dispatcher);
 
         Assert.Equal(0, git.GetLocalChangesCalls);
-        Assert.Empty(vm.Files.Value);
-        Assert.Equal(loc.Strings.Value.LocalchangesFilesHeaderEmpty, vm.FilesHeader.Value);
+        Assert.Empty(vm.Files.Files);
+        Assert.Equal(loc.Strings.Value.LocalchangesFilesHeaderEmpty, vm.Files.Header.Value);
     }
 }

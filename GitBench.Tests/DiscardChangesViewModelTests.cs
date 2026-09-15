@@ -43,7 +43,7 @@ public sealed class DiscardChangesViewModelTests
         Assert.Equal(0, git.GetHeadCommitMessageCalls);
 
         // Discard lists only the Unstaged side, sorted, ignoring Staged.
-        Assert.Equal(new[] { "a.txt", "b.txt" }, vm.Files.Value.Select(r => r.Path).ToArray());
+        Assert.Equal(new[] { "a.txt", "b.txt" }, vm.Files.Files.Select(r => r.Path).ToArray());
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public sealed class DiscardChangesViewModelTests
             LocalChangesSnapshot.Empty(Repo.Id), git, dispatcher, new MessageBus(), loc, () => { });
 
         Assert.Equal(0, git.GetLocalChangesCalls);
-        Assert.Empty(vm.Files.Value);
-        Assert.Equal(loc.Strings.Value.LocalchangesFilesHeaderEmpty, vm.FilesHeader.Value);
+        Assert.Empty(vm.Files.Files);
+        Assert.Equal(loc.Strings.Value.LocalchangesFilesHeaderEmpty, vm.Files.Header.Value);
     }
 }

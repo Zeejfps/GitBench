@@ -139,12 +139,7 @@ internal sealed record CleanBranchesDialog : Widget
 
         var body = new List<IWidget>
         {
-            new Text
-            {
-                Value = s.BranchesCleanDescription,
-                Wrap = TextWrap.Wrap,
-                Color = Theme.Color(t => t.DialogBody.BodyText),
-            },
+            new DialogBodyText { Value = s.BranchesCleanDescription },
         };
 
         if (FolderPath.Length > 0)

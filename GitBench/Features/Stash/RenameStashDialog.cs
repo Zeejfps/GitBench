@@ -53,12 +53,7 @@ internal sealed record RenameStashDialog : Widget
             Command = rename,
             Body =
             [
-                new Text
-                {
-                    Value = s.StashRenameContext(CurrentMessage),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.StashRenameContext(CurrentMessage) },
                 new LabeledInput
                 {
                     Label = s.StashRenameDescriptionLabel,

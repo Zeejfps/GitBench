@@ -70,12 +70,7 @@ internal sealed record RenameBranchDialog : Widget
             Command = rename,
             Body =
             [
-                new Text
-                {
-                    Value = s.BranchesRenameDescription(CurrentName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.BranchesRenameDescription(CurrentName) },
                 new LabeledInput
                 {
                     Label = s.BranchesRenameNewNameLabel,

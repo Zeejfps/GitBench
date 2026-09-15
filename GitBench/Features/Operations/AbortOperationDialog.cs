@@ -82,12 +82,7 @@ internal sealed record AbortOperationDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = bodyText,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = bodyText },
             ],
         };
     }

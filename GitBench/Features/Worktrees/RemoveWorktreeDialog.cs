@@ -90,12 +90,7 @@ internal sealed record RemoveWorktreeDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.WorktreesRemoveConfirm(Worktree.DisplayName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.WorktreesRemoveConfirm(Worktree.DisplayName) },
                 pathBox,
                 new CheckboxWidget
                 {

@@ -46,12 +46,7 @@ internal sealed record ForcePushDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.BranchesForcePushDescription(displayBranch, Ahead, Behind),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.BranchesForcePushDescription(displayBranch, Ahead, Behind) },
             ],
         };
     }

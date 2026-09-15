@@ -53,12 +53,7 @@ internal sealed record DeleteTagDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.CommitsDeleteTagDesc,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.CommitsDeleteTagDesc },
                 new LabeledRow { Label = s.CommitsDeleteTagLabel, Value = TagValue(TagName) },
                 new CheckboxWidget
                 {

@@ -1,3 +1,4 @@
+using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
@@ -5,32 +6,17 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
 
-internal sealed record StashFileRow(string Path, FileChange Display, bool IsUntracked);
-
-internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
+internal sealed class StashDialogViewModel
 {
-    private readonly Repo _repo;
-    private readonly IGitStashOperations _gitService;
-    private readonly IMessageBus _bus;
-    private readonly HashSet<string> _untrackedPaths = new();
-    private readonly string _doneToast;
-    private readonly Action _onClose;
-
-    public IReadable<IReadOnlyList<StashFileRow>> Files { get; }
-    public IReadable<IReadOnlySet<string>> CheckedPaths { get; }
-    public IReadable<string> FilesHeader { get; }
-    public IReadable<string> Message { get; }
-    public IReadable<bool> KeepStaged { get; }
+    public CheckedFileList Files { get; }
+    public IReadOnlySet<string> UntrackedPaths { get; }
+    public State<string> Message { get; } = new(string.Empty);
+    public State<bool> KeepStaged { get; } = new(false);
     public AsyncCommand Stash { get; }
-
-
-    // The pivot a Shift-click extends a range from; moves to the row of every plain/toggle click.
-    private int _anchorIndex = -1;
 
     public StashDialogViewModel(
         Repo repo,
@@ -41,133 +27,36 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
         LocalChangesSelectionStore selectionStore,
         ILocalizationService loc,
         Action onClose)
-        : base(dispatcher, StashDialogState.Initial)
     {
-        _repo = repo;
-        _gitService = gitService;
-        _bus = bus;
-        _onClose = onClose;
         var strings = loc.Strings.Value;
-        _doneToast = strings.ToastChangesStashed;
-
-        var rows = BuildRows(snapshot, _untrackedPaths);
-        var preChecked = ComputePreChecked(rows, selectionStore.UnstagedPaths.Value);
-        Update(s => s with
-        {
-            Files = rows,
-            CheckedPaths = new HashSet<string>(preChecked),
-        });
-
-        Files = Slice(s => s.Files);
-        CheckedPaths = Slice(s => s.CheckedPaths);
-        FilesHeader = Slice(s => s.Files.Count == 0
-            ? strings.LocalchangesFilesHeaderEmpty
-            : strings.LocalchangesFilesHeader(s.CheckedPaths.Count, s.Files.Count));
-        Message = Slice(s => s.Message);
-        KeepStaged = Slice(s => s.KeepStaged);
-
-        var canStash = Slice(s => s.Message.Length > 0 && s.CheckedPaths.Count > 0);
-        Stash = AsyncCommand.ForOutcome(dispatcher, DoStash, OnStashSucceeded, canStash);
-    }
-
-    public void SetMessage(string message) =>
-        Update(s => s.Message == message ? s : s with { Message = message });
-
-    public void SetKeepStaged(bool value) =>
-        Update(s => s.KeepStaged == value ? s : s with { KeepStaged = value });
-
-    /// <summary>
-    /// Handles a click on the row at <paramref name="index"/>. Shift extends a range from the anchor
-    /// to the clicked row and sets the whole range to match the clicked row's toggled state — a Shift
-    /// on an unchecked row checks the range, on a checked row unchecks it (the anchor stays put for
-    /// further extends). Any other click toggles just that row and moves the anchor to it.
-    /// </summary>
-    public void ClickRow(int index, InputModifiers modifiers)
-    {
-        var files = State.Value.Files;
-        if ((uint)index >= (uint)files.Count) return;
-
-        if ((modifiers & InputModifiers.Shift) != 0 && (uint)_anchorIndex < (uint)files.Count)
-        {
-            var lo = Math.Min(_anchorIndex, index);
-            var hi = Math.Max(_anchorIndex, index);
-            Update(s =>
-            {
-                var targetChecked = !s.CheckedPaths.Contains(s.Files[index].Path);
-                var next = new HashSet<string>(s.CheckedPaths);
-                for (var i = lo; i <= hi; i++)
-                {
-                    if (targetChecked) next.Add(s.Files[i].Path);
-                    else next.Remove(s.Files[i].Path);
-                }
-                return s with { CheckedPaths = next };
-            });
-            return;
-        }
-
-        _anchorIndex = index;
-        var path = files[index].Path;
-        Update(s =>
-        {
-            var next = new HashSet<string>(s.CheckedPaths);
-            if (!next.Add(path)) next.Remove(path);
-            return s with { CheckedPaths = next };
-        });
-    }
-
-    private GitOutcome DoStash()
-    {
-        var state = State.Value;
-        var paths = new List<string>(state.CheckedPaths.Count);
-        var includeUntracked = false;
-        foreach (var f in state.Files)
-        {
-            if (!state.CheckedPaths.Contains(f.Path)) continue;
-            paths.Add(f.Path);
-            if (_untrackedPaths.Contains(f.Path)) includeUntracked = true;
-        }
-
-        return _gitService.CreateStash(_repo, state.Message, includeUntracked, state.KeepStaged, paths);
-    }
-
-    private void OnStashSucceeded()
-    {
-        _bus.Broadcast(new RefsChangedMessage(_repo.Id));
-        _bus.Broadcast(new WorkingTreeChangedMessage(_repo.Id));
-        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_doneToast)));
-        _onClose();
-    }
-
-    private static IReadOnlyList<StashFileRow> BuildRows(LocalChangesSnapshot snapshot, HashSet<string> untracked)
-    {
-        untracked.Clear();
-        var seen = new Dictionary<string, StashFileRow>(snapshot.Staged.Count + snapshot.Unstaged.Count);
+        var untracked = new HashSet<string>();
         // Unstaged first so the worktree status wins the display when a path appears on both sides.
+        var seen = new Dictionary<string, FileChange>(snapshot.Staged.Count + snapshot.Unstaged.Count);
         foreach (var f in snapshot.Unstaged)
         {
-            var isUntracked = f.Status == FileChangeStatus.Added;
-            if (isUntracked) untracked.Add(f.Path);
-            seen[f.Path] = new StashFileRow(f.Path, f, isUntracked);
+            if (f.Status == FileChangeStatus.Added) untracked.Add(f.Path);
+            seen[f.Path] = f;
         }
         foreach (var f in snapshot.Staged)
-        {
-            if (!seen.ContainsKey(f.Path))
-                seen[f.Path] = new StashFileRow(f.Path, f, false);
-        }
-        var rows = seen.Values.ToList();
-        rows.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
-        return rows;
-    }
+            seen.TryAdd(f.Path, f);
 
-    private static IReadOnlyList<string> ComputePreChecked(IReadOnlyList<StashFileRow> rows, IReadOnlyList<string> unstagedSelection)
-    {
-        if (unstagedSelection.Count == 0)
-            return rows.Select(r => r.Path).ToList();
+        UntrackedPaths = untracked;
+        Files = new CheckedFileList(seen.Values, selectionStore.UnstagedPaths.Value, strings);
 
-        var selSet = new HashSet<string>(unstagedSelection);
-        var preChecked = new List<string>(unstagedSelection.Count);
-        foreach (var r in rows)
-            if (selSet.Contains(r.Path)) preChecked.Add(r.Path);
-        return preChecked;
+        Stash = AsyncCommand.ForOutcome(
+            dispatcher,
+            () =>
+            {
+                var paths = Files.CheckedInOrder();
+                return gitService.CreateStash(repo, Message.Value, paths.Any(untracked.Contains), KeepStaged.Value, paths);
+            },
+            () =>
+            {
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
+                bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                bus.Broadcast(new ShowToastMessage(ToastIntent.Success(strings.ToastChangesStashed)));
+                onClose();
+            },
+            new Derived<bool>(() => Message.Value.Length > 0 && Files.CheckedPaths.Value.Count > 0));
     }
 }

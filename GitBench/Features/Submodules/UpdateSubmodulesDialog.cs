@@ -64,14 +64,9 @@ internal sealed record UpdateSubmodulesDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = Target is null
+                new DialogBodyText { Value = Target is null
                         ? s.SubmodulesUpdateDescAll(Primary.DisplayName)
-                        : s.SubmodulesUpdateDescSingle(Target.DisplayName),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                        : s.SubmodulesUpdateDescSingle(Target.DisplayName) },
                 new CheckboxWidget { Label = s.SubmodulesUpdateInitLabel, Checked = init, Height = Sizes.RowHeight }.WithController<KbmController>(),
                 new CheckboxWidget { Label = s.SubmodulesUpdateRecursiveLabel, Checked = recursive, Height = Sizes.RowHeight }.WithController<KbmController>(),
                 new Text
