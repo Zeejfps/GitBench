@@ -442,7 +442,10 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
 
     public AssistantProviderSwitchTimingTests()
     {
-        foreach (var variable in AssistantProviders.All.Select(p => p.EnvironmentVariable).OfType<string>())
+        foreach (var variable in AssistantProviders.All
+                     .Select(p => p.Hosting)
+                     .OfType<AssistantHosting.Hosted>()
+                     .Select(h => h.EnvironmentVariable))
         {
             _environment[variable] = Environment.GetEnvironmentVariable(variable);
             Environment.SetEnvironmentVariable(variable, null);
@@ -835,12 +838,15 @@ public sealed class AssistantProviderPreferencesTests : IDisposable
     {
         var path = Path.Combine(_dir.Path, "prefs.json");
         var service = new PreferencesService(Preferences.Default, path);
-        service.SetAssistantProvider(
-            "openai",
+        service.Update(p => p with
+        {
+            AssistantProviderId = "openai",
+            AssistantProviderPreferences =
             [
                 new AssistantProviderPreference("anthropic", "claude-sonnet-5", null),
                 new AssistantProviderPreference("openai", "gpt-5.6-terra", null),
-            ]);
+            ],
+        });
         service.Dispose();
 
         var loaded = PreferencesStore.Load(path);

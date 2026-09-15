@@ -84,21 +84,20 @@ internal sealed record AssistantSettingsCard : Widget
                                         Placeholder = Prop.Bind<string?>(() => vm.BaseUrlHint.Value),
                                     },
                                 },
-                                new Show
+                                // Every provider takes a key: a self-hosted endpoint needs none,
+                                // but a gateway put in front of one is routinely behind a token,
+                                // and without this field the only box left for it is the endpoint.
+                                new AssistantSettingsField
                                 {
-                                    When = vm.WantsApiKey,
-                                    Then = () => new AssistantSettingsField
-                                    {
-                                        FieldId = KeyInputId,
-                                        Label = L.T(s => s.AssistantSettingsKey),
-                                        Value = vm.KeyDraft,
-                                        // The label column is a fixed width, so which of the two a
-                                        // key is — asked for, or merely taken — is said in the box.
-                                        Placeholder = Prop.Bind<string?>(() => vm.IsApiKeyOptional.Value
-                                            ? loc.Strings.Value.AssistantSetupPlaceholderOptional
-                                            : loc.Strings.Value.AssistantSetupPlaceholder),
-                                        Masked = true,
-                                    },
+                                    FieldId = KeyInputId,
+                                    Label = L.T(s => s.AssistantSettingsKey),
+                                    Value = vm.KeyDraft,
+                                    // The label column is a fixed width, so which of the two a
+                                    // key is — asked for, or merely taken — is said in the box.
+                                    Placeholder = Prop.Bind<string?>(() => vm.IsApiKeyOptional.Value
+                                        ? loc.Strings.Value.AssistantSetupPlaceholderOptional
+                                        : loc.Strings.Value.AssistantSetupPlaceholder),
+                                    Masked = true,
                                 },
                                 new Text
                                 {

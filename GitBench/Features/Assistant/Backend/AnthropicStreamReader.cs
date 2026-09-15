@@ -1,103 +1,18 @@
-using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using GitBench.Features.Assistant.Tools;
 
 namespace GitBench.Features.Assistant.Backend;
 
 /// <summary>
-/// Talks to the Messages API over <see cref="HttpClient"/> and turns its event stream into
-/// <see cref="BackendEvent"/>s.
+/// Turns a Messages API event stream into <see cref="BackendEvent"/>s.
 /// </summary>
-/// <remarks>
-/// Hand-rolled rather than SDK-backed: the surface needed is small, and a generated dependency has
-/// unverified NativeAOT behaviour in this app.
-/// </remarks>
-internal sealed class AnthropicBackend : IAssistantBackend
+internal static class AnthropicStreamReader
 {
-    private const string Path = "/messages";
-    private const string ApiVersion = "2023-06-01";
-    private const string FallbackBeta = "server-side-fallback-2026-07-01";
     private const string DataPrefix = "data:";
 
-    private readonly HttpClient _http;
-    private readonly Func<AssistantConnection> _connection;
-
-    // The connection is read per request rather than captured, so a key or model changed after
-    // startup takes effect without rebuilding the backend.
-    public AnthropicBackend(HttpClient http, Func<AssistantConnection> connection)
-    {
-        _http = http;
-        _connection = connection;
-    }
-
-    public async IAsyncEnumerable<BackendEvent> SendAsync(
-        AssistantTurn turn,
-        IReadOnlyList<IAssistantTool> tools,
-        [EnumeratorCancellation] CancellationToken ct)
-    {
-        var connection = _connection();
-        if (connection.ApiKey is not { } key)
-        {
-            yield return new BackendEvent.Error($"No {connection.Provider.DisplayName} API key is configured.");
-            yield break;
-        }
-
-        var (response, sendFailure) = await SendRequestAsync(turn, tools, connection, key, ct).ConfigureAwait(false);
-        if (response is null)
-        {
-            yield return new BackendEvent.Error(sendFailure ?? "The request could not be sent.");
-            yield break;
-        }
-
-        using var owned = response;
-        if (!owned.IsSuccessStatusCode)
-        {
-            yield return await AssistantHttpError.ReadAsync(owned, ct).ConfigureAwait(false);
-            yield break;
-        }
-
-        await using var stream = await owned.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        await foreach (var backendEvent in ReadEventsAsync(reader, ct).ConfigureAwait(false))
-            yield return backendEvent;
-    }
-
-    private async Task<(HttpResponseMessage? Response, string? Failure)> SendRequestAsync(
-        AssistantTurn turn,
-        IReadOnlyList<IAssistantTool> tools,
-        AssistantConnection connection,
-        string key,
-        CancellationToken ct)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, connection.Endpoint(Path));
-        request.Headers.TryAddWithoutValidation("x-api-key", key);
-        request.Headers.TryAddWithoutValidation("anthropic-version", ApiVersion);
-        if (connection.Capabilities(turn.Tier).ServerSideFallbacks)
-            request.Headers.TryAddWithoutValidation("anthropic-beta", FallbackBeta);
-        request.Content = new ByteArrayContent(AnthropicRequestWriter.Write(turn, tools, connection));
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-        try
-        {
-            var response = await _http
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-                .ConfigureAwait(false);
-            return (response, null);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return (null, ex.Message);
-        }
-    }
-
-    private static async IAsyncEnumerable<BackendEvent> ReadEventsAsync(
-        StreamReader reader,
+    public static async IAsyncEnumerable<BackendEvent> ReadAsync(
+        TextReader reader,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var toolIds = new Dictionary<int, string>();

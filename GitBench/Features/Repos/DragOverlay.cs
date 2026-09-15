@@ -4,11 +4,11 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
-namespace GitBench.Controls;
+namespace GitBench.Features.Repos;
 
 /// <summary>
 /// Top z-layer that paints a single drop-target indicator while a drag is in progress,
-/// tracking <see cref="IDragController.Target"/>. Draws nothing when no drag is active.
+/// tracking <see cref="DragController.Target"/>. Draws nothing when no drag is active.
 /// </summary>
 public sealed record DragOverlay : Widget
 {
@@ -17,7 +17,7 @@ public sealed record DragOverlay : Widget
     private sealed class Core : ContainerView
     {
         private readonly RectView _indicator;
-        private readonly IDragController? _dragController;
+        private readonly DragController _dragController;
 
         public Core(Context ctx)
         {
@@ -28,9 +28,8 @@ public sealed record DragOverlay : Widget
             };
             _indicator.BindThemedBackgroundColor(ctx.Theme(), s => s.Palette.Accent);
 
-            _dragController = ctx.Get<IDragController>();
-            if (_dragController is { } drag)
-                this.Use(() => drag.Target.Subscribe(OnTargetChanged));
+            _dragController = ctx.Require<DragController>();
+            this.Use(() => _dragController.Target.Subscribe(OnTargetChanged));
         }
 
         private void OnTargetChanged(DropTarget? target)
@@ -47,7 +46,7 @@ public sealed record DragOverlay : Widget
 
         protected override void OnLayoutChildren()
         {
-            var target = _dragController?.Target.Value;
+            var target = _dragController.Target.Value;
             if (target is null) return;
 
             var bounds = target.IndicatorBounds;

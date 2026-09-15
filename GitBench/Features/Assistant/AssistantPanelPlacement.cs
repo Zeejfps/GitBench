@@ -125,7 +125,13 @@ internal sealed class AssistantPanelPlacement
         _y = resolved.Y;
         _width = resolved.Width;
         _height = resolved.Height;
-        _preferences.SetAssistantPanelPlacement(resolved.X, resolved.Y, resolved.Width, resolved.Height);
+        _preferences.Update(p => p with
+        {
+            AssistantPanelX = resolved.X,
+            AssistantPanelY = resolved.Y,
+            AssistantPanelWidth = resolved.Width,
+            AssistantPanelHeight = resolved.Height,
+        });
     }
 
     private AssistantPanelRect Resolve()

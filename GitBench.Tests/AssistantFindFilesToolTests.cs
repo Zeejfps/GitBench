@@ -161,17 +161,15 @@ public sealed class AssistantFindFilesToolTests : IDisposable
     [Fact]
     public void RefusingAnUntrackedPath_SuggestsTheRealOne()
     {
-        var resolution = RepoFileGuard.Resolve(_git, _repo, "src/Assistant/AgentCatalog.cs");
-        Assert.NotNull(resolution.Refusal);
-        Assert.Contains("src/Features/Assistant/AgentCatalog.cs", resolution.Refusal);
+        var refused = Assert.IsType<RepoFileResolution.Refused>(RepoFileGuard.Resolve(_git, _repo, "src/Assistant/AgentCatalog.cs"));
+        Assert.Contains("src/Features/Assistant/AgentCatalog.cs", refused.Refusal);
     }
 
     [Fact]
     public void RefusingAPathLikeNothingInTheRepo_SuggestsNothing()
     {
-        var resolution = RepoFileGuard.Resolve(_git, _repo, "zzzzzzzzz.txt");
-        Assert.NotNull(resolution.Refusal);
-        Assert.DoesNotContain("Did you mean", resolution.Refusal);
+        var refused = Assert.IsType<RepoFileResolution.Refused>(RepoFileGuard.Resolve(_git, _repo, "zzzzzzzzz.txt"));
+        Assert.DoesNotContain("Did you mean", refused.Refusal);
     }
 
     private string? First(string pattern) => Matches(pattern).FirstOrDefault();

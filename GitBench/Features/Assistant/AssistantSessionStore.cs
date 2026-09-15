@@ -364,7 +364,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
 
     // Whether a turn that never calls a tool is worth reporting: against a self-hosted endpoint it
     // may mean the loaded model cannot call tools at all, which otherwise fails silently.
-    private bool ToolCallingIsUnproven() => !Volatile.Read(ref _connection).Provider.ToolCalling;
+    private bool ToolCallingIsUnproven() => Volatile.Read(ref _connection).Provider.Hosting is AssistantHosting.SelfHosted;
 
     public void Dispose()
     {

@@ -69,6 +69,9 @@ internal sealed class AssistantViewFixture : IDisposable
     /// <summary>Where the panel sits, so a test can drive a drag and read back what it did.</summary>
     public AssistantPanelPlacement Placement { get; }
 
+    /// <summary>The mark's image id; null until a test hands it one, which is the glyph fallback.</summary>
+    public AssistantMarkImage Mark { get; } = new();
+
     public PreferencesService Preferences { get; }
 
     public AssistantViewFixture(
@@ -180,6 +183,7 @@ internal sealed class AssistantViewFixture : IDisposable
                 Vm = new AssistantViewModel(store, localization, Bus);
                 ctx.AddService(Vm);
                 ctx.AddService(Placement);
+                ctx.AddService(Mark);
 
                 keybind = new AppKeybindController(
                     new KeyMap(),

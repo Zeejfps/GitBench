@@ -1,16 +1,10 @@
+using System.Diagnostics;
+
 namespace GitBench.Features.Assistant.Backend;
 
-/// Which request shape a provider speaks: the Messages API, or the <c>/v1/chat/completions</c> shape
-/// OpenAI, Ollama, LM Studio, OpenRouter, Groq, Together and vLLM all share.
-internal enum AssistantWireFormat
-{
-    Anthropic,
-    OpenAiCompatible,
-}
-
 /// <summary>
-/// One model provider the assistant can be pointed at: where it lives, whether it has to be signed,
-/// which model answers each tier, and what its wire format supports.
+/// One model provider the assistant can be pointed at: where it lives, how it is hosted, which
+/// model answers each tier, and what its wire format supports.
 /// </summary>
 internal sealed record AssistantProvider
 {
@@ -24,63 +18,50 @@ internal sealed record AssistantProvider
 
     public required AssistantWireFormat Wire { get; init; }
 
-    /// <summary>Whether a turn cannot be attempted without a key. Stated by every provider rather
-    /// than defaulted, so a new hosted one cannot arrive silently keyless.</summary>
-    public required bool RequiresApiKey { get; init; }
+    public required AssistantHosting Hosting { get; init; }
 
+    /// <summary>The tier defaults name entries in the hosted model list rather than standing beside
+    /// it, so the models the tiers run on cannot drift out of the list the picker offers.</summary>
     public required string ChatModel { get; init; }
 
     public required string QuickModel { get; init; }
 
-    /// <summary>Every model this build knows the provider serves, in the order the picker offers them.
-    /// The tier defaults name entries here rather than standing beside them, so the models the tiers
-    /// run on cannot drift out of the list. Empty where the endpoint serves whatever the user has
-    /// loaded rather than a published catalogue.</summary>
-    public IReadOnlyList<AssistantModel> Models { get; init; } = [];
-
-    /// <summary>The variable read when no key is saved, or null for a provider with no such convention.</summary>
-    public string? EnvironmentVariable { get; init; }
-
     public int MaxOutputTokens { get; init; } = 8192;
-
-    /// <summary>Whether the endpoint is the user's to set — true for the self-hosted providers, whose
-    /// address is a local port rather than a product.</summary>
-    public bool CustomBaseUrl { get; init; }
-
-    /// <summary>False where tool calling depends on whichever model happens to be loaded, so a turn
-    /// that never calls a tool is worth reporting rather than trusting.</summary>
-    public bool ToolCalling { get; init; } = true;
-
-    /// <summary>Whether a key is worth asking for — which is not the same question as whether one is
-    /// needed. A self-hosted endpoint answers unauthenticated, but its address is the user's to set
-    /// and a gateway put in front of it is routinely behind a token, so a key given for one is sent.
-    /// Without this the only field left open for that token is the endpoint, which is unmasked and
-    /// kept in plain text.</summary>
-    public bool AcceptsApiKey => RequiresApiKey || CustomBaseUrl;
 
     /// <summary>The name this provider's key is kept under in the OS secret store.</summary>
     public string SecretName => Id + "-api-key";
 
-    /// <summary>False where the endpoint serves whatever the user has loaded rather than a published
-    /// catalogue, so any list would be a guess and the model stays free text.</summary>
-    public bool KnownModels => Models.Count > 0;
+    /// <summary>Whether a turn cannot be attempted without a key. A self-hosted endpoint answers
+    /// unauthenticated, but a gateway put in front of one is routinely behind a token, so a key
+    /// given for it is still sent.</summary>
+    public bool RequiresApiKey => Hosting is AssistantHosting.Hosted;
 
     /// <summary>The models offered as a starting point — a default and never a whitelist, so a model
     /// typed by hand is taken as typed. Empty where the served models are the user's own.</summary>
-    public IReadOnlyList<string> ModelPresets => [.. Models.Select(m => m.Id)];
+    public IReadOnlyList<string> ModelPresets => Hosting switch
+    {
+        AssistantHosting.Hosted hosted => [.. hosted.Models.Select(m => m.Id)],
+        AssistantHosting.SelfHosted => [],
+        _ => throw new UnreachableException(),
+    };
 
     /// <summary>What this build knows the named model accepts, or <see cref="AssistantModel.Unlisted"/>
-    /// for one it has never heard of.</summary>
-    public AssistantModel Capabilities(string model) =>
-        Models.FirstOrDefault(m => string.Equals(m.Id, model, StringComparison.OrdinalIgnoreCase))
-        ?? AssistantModel.Unlisted;
+    /// for one it has never heard of — which is every model a self-hosted endpoint serves.</summary>
+    public AssistantModel Capabilities(string model) => Hosting switch
+    {
+        AssistantHosting.Hosted hosted =>
+            hosted.Models.FirstOrDefault(m => string.Equals(m.Id, model, StringComparison.OrdinalIgnoreCase))
+            ?? AssistantModel.Unlisted,
+        AssistantHosting.SelfHosted => AssistantModel.Unlisted,
+        _ => throw new UnreachableException(),
+    };
 
     public string ModelFor(ModelTier tier) => tier == ModelTier.Quick ? QuickModel : ChatModel;
 }
 
 /// <summary>
-/// The providers the assistant knows how to reach. One OpenAI-compatible implementation serves all
-/// but the first; what differs between them is data, which is what this list holds.
+/// The providers the assistant knows how to reach. One wire format serves all but the first; what
+/// differs between them is data, which is what this list holds.
 /// </summary>
 internal static class AssistantProviders
 {
@@ -92,20 +73,18 @@ internal static class AssistantProviders
         DisplayName = "Anthropic",
         BaseUrl = "https://api.anthropic.com/v1",
         Wire = AssistantWireFormat.Anthropic,
-        RequiresApiKey = true,
-        EnvironmentVariable = "ANTHROPIC_API_KEY",
         ChatModel = "claude-opus-5",
         QuickModel = "claude-haiku-4-5-20251001",
         // Mid-conversation system entries and a server-side fallback policy are the frontier models'
         // alone. Sonnet 5 and Haiku 4.5 reject both by name, so they say so here rather than
         // inheriting an Anthropic-wide yes.
-        Models =
+        Hosting = new AssistantHosting.Hosted("ANTHROPIC_API_KEY",
         [
             new() { Id = "claude-opus-5", MidConversationSystem = true, ServerSideFallbacks = true },
             new() { Id = "claude-haiku-4-5-20251001" },
             new() { Id = "claude-sonnet-5" },
             new() { Id = "claude-fable-5", MidConversationSystem = true, ServerSideFallbacks = true },
-        ],
+        ]),
         MaxOutputTokens = AssistantTurn.DefaultMaxTokens,
     };
 
@@ -115,16 +94,14 @@ internal static class AssistantProviders
         DisplayName = "OpenAI",
         BaseUrl = "https://api.openai.com/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = true,
-        EnvironmentVariable = "OPENAI_API_KEY",
         ChatModel = "gpt-5.6-sol",
         QuickModel = "gpt-5.6-luna",
-        Models =
+        Hosting = new AssistantHosting.Hosted("OPENAI_API_KEY",
         [
             new() { Id = "gpt-5.6-sol", UsesMaxCompletionTokens = true, ToolReasoningEffort = "none" },
             new() { Id = "gpt-5.6-luna", UsesMaxCompletionTokens = true, ToolReasoningEffort = "none" },
             new() { Id = "gpt-5.6-terra", UsesMaxCompletionTokens = true, ToolReasoningEffort = "none" },
-        ],
+        ]),
         MaxOutputTokens = 32000,
     };
 
@@ -134,13 +111,11 @@ internal static class AssistantProviders
         DisplayName = "OpenRouter",
         BaseUrl = "https://openrouter.ai/api/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = true,
-        EnvironmentVariable = "OPENROUTER_API_KEY",
         ChatModel = "openai/gpt-5.6-sol",
         QuickModel = "openai/gpt-5.6-luna",
         // The gateway normalizes the request shape across the models it fronts, so none of them
         // needs the per-model parameters their first-party endpoints do.
-        Models =
+        Hosting = new AssistantHosting.Hosted("OPENROUTER_API_KEY",
         [
             new() { Id = "openai/gpt-5.6-sol" },
             new() { Id = "openai/gpt-5.6-luna" },
@@ -148,7 +123,7 @@ internal static class AssistantProviders
             new() { Id = "anthropic/claude-opus-5" },
             new() { Id = "anthropic/claude-sonnet-5" },
             new() { Id = "google/gemini-3.6-flash" },
-        ],
+        ]),
         MaxOutputTokens = 16000,
     };
 
@@ -158,17 +133,15 @@ internal static class AssistantProviders
         DisplayName = "Groq",
         BaseUrl = "https://api.groq.com/openai/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = true,
-        EnvironmentVariable = "GROQ_API_KEY",
         ChatModel = "openai/gpt-oss-120b",
         QuickModel = "openai/gpt-oss-20b",
-        Models =
+        Hosting = new AssistantHosting.Hosted("GROQ_API_KEY",
         [
             new() { Id = "openai/gpt-oss-120b" },
             new() { Id = "openai/gpt-oss-20b" },
             new() { Id = "groq/compound" },
             new() { Id = "groq/compound-mini" },
-        ],
+        ]),
     };
 
     public static AssistantProvider Together { get; } = new()
@@ -177,11 +150,9 @@ internal static class AssistantProviders
         DisplayName = "Together",
         BaseUrl = "https://api.together.xyz/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = true,
-        EnvironmentVariable = "TOGETHER_API_KEY",
         ChatModel = "deepseek-ai/DeepSeek-V4-Pro",
         QuickModel = "openai/gpt-oss-20b",
-        Models =
+        Hosting = new AssistantHosting.Hosted("TOGETHER_API_KEY",
         [
             new() { Id = "deepseek-ai/DeepSeek-V4-Pro" },
             new() { Id = "openai/gpt-oss-20b" },
@@ -189,7 +160,7 @@ internal static class AssistantProviders
             new() { Id = "zai-org/GLM-5.2" },
             new() { Id = "openai/gpt-oss-120b" },
             new() { Id = "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
-        ],
+        ]),
     };
 
     public static AssistantProvider Ollama { get; } = new()
@@ -198,12 +169,10 @@ internal static class AssistantProviders
         DisplayName = "Ollama",
         BaseUrl = "http://localhost:11434/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = false,
+        Hosting = new AssistantHosting.SelfHosted(),
         ChatModel = "gpt-oss:20b",
         QuickModel = "gpt-oss:20b",
         MaxOutputTokens = 4096,
-        CustomBaseUrl = true,
-        ToolCalling = false,
     };
 
     public static AssistantProvider LmStudio { get; } = new()
@@ -212,12 +181,10 @@ internal static class AssistantProviders
         DisplayName = "LM Studio",
         BaseUrl = "http://localhost:1234/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = false,
+        Hosting = new AssistantHosting.SelfHosted(),
         ChatModel = "local-model",
         QuickModel = "local-model",
         MaxOutputTokens = 4096,
-        CustomBaseUrl = true,
-        ToolCalling = false,
     };
 
     public static AssistantProvider VLlm { get; } = new()
@@ -226,12 +193,10 @@ internal static class AssistantProviders
         DisplayName = "vLLM",
         BaseUrl = "http://localhost:8000/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        RequiresApiKey = false,
+        Hosting = new AssistantHosting.SelfHosted(),
         ChatModel = "local-model",
         QuickModel = "local-model",
         MaxOutputTokens = 4096,
-        CustomBaseUrl = true,
-        ToolCalling = false,
     };
 
     public static IReadOnlyList<AssistantProvider> All { get; } =

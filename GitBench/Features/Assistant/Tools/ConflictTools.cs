@@ -1,5 +1,6 @@
-using System.Text;
+using System.Diagnostics;
 using System.Text.Json;
+using System.Text;
 using GitBench.Git;
 using GitBench.Infrastructure;
 
@@ -28,6 +29,17 @@ internal static class ConflictTools
     /// <summary>One conflicted path the model may address, with the three sides already read.</summary>
     internal readonly record struct ConflictTarget(string RelativePath, string FullPath, ConflictStages Stages);
 
+    /// <summary>What the path argument settled to: a conflicted file, or the sentence the model is
+    /// told instead.</summary>
+    internal abstract record ConflictResolution
+    {
+        private ConflictResolution() { }
+
+        public sealed record Found(ConflictTarget Target) : ConflictResolution;
+
+        public sealed record Refused(string Refusal) : ConflictResolution;
+    }
+
     internal static string OperationName(RepoOperationState state) => state switch
     {
         RepoOperationState.Merge => "merge",
@@ -53,18 +65,22 @@ internal static class ConflictTools
         : ConflictChangeKind.Added;
 
     /// <summary>Settles the path argument, or the sentence the model is told instead.</summary>
-    internal static (ConflictTarget? Target, string? Refusal) Resolve(IGitService git, Repo repo, JsonElement args)
+    internal static ConflictResolution Resolve(IGitService git, Repo repo, JsonElement args) =>
+        RepoFileGuard.ResolveForDiff(git, repo, ToolJson.String(args, "path")) switch
+        {
+            RepoFileResolution.Refused refused => new ConflictResolution.Refused(refused.Refusal),
+            RepoFileResolution.Allowed allowed => Resolve(git, repo, allowed),
+            _ => throw new UnreachableException(),
+        };
+
+    private static ConflictResolution Resolve(IGitService git, Repo repo, RepoFileResolution.Allowed allowed)
     {
-        var resolved = RepoFileGuard.ResolveForDiff(git, repo, ToolJson.String(args, "path"));
-        if (resolved.Refusal is { } refusal) return (null, refusal);
-
-        var stages = git.GetConflictStages(repo, resolved.RelativePath!);
+        var stages = git.GetConflictStages(repo, allowed.RelativePath);
         if (stages is null)
-            return (null,
-                $"'{resolved.RelativePath}' is not a conflicted path in this repository. Call "
+            return new ConflictResolution.Refused(
+                $"'{allowed.RelativePath}' is not a conflicted path in this repository. Call "
                 + "get_conflicts for the paths that are.");
-
-        return (new ConflictTarget(resolved.RelativePath!, resolved.FullPath!, stages), null);
+        return new ConflictResolution.Found(new ConflictTarget(allowed.RelativePath, allowed.FullPath, stages));
     }
 }
 
@@ -158,25 +174,29 @@ internal sealed class GetConflictTool : IAssistantTool
 
     public bool IsWrite => false;
 
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        var (target, refusal) = ConflictTools.Resolve(_git, _repo, args);
-        if (refusal is not null) return Task.FromResult(ToolInvocation.Error(refusal));
+    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct) =>
+        Task.FromResult(ConflictTools.Resolve(_git, _repo, args) switch
+        {
+            ConflictTools.ConflictResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            ConflictTools.ConflictResolution.Found found => Describe(found.Target),
+            _ => throw new UnreachableException(),
+        });
 
-        var found = target!.Value;
+    private ToolInvocation Describe(ConflictTools.ConflictTarget found)
+    {
         var stages = found.Stages;
         // Decoded bytes are not text: a conflicted PNG handed back as several thousand replacement
         // characters costs the turn and tells the model nothing it can merge.
         if (LooksBinary(stages.Base) || LooksBinary(stages.Ours) || LooksBinary(stages.Theirs))
-            return Task.FromResult(ToolInvocation.Error(
+            return ToolInvocation.Error(
                 $"'{found.RelativePath}' is a binary file, so its sides are not text to merge. "
-                + "Settle it with resolve_conflict's 'ours' or 'theirs'."));
+                + "Settle it with resolve_conflict's 'ours' or 'theirs'.");
 
         var context = _git.GetConflictContext(_repo, found.RelativePath);
         var operation = ConflictTools.OperationName(context?.Operation ?? _git.GetOperationState(_repo));
         var hasBase = stages.Base is not null;
 
-        return Task.FromResult(ToolInvocation.Ok(ToolJson.Write(writer =>
+        return ToolInvocation.Ok(ToolJson.Write(writer =>
         {
             writer.WriteString("path", found.RelativePath);
             writer.WriteString("operation", operation);
@@ -189,7 +209,7 @@ internal sealed class GetConflictTool : IAssistantTool
             }
             WriteSide(writer, "ours", context?.Ours.Label, stages.Ours, hasBase);
             WriteSide(writer, "theirs", context?.Theirs.Label, stages.Theirs, hasBase);
-        })));
+        }));
     }
 
     private static void WriteSide(Utf8JsonWriter writer, string name, string? label, string? text, bool hasBase)
@@ -297,10 +317,18 @@ internal sealed class ResolveConflictTool : IAssistantTool
                 "Argument 'content' is required when resolution is 'content': it is the resolved "
                 + "file in full, not a patch.");
 
-        var (target, refusal) = ConflictTools.Resolve(_git, _repo, args);
-        if (refusal is not null) return ToolInvocation.Error(refusal);
+        return ConflictTools.Resolve(_git, _repo, args) switch
+        {
+            ConflictTools.ConflictResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            ConflictTools.ConflictResolution.Found found =>
+                await ResolveAsync(found.Target, resolution, content, ct).ConfigureAwait(false),
+                _ => throw new UnreachableException(),
+        };
+    }
 
-        var found = target!.Value;
+    private async Task<ToolInvocation> ResolveAsync(
+        ConflictTools.ConflictTarget found, string resolution, string? content, CancellationToken ct)
+    {
         if (await BeingEditedAsync(found.FullPath, ct).ConfigureAwait(false))
             return ToolInvocation.Error(
                 $"'{found.RelativePath}' is open in the editor with changes that are not on disk, "

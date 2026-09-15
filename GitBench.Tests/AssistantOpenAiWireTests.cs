@@ -489,7 +489,7 @@ public sealed class AssistantOpenAiWireTests
     {
         var handler = new RecordingHandler();
         using var http = new HttpClient(handler);
-        var backend = new OpenAiCompatibleBackend(http, () => connection);
+        var backend = new HttpAssistantBackend(http, () => connection);
         var turn = new AssistantTurn(
             ModelTier.Chat, "system prompt", new AssistantMessage[] { new AssistantMessage.User("go") });
 

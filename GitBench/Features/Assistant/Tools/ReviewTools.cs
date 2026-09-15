@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
@@ -241,23 +242,26 @@ internal sealed class GetFileAtBaseTool : IAssistantTool
 
     public bool IsWrite => false;
 
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        var resolved = RepoFileGuard.ResolveForDiff(_git, _repo, ToolJson.String(args, "path"));
-        if (resolved.Refusal is { } refusal)
-            return Task.FromResult(ToolInvocation.Error(refusal));
+    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct) =>
+        Task.FromResult(RepoFileGuard.ResolveForDiff(_git, _repo, ToolJson.String(args, "path")) switch
+        {
+            RepoFileResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            RepoFileResolution.Allowed allowed => Read(allowed.RelativePath, args),
+            _ => throw new UnreachableException(),
+        });
 
-        var path = resolved.RelativePath!;
+    private ToolInvocation Read(string path, JsonElement args)
+    {
         var (scope, error) = ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref"));
-        if (scope is null) return Task.FromResult(ToolInvocation.Error(error!));
+        if (scope is null) return ToolInvocation.Error(error!);
 
         var text = _git.GetFileText(_repo, path, DiffSide.Range, oldSide: true, scope.HeadSha, scope.BaseSha);
         if (text is null)
-            return Task.FromResult(ToolInvocation.Error(
-                $"'{path}' has no content at {scope.BaseRef} — the branch adds it, or the path differs there."));
+            return ToolInvocation.Error(
+                $"'{path}' has no content at {scope.BaseRef} — the branch adds it, or the path differs there.");
 
         if (LooksBinary(text))
-            return Task.FromResult(ToolInvocation.Error($"'{path}' is a binary file."));
+            return ToolInvocation.Error($"'{path}' is a binary file.");
 
         var start = ToolJson.Int(args, "start_line", 1, 1, int.MaxValue);
         var count = ToolJson.Int(args, "line_count", DefaultLines, 1, MaxLines);
@@ -279,7 +283,7 @@ internal sealed class GetFileAtBaseTool : IAssistantTool
             bytes += all[i].Length + 1;
         }
 
-        return Task.FromResult(ToolInvocation.Ok(ToolJson.Write(writer =>
+        return ToolInvocation.Ok(ToolJson.Write(writer =>
         {
             scope.WriteRange(writer);
             writer.WriteString("path", path);
@@ -288,7 +292,7 @@ internal sealed class GetFileAtBaseTool : IAssistantTool
             writer.WriteNumber("total_lines", all.Length);
             writer.WriteBoolean("truncated", cappedBySize || from + lines.Count < all.Length);
             writer.WriteString("content", string.Join('\n', lines));
-        })));
+        }));
     }
 
     // A NUL in the first block is what git itself treats as "binary", and it keeps a compiled

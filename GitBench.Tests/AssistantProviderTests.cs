@@ -31,7 +31,9 @@ public sealed class AssistantProviderTests
         // The two capabilities the Anthropic writer branches on are Anthropic's alone.
         foreach (var model in AssistantProviders.All
                      .Where(p => p.Wire == AssistantWireFormat.OpenAiCompatible)
-                     .SelectMany(p => p.Models))
+                     .Select(p => p.Hosting)
+                     .OfType<AssistantHosting.Hosted>()
+                     .SelectMany(h => h.Models))
         {
             Assert.False(model.MidConversationSystem);
             Assert.False(model.ServerSideFallbacks);
@@ -77,7 +79,7 @@ public sealed class AssistantProviderTests
         Assert.Null(unlisted.ToolReasoningEffort);
 
         // Which is also every model a local endpoint serves, since the user pulled them, not us.
-        Assert.Empty(AssistantProviders.Ollama.Models);
+        Assert.IsType<AssistantHosting.SelfHosted>(AssistantProviders.Ollama.Hosting);
         Assert.Null(AssistantProviders.Ollama.Capabilities("qwen3:8b").ToolReasoningEffort);
 
         // A listed model matches however the user cased it.
@@ -89,7 +91,7 @@ public sealed class AssistantProviderTests
     [Fact]
     public void ThePresetsAlwaysContainTheModelsTheTiersRunOn()
     {
-        foreach (var provider in AssistantProviders.All.Where(p => p.KnownModels))
+        foreach (var provider in AssistantProviders.All.Where(p => p.Hosting is AssistantHosting.Hosted))
         {
             Assert.Contains(provider.ChatModel, provider.ModelPresets);
             Assert.Contains(provider.QuickModel, provider.ModelPresets);
@@ -98,33 +100,8 @@ public sealed class AssistantProviderTests
 
         // A local endpoint serves whatever the user pulled, so there is nothing to offer and the
         // model field stays free text.
-        foreach (var provider in AssistantProviders.All.Where(p => p.CustomBaseUrl))
-        {
-            Assert.False(provider.KnownModels);
+        foreach (var provider in AssistantProviders.All.Where(p => p.Hosting is AssistantHosting.SelfHosted))
             Assert.Empty(provider.ModelPresets);
-        }
-    }
-
-    // "Needs a key" and "takes a key" are different questions. Answering only the first is what left
-    // a self-hosted gateway's token with nowhere to go but the endpoint field.
-    [Fact]
-    public void EveryProviderTakesAKeyAndOnlyTheHostedOnesDemandOne()
-    {
-        foreach (var provider in AssistantProviders.All)
-        {
-            Assert.True(provider.AcceptsApiKey);
-            // A provider that demands one obviously takes one; the reverse does not follow.
-            if (provider.RequiresApiKey) Assert.True(provider.AcceptsApiKey);
-        }
-
-        foreach (var provider in AssistantProviders.All.Where(p => p.CustomBaseUrl))
-            Assert.False(provider.RequiresApiKey);
-
-        foreach (var provider in AssistantProviders.All.Where(p => !p.CustomBaseUrl))
-        {
-            Assert.True(provider.RequiresApiKey);
-            Assert.NotNull(provider.EnvironmentVariable);
-        }
     }
 
     // A key given for a local endpoint reaches the connection, which is what puts it on the wire.
@@ -179,7 +156,7 @@ public sealed class AssistantProviderTests
     {
         var secrets = new MemorySecretStore();
         var credentials = new AssistantCredentials(secrets);
-        var variable = AssistantProviders.OpenAi.EnvironmentVariable!;
+        var variable = Assert.IsType<AssistantHosting.Hosted>(AssistantProviders.OpenAi.Hosting).EnvironmentVariable;
         var previous = Environment.GetEnvironmentVariable(variable);
         Environment.SetEnvironmentVariable(variable, "sk-from-env");
         try

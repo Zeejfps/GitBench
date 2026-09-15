@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Git;
 
@@ -58,21 +59,26 @@ internal sealed class ReadFileTool : IAssistantTool
 
     public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
     {
-        var requested = ToolJson.String(args, "path");
-        var resolved = RepoFileGuard.Resolve(_git, _repo, requested);
-        if (resolved.Refusal is { } refusal)
-            return Task.FromResult(ToolInvocation.Error(refusal));
+        return Task.FromResult(RepoFileGuard.Resolve(_git, _repo, ToolJson.String(args, "path")) switch
+        {
+            RepoFileResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            RepoFileResolution.Allowed allowed => Read(allowed, args),
+            _ => throw new UnreachableException(),
+        });
+    }
 
+    private static ToolInvocation Read(RepoFileResolution.Allowed allowed, JsonElement args)
+    {
         var start = ToolJson.Int(args, "start_line", 1, 1, MaxScannedLines);
         var count = ToolJson.Int(args, "line_count", DefaultLines, 1, MaxLines);
 
         try
         {
-            return Task.FromResult(Read(resolved.FullPath!, requested!.Trim().Replace('\\', '/'), start, count));
+            return Read(allowed.FullPath, allowed.RelativePath, start, count);
         }
         catch (Exception ex)
         {
-            return Task.FromResult(ToolInvocation.Error(ex.Message));
+            return ToolInvocation.Error(ex.Message);
         }
     }
 

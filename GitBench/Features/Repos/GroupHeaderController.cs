@@ -1,4 +1,3 @@
-using GitBench.Controls;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -19,7 +18,7 @@ public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
     private readonly Func<bool> _isRenaming;
     private readonly Action _onToggleCollapsed;
 
-    private readonly IDragController? _dragController;
+    private readonly DragController _dragController;
     private readonly InputSystem _inputSystem;
 
     private bool _pressed;
@@ -43,15 +42,15 @@ public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
         _isRenaming = isRenaming;
         _onToggleCollapsed = onToggleCollapsed;
 
-        _dragController = context.Get<IDragController>();
+        _dragController = context.Require<DragController>();
         _inputSystem = context.Get<InputSystem>()!;
-        _dragController?.RegisterGroupHeader(view, _group.Id);
+        _dragController.RegisterGroupHeader(view, _group.Id);
     }
 
     public void Dispose()
     {
-        _dragController?.Unregister(_view);
-        if (_pressed || _dragging) _dragController?.CancelDrag();
+        _dragController.Unregister(_view);
+        if (_pressed || _dragging) _dragController.CancelDrag();
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e)
@@ -78,12 +77,12 @@ public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
 
             _dragging = true;
             _onHoverChanged(false);
-            _dragController?.StartGroupDrag(_group, e.Mouse.Point);
+            _dragController.StartGroupDrag(_group);
             e.Consume();
             return;
         }
 
-        _dragController?.UpdateDrag(e.Mouse.Point);
+        _dragController.UpdateDrag(e.Mouse.Point);
         e.Consume();
     }
 
@@ -123,7 +122,7 @@ public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
             if (_dragging)
             {
                 _dragging = false;
-                _dragController?.CompleteDrag();
+                _dragController.CompleteDrag();
             }
             else
             {
@@ -141,7 +140,7 @@ public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
         if (e.Key != KeyboardKey.Escape) return;
         _dragging = false;
         _pressed = false;
-        _dragController?.CancelDrag();
+        _dragController.CancelDrag();
         _inputSystem.Blur(this);
         e.Consume();
     }
@@ -150,7 +149,7 @@ public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
     {
         if (_dragging)
         {
-            _dragController?.CancelDrag();
+            _dragController.CancelDrag();
             _dragging = false;
         }
         _pressed = false;

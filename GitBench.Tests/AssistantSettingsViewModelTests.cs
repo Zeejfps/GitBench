@@ -53,7 +53,6 @@ public sealed class AssistantSettingsViewModelTests : IDisposable
         Assert.Equal(AssistantProviders.Ollama.BaseUrl, _vm.BaseUrlHint.Value);
         // A local endpoint is the user's to point at, and takes a key without needing one.
         Assert.True(_vm.WantsBaseUrl.Value);
-        Assert.True(_vm.WantsApiKey.Value);
         Assert.True(_vm.IsApiKeyOptional.Value);
         Assert.Equal(
             "Ollama needs no API key. Add one only if your endpoint sits behind a gateway that asks for one.",
@@ -63,19 +62,17 @@ public sealed class AssistantSettingsViewModelTests : IDisposable
     // The trap this replaced: the field was hidden wherever a key was not required, so the only box
     // left open for a gateway token was the endpoint — unmasked, and kept in plain text on disk.
     [Fact]
-    public void ASelfHostedProviderOffersAKeyFieldAndSaysItIsOptional()
+    public void ASelfHostedProviderSaysItsKeyIsOptional()
     {
-        foreach (var provider in AssistantProviders.All.Where(p => p.CustomBaseUrl))
+        foreach (var provider in AssistantProviders.All.Where(p => p.Hosting is AssistantHosting.SelfHosted))
         {
             _vm.SetProviderDraft(provider.Id);
 
-            Assert.True(_vm.WantsApiKey.Value);
             Assert.True(_vm.IsApiKeyOptional.Value);
         }
 
         // And a provider that demands one asks for it outright rather than offering it.
         _vm.SetProviderDraft(AssistantProviders.OpenAi.Id);
-        Assert.True(_vm.WantsApiKey.Value);
         Assert.False(_vm.IsApiKeyOptional.Value);
     }
 
