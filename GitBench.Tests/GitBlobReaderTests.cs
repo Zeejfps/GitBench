@@ -281,9 +281,8 @@ public sealed class GitBlobReaderPoolTests : IDisposable
 
     private string? Read(string repo)
     {
-        var status = _reader.TryRead(repo, "HEAD:f.txt", long.MaxValue, out var bytes);
-        Assert.Equal(GitBlobReader.Status.Found, status);
-        return Encoding.UTF8.GetString(bytes!);
+        var found = Assert.IsType<GitBlobReader.Blob.Found>(_reader.TryRead(repo, "HEAD:f.txt", long.MaxValue));
+        return Encoding.UTF8.GetString(found.Content);
     }
 
     private string MakeRepo(int index)

@@ -23,7 +23,7 @@ namespace GitBench.Git;
 /// </para>
 /// <para>
 /// Nothing here can make a read wrong, only faster: every failure path returns
-/// <see cref="Status.Unavailable"/>, which the caller answers by spawning <c>git show</c> exactly
+/// <see cref="Blob.Unavailable"/>, which the caller answers by spawning <c>git show</c> exactly
 /// as it did before.
 /// </para>
 /// </remarks>
@@ -41,15 +41,21 @@ internal sealed class GitBlobReader : IDisposable
     /// <summary>Guards against a malformed stream: no <c>cat-file</c> header is near this long.</summary>
     private const int MaxHeaderBytes = 1024;
 
-    public enum Status
+    public abstract record Blob
     {
-        /// <summary>Read. The out parameter holds the blob's bytes.</summary>
-        Found,
+        private Blob() { }
+
+        public sealed record Found(byte[] Content) : Blob;
+
         /// <summary>Git answered and there is nothing to return: no such object, not a blob, or
         /// past the caller's cap. The same answer <c>git show</c> would give, so do not retry.</summary>
-        Missing,
+        public sealed record Missing : Blob;
+
         /// <summary>No usable reader. The caller must fall back to spawning git.</summary>
-        Unavailable,
+        public sealed record Unavailable : Blob;
+
+        public static readonly Blob NotFound = new Missing();
+        public static readonly Blob NoReader = new Unavailable();
     }
 
     private readonly Func<string, ProcessStartInfo> _startInfo;
@@ -67,20 +73,19 @@ internal sealed class GitBlobReader : IDisposable
     /// <see cref="MaxLiveRepos"/>.</summary>
     public int LiveRepoCount { get { lock (_gate) return _live.Count; } }
 
-    public Status TryRead(string workingDir, string revPath, long maxBytes, out byte[]? content)
+    public Blob TryRead(string workingDir, string revPath, long maxBytes)
     {
-        content = null;
         // A newline in the request would desync a line-delimited protocol, and git does allow one
         // in a path. Rare enough to hand to the fallback rather than complicate the reader.
-        if (revPath.AsSpan().IndexOfAny('\n', '\r') >= 0) return Status.Unavailable;
+        if (revPath.AsSpan().IndexOfAny('\n', '\r') >= 0) return Blob.NoReader;
 
         var session = Acquire(workingDir);
-        if (session == null) return Status.Unavailable;
+        if (session == null) return Blob.NoReader;
 
-        var status = session.Read(revPath, maxBytes, out content);
+        var blob = session.Read(revPath, maxBytes);
         // Covers both a broken pipe and a body we killed the process rather than drain.
         if (!session.Alive) Retire(session);
-        return status;
+        return blob;
     }
 
     private Session? Acquire(string workingDir)
@@ -191,12 +196,11 @@ internal sealed class GitBlobReader : IDisposable
             }
         }
 
-        public Status Read(string revPath, long maxBytes, out byte[]? content)
+        public Blob Read(string revPath, long maxBytes)
         {
-            content = null;
             lock (_pipe)
             {
-                if (!Alive) return Status.Unavailable;
+                if (!Alive) return Blob.NoReader;
                 try
                 {
                     Request(revPath);
@@ -206,7 +210,7 @@ internal sealed class GitBlobReader : IDisposable
                     // ambiguous, dangling — is a single line with no body to consume.
                     var parts = header.Split(' ');
                     if (parts.Length != 3 || !long.TryParse(parts[2], out var size) || size < 0)
-                        return Status.Missing;
+                        return Blob.NotFound;
 
                     if (parts[1] != "blob" || size > maxBytes || size > Array.MaxLength)
                     {
@@ -214,20 +218,19 @@ internal sealed class GitBlobReader : IDisposable
                         if (size > MaxDrainBytes)
                         {
                             _broken = true;
-                            return Status.Missing;
+                            return Blob.NotFound;
                         }
                         Drain(size);
-                        return Status.Missing;
+                        return Blob.NotFound;
                     }
 
-                    content = ReadBody(size);
-                    return Status.Found;
+                    return new Blob.Found(ReadBody(size));
                 }
                 catch (Exception ex) when (ex is IOException or ObjectDisposedException
                     or InvalidOperationException or NotSupportedException)
                 {
                     _broken = true;
-                    return Status.Unavailable;
+                    return Blob.NoReader;
                 }
             }
         }

@@ -38,6 +38,21 @@ public sealed class GitProcessEnvironmentTests : IDisposable
         Assert.Contains(Path.GetDirectoryName(ResolvedGitDir()), seen);
     }
 
+    // A git that never started is a result, not an exception: every read above the runner relies
+    // on that to have nothing left to catch.
+    [Fact]
+    public void AMissingWorkingDirectoryIsAResultNotAnException()
+    {
+        var gone = Path.Combine(_root, "does-not-exist");
+
+        var result = _runner.Run(gone, new[] { "status" });
+
+        Assert.False(result.Started);
+        Assert.False(result.Ok);
+        Assert.StartsWith("Failed to start git", result.FirstLineError("git status"));
+        Assert.StartsWith("Failed to start git", result.BlockError("git status"));
+    }
+
     [Fact]
     public void RepoScopingVariablesNeverReachGit()
     {

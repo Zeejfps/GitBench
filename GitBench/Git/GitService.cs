@@ -81,16 +81,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
 
     public Fetched<CommitSnapshot> Load(Repo repo, int cap)
-    {
-        try
+        => Read<CommitSnapshot>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new Fetched<CommitSnapshot>.Failed("Not a git repository.");
+            var refsOut = RunGit(repo.Path,
+                "for-each-ref", $"--format={GraphRefFormat}", "refs/heads", "refs/remotes", "refs/tags");
+            if (!refsOut.Ok)
+                return Fetched<CommitSnapshot>.Fail(refsOut.FirstLineError("git for-each-ref"));
 
-            var refs = ReadGraphRefs(repo.Path, out var refErr);
-            if (refs == null)
-                return new Fetched<CommitSnapshot>.Failed(refErr ?? "git for-each-ref failed.");
-
+            var refs = ParseGraphRefs(refsOut.Stdout);
             var head = ReadHead(repo.Path, refs);
             var scan = ScanRefs(repo.Path, refs, head);
             var commits = WalkCommits(repo.Path, scan.RefTips, cap, out var truncated);
@@ -107,12 +105,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             var nodes = BuildNodes(commits, inputs, assignments, scan.BadgesBySha, localReachable, anchoredReachable);
 
             return new CommitSnapshot(repo.Id, repo.Path, nodes, laneCount, truncated, head.BranchName);
-        }
-        catch (Exception ex)
-        {
-            return new Fetched<CommitSnapshot>.Failed(ex.Message);
-        }
-    }
+        });
 
     // BranchName is null when HEAD is detached; otherwise the checked-out branch's friendly name.
     private readonly record struct HeadState(string? Sha, bool IsDetached, string? BranchName);
@@ -158,12 +151,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private static readonly string GraphRefFormat = string.Join(GraphFieldSep,
         "%(HEAD)", "%(refname)", "%(objectname)", "%(objecttype)", "%(*objectname)", "%(*objecttype)", "%(upstream:short)");
 
-    private GraphRefs? ReadGraphRefs(string repoPath, out string? error)
+    private static GraphRefs ParseGraphRefs(string output)
     {
-        var output = RunGit(repoPath, out error,
-            "for-each-ref", $"--format={GraphRefFormat}", "refs/heads", "refs/remotes", "refs/tags");
-        if (output == null) return null;
-
         var refs = new GraphRefs();
         foreach (var line in output.Split('\n'))
         {
@@ -207,7 +196,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         if (refs.HeadBranch is { } branch)
             return new HeadState(refs.ShaByName.GetValueOrDefault(branch), false, branch);
 
-        var sha = TrimOrNull(RunGit(repoPath, out _, "rev-parse", "--verify", "--quiet", "HEAD"));
+        var sha = RevSha(repoPath, "HEAD");
         return new HeadState(sha, sha != null, null);
     }
 
@@ -497,12 +486,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // caller overrides labels with branch names). Each increment's churn is the commit-vs-first-parent
     // line counts (the unit the review pane shows).
     public Fetched<ReviewStack> LoadReviewStack(Repo repo, string baseRef, string headRef, int cap)
-    {
-        try
+        => Read<ReviewStack>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new Fetched<ReviewStack>.Failed("Not a git repository.");
-
             var headSha = ResolveCommit(repo.Path, headRef);
             if (headSha == null)
                 return new Fetched<ReviewStack>.Failed($"Could not resolve '{headRef}'.");
@@ -516,13 +501,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             var increments = new List<ReviewIncrement>();
             var truncated = false;
-            var walk = RunGit(repo.Path, out var walkErr,
+            var walk = RunGit(repo.Path,
                 "log", "--first-parent", "--topo-order", $"--max-count={cap + 1}",
                 $"--format={GraphLogFormat}", $"{baseSha}..{headSha}");
-            if (walk == null)
-                return new Fetched<ReviewStack>.Failed(walkErr ?? "git log failed.");
+            if (!walk.Ok)
+                return Fetched<ReviewStack>.Fail(walk.FirstLineError("git log"));
 
-            foreach (var line in walk.Split('\n'))
+            foreach (var line in walk.Stdout.Split('\n'))
             {
                 if (line.Length == 0) continue;
                 if (increments.Count >= cap) { truncated = true; break; }
@@ -549,12 +534,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 ShortSha(headSha),
                 increments,
                 truncated);
-        }
-        catch (Exception ex)
-        {
-            return new Fetched<ReviewStack>.Failed(ex.Message);
-        }
-    }
+        });
 
     // Per-commit churn for base..head from a single `git log --numstat` invocation: each commit's
     // file count and added/removed line totals, keyed by SHA. A commit absent from the output (or
@@ -564,10 +544,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         string repoPath, string baseSha, string headSha, int cap)
     {
         var churn = new Dictionary<string, (int Files, int Added, int Removed)>(StringComparer.Ordinal);
-        var output = RunGit(repoPath, out _,
+        var output = ProbeGit(repoPath,
             "log", "--first-parent", "--topo-order", $"--max-count={cap}",
             "--format=%x01%H", "--numstat", "-M", $"{baseSha}..{headSha}");
-        if (output == null) return churn;
 
         string? sha = null;
         var current = (Files: 0, Added: 0, Removed: 0);
@@ -594,29 +573,20 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     public Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string headSha)
-    {
-        try
+        => Read<IReadOnlyList<FileChange>>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new Fetched<IReadOnlyList<FileChange>>.Failed("Not a git repository.");
-
             // The combined net file list of base→head (two-dot, base is already the merge-base). The
             // `--raw` format additionally carries each file's after-side blob OID, which the review's
             // Viewed marks fingerprint on to re-open a file that changed since it was marked; a file
             // touched in several increments appears once, an add-then-delete nets out.
-            var diffOutput = RunGit(repo.Path, out var error, "diff", "-M", "--raw", "-z", baseSha, headSha);
-            if (diffOutput == null)
-                return new Fetched<IReadOnlyList<FileChange>>.Failed(error ?? "git diff failed.");
+            var diffOutput = RunGit(repo.Path, "diff", "-M", "--raw", "-z", baseSha, headSha);
+            if (!diffOutput.Ok)
+                return Fetched<IReadOnlyList<FileChange>>.Fail(diffOutput.FirstLineError("git diff"));
 
-            var files = ParseDiffRawZ(diffOutput);
+            var files = ParseDiffRawZ(diffOutput.Stdout);
             files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             return new Fetched<IReadOnlyList<FileChange>>.Ok(files);
-        }
-        catch (Exception ex)
-        {
-            return new Fetched<IReadOnlyList<FileChange>>.Failed(ex.Message);
-        }
-    }
+        });
 
     // "origin/main" -> "main"; "origin/feature/x" -> "feature/x". Remote names can't contain
     // slashes, so the local-branch name is everything after the first segment.
@@ -629,7 +599,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // Peels any ref, sha or revision expression to a commit sha. Null when it doesn't name one,
     // which is how the review stack reports an unresolvable base/head.
     private string? ResolveCommit(string repoPath, string rev)
-        => TrimOrNull(RunGit(repoPath, out _, "rev-parse", "--verify", "--quiet", $"{rev}^{{commit}}"));
+        => RevSha(repoPath, $"{rev}^{{commit}}");
 
     private static void AddBadge(Dictionary<string, List<RefBadge>> map, string sha, RefBadge badge)
     {
@@ -642,22 +612,18 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     public Fetched<CommitDetails> LoadDetails(Repo repo, string sha)
-    {
-        try
+        => Read<CommitDetails>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new Fetched<CommitDetails>.Failed("Not a git repository.");
-
             // One log call with NUL-separated fields. %B (raw message) is last so any
             // newlines inside it can't be confused with field boundaries. Split(_, 10)
             // caps the chunk count so a NUL inside the body (theoretical, not seen in
             // practice) lands in the body field rather than producing extra entries.
             const string fmt = "%H%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%P%x00%s%x00%B";
-            var logOutput = RunGit(repo.Path, out var logErr, "log", "-1", $"--format={fmt}", sha);
-            if (logOutput == null)
-                return new Fetched<CommitDetails>.Failed(logErr ?? "Commit not found.");
+            var logOutput = RunGit(repo.Path, "log", "-1", $"--format={fmt}", sha);
+            if (!logOutput.Ok)
+                return Fetched<CommitDetails>.Fail(logOutput.FirstLineError("git log"));
 
-            var parts = logOutput.Split('\0', 10);
+            var parts = logOutput.Stdout.Split('\0', 10);
             if (parts.Length < 10)
                 return new Fetched<CommitDetails>.Failed("Unexpected git log output.");
 
@@ -669,9 +635,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // --root makes the root commit emit additions (against the empty tree) instead
             // of erroring on the missing parent. -M enables rename detection. -z switches
             // to NUL-separated records (see ParseDiffTreeNameStatusZ).
-            var diffOutput = RunGit(repo.Path, out _, "diff-tree", "-r", "-M", "--name-status",
+            var diffOutput = RunGit(repo.Path, "diff-tree", "-r", "-M", "--name-status",
                 "--no-commit-id", "-z", "--root", resolvedSha);
-            var files = ParseDiffTreeNameStatusZ(diffOutput ?? string.Empty);
+            if (!diffOutput.Ok)
+                return Fetched<CommitDetails>.Fail(diffOutput.FirstLineError("git diff-tree"));
+            var files = ParseDiffTreeNameStatusZ(diffOutput.Stdout);
             files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
 
             return new CommitDetails(
@@ -687,12 +655,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 MessageShort: parts[8],
                 ParentShas: parentShas,
                 Files: files);
-        }
-        catch (Exception ex)
-        {
-            return new Fetched<CommitDetails>.Failed(ex.Message);
-        }
-    }
+        });
 
     private static DateTimeOffset ParseIsoDateOrDefault(string s)
         => DateTimeOffset.TryParse(s, out var when) ? when : DateTimeOffset.MinValue;
@@ -782,42 +745,31 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         $"%(HEAD){BranchFieldSep}%(objectname){BranchFieldSep}%(refname){BranchFieldSep}%(upstream:track,nobracket){BranchFieldSep}%(upstream)";
 
     public Fetched<BranchListing> GetBranches(Repo repo)
-    {
-        try
+        => Read<BranchListing>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new Fetched<BranchListing>.Failed("Not a git repository.");
+            var remotesOut = RunGit(repo.Path, "remote");
+            if (!remotesOut.Ok)
+                return Fetched<BranchListing>.Fail(remotesOut.FirstLineError("git remote"));
 
-            var remotesByName = SeedRemoteGroups(repo.Path, out var remErr);
-            if (remotesByName == null)
-                return new Fetched<BranchListing>.Failed(remErr ?? "git remote failed.");
-
-            var branchesOut = RunGit(repo.Path, out var brErr,
+            var branchesOut = RunGit(repo.Path,
                 "for-each-ref", $"--format={BranchRefFormat}", "refs/heads", "refs/remotes");
-            if (branchesOut == null)
-                return new Fetched<BranchListing>.Failed(brErr ?? "git for-each-ref failed.");
+            if (!branchesOut.Ok)
+                return Fetched<BranchListing>.Fail(branchesOut.FirstLineError("git for-each-ref"));
 
+            var remotesByName = SeedRemoteGroups(remotesOut.Stdout);
             var locals = new List<LocalBranchEntry>();
-            foreach (var line in branchesOut.Split('\n'))
+            foreach (var line in branchesOut.Stdout.Split('\n'))
                 ParseBranchRefLine(line, locals, remotesByName);
 
             SortLocalBranches(locals);
             var remoteGroups = BuildRemoteGroups(remotesByName);
             var stashes = LoadStashes(repo.Path);
             return new BranchListing(repo.Id, locals, remoteGroups, stashes);
-        }
-        catch (Exception ex)
-        {
-            return new Fetched<BranchListing>.Failed(ex.Message);
-        }
-    }
+        });
 
-    // Seed with all configured remotes so groups still show even when a remote has no branches
-    // yet. Returns null on a genuine git failure.
-    private Dictionary<string, List<RemoteBranchEntry>>? SeedRemoteGroups(string repoPath, out string? error)
+    // Seed with all configured remotes so groups still show even when a remote has no branches yet.
+    private static Dictionary<string, List<RemoteBranchEntry>> SeedRemoteGroups(string remotesOut)
     {
-        var remotesOut = RunGit(repoPath, out error, "remote");
-        if (remotesOut == null) return null;
         var remotesByName = new Dictionary<string, List<RemoteBranchEntry>>(StringComparer.Ordinal);
         foreach (var rawLine in remotesOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -916,8 +868,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     {
         const char Sep = '\x1F';
         var fmt = $"%H{Sep}%gs";
-        var output = RunGit(repoPath, out _, "stash", "list", $"--format={fmt}");
-        if (string.IsNullOrEmpty(output)) return Array.Empty<StashEntry>();
+        var output = ProbeGit(repoPath, "stash", "list", $"--format={fmt}");
+        if (output.Length == 0) return Array.Empty<StashEntry>();
 
         var list = new List<StashEntry>();
         var idx = 0;
@@ -978,33 +930,42 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // where the smudged workdir was produced from a different pointer than HEAD now has.
     // Using the CLI keeps our view in sync with what git itself thinks the working tree
     // contains, the same reason GetBranches and GetDiff already shell out.
+    //
+    // -z is required: it switches records to NUL termination and disables the C-style quoting
+    // that wraps paths with spaces or unicode in the default porcelain output.
+    //
+    // --ignore-submodules=dirty isolates the failure domain: without it, status runs a full
+    // `git status --porcelain=2` *inside* each submodule to detect a dirty work tree, so a
+    // transient submodule hiccup (a dropped --recurse-submodules fetch, an in-progress op)
+    // fails the whole read with "failed in submodule X" — blanking the superproject's own file
+    // list for changes that are perfectly readable. =dirty skips that inner recursion while
+    // still reporting the submodule's committed pointer diff (the `SC`/`S` line) against HEAD
+    // and the index, so both staged and unstaged pointer bumps render exactly as before; the
+    // only thing dropped is a submodule whose internal work tree is dirty — which can't be
+    // committed from the superproject anyway. Submodule pointer drift comes from the dedicated
+    // ListSubmodules read (RepoSnapshotStore), which has its own failure domain.
     public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo)
-    {
-        try
+        => Read<LocalChangesSnapshot>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new Fetched<LocalChangesSnapshot>.Failed("Not a git repository.");
-
-            var output = RunGitStatusPorcelain(repo.Path, out var error, out var detail);
-            if (output == null)
-                return new Fetched<LocalChangesSnapshot>.Failed(error ?? "git status failed.", detail);
+            var result = _runner.Run(
+                repo.Path,
+                new[] { "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" });
+            // One-line headline for the inline placeholder; full block for the on-demand dialog.
+            // The detail block keeps any trailing "fatal:"/"hint:" lines that FirstLineError drops.
+            if (!result.Ok)
+                return new Fetched<LocalChangesSnapshot>.Failed(result.FirstLineError("git status"), result.BlockError("git status"));
 
             var staged = new List<FileChange>();
             var unstaged = new List<FileChange>();
             var headers = new StatusBranchHeaders();
             var dirty = false;
-            ParseStatusPorcelainV2(output, staged, unstaged, ref headers, ref dirty);
+            ParseStatusPorcelainV2(result.Stdout, staged, unstaged, ref headers, ref dirty);
 
             staged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             unstaged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
 
             return new LocalChangesSnapshot(repo.Id, staged, unstaged, headers.ToSummary(dirty));
-        }
-        catch (Exception ex)
-        {
-            return new Fetched<LocalChangesSnapshot>.Failed(ex.Message);
-        }
-    }
+        });
 
     // Porcelain v2 with -z is NUL-terminated. Most records are a single NUL-terminated line;
     // type-2 (rename/copy) records carry an additional NUL-terminated origPath right after, so
@@ -1125,37 +1086,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         _ => null,
     };
 
-    // Uses the direct git executable rather than the shell wrapper — status is read-only,
-    // runs on every working-tree change, and doesn't need the interactive-shell env (no auth,
-    // no PATH-dependent helpers). -z is required: it switches records to NUL termination and
-    // disables the C-style quoting that wraps paths with spaces or unicode in the default
-    // porcelain output.
-    //
-    // --ignore-submodules=dirty isolates the failure domain: without it, status runs a full
-    // `git status --porcelain=2` *inside* each submodule to detect a dirty work tree, so a
-    // transient submodule hiccup (a dropped --recurse-submodules fetch, an in-progress op)
-    // fails the whole read with "failed in submodule X" — blanking the superproject's own file
-    // list for changes that are perfectly readable. =dirty skips that inner recursion while
-    // still reporting the submodule's committed pointer diff (the `SC`/`S` line) against HEAD
-    // and the index, so both staged and unstaged pointer bumps render exactly as before; the
-    // only thing dropped is a submodule whose internal work tree is dirty — which can't be
-    // committed from the superproject anyway. Submodule pointer drift comes from the dedicated
-    // ListSubmodules read (RepoSnapshotStore), which has its own failure domain.
-    private string? RunGitStatusPorcelain(string workingDir, out string? error, out string? detail)
-    {
-        error = null;
-        detail = null;
-        var result = _runner.Run(
-            workingDir,
-            new[] { "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" });
-        if (result.Ok) return result.Stdout;
-        // One-line headline for the inline placeholder; full block for the on-demand dialog.
-        // The detail block keeps any trailing "fatal:"/"hint:" lines that FirstLineError drops.
-        error = result.FirstLineError("git status");
-        detail = result.BlockError("git status");
-        return null;
-    }
-
     // One `git status --porcelain=v2 --branch` read yielding the cheap per-repo signals the RepoBar
     // and toolbar need: branch / detached / upstream + ahead/behind (from the `# branch.*` headers)
     // and whether the working tree is dirty (any non-header record). Unlike the file-list read this
@@ -1167,20 +1097,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // probe itself failed (a transient git failure — e.g. a crashed fsmonitor daemon — where the
     // caller keeps the last known status instead of zeroing it out).
     public GitStatusSummary? GetStatusSummary(Repo repo)
-    {
-        try
+        => Read(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return GitStatusSummary.Unknown;
             var result = _runner.Run(
                 repo.Path,
                 new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=normal", "--ignored=no", "--ignore-submodules=dirty" });
             return result.Ok ? ParseStatusSummary(result.Stdout) : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, GitStatusSummary.Unknown);
 
     // Where HEAD is and how it stands against its upstream, without touching the working tree:
     // `symbolic-ref` reads .git/HEAD, and `for-each-ref` resolves the upstream and counts the
@@ -1191,11 +1114,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // Same contract as GetStatusSummary: Unknown when the path isn't a repo, null when the read
     // itself failed and the caller should keep what it has.
     public GitSyncSummary? GetSyncSummary(Repo repo)
-    {
-        try
+        => Read(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return GitSyncSummary.Unknown;
-
             var head = _runner.Run(
                 repo.Path,
                 new[] { "symbolic-ref", "--quiet", "--short", "HEAD" });
@@ -1209,16 +1129,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             var refs = _runner.Run(
                 repo.Path,
-                new[] { "for-each-ref", "--format=%(refname:short)\t%(upstream)\t%(upstream:track)", "refs/heads/" + branch });
+                new[] { "for-each-ref", "--format=%(refname:short)\t%(upstream)\t%(upstream:track,nobracket)", "refs/heads/" + branch });
             if (!refs.Ok) return null;
 
             return ParseSyncSummary(branch, refs.Stdout);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, GitSyncSummary.Unknown);
 
     // for-each-ref matches a pattern at "/" boundaries, so a `refs/heads/feat` pattern can also
     // return `refs/heads/feat/x` — take the line that names the branch we asked about.
@@ -1235,8 +1150,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // "gone" (the upstream ref no longer exists) and "" (level with it) both mean no
             // divergence to report, which is how porcelain-v2 reports them too: a branch.upstream
             // header with no branch.ab line.
-            ParseUpstreamTrack(fields[2], out var ahead, out var behind);
-            return new GitSyncSummary(branch, IsDetached: false, hasUpstream, ahead, behind);
+            var sync = ParseSync(fields[2]);
+            return new GitSyncSummary(branch, IsDetached: false, hasUpstream, sync.Ahead, sync.Behind);
         }
 
         // HEAD names a branch that has no ref yet — an unborn branch in a repo with no commits.
@@ -1244,28 +1159,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         // branch.ab, so report it as the named branch rather than as a failed read.
         return new GitSyncSummary(branch, IsDetached: false, HasUpstream: false, 0, 0);
     }
-
-    // "[ahead 3, behind 22]", "[behind 22]", "[gone]", or empty when the branch is level with its
-    // upstream. Brackets are stripped rather than suppressed with the `nobracket` modifier so the
-    // format string stays one every git version understands.
-    private static void ParseUpstreamTrack(string track, out int ahead, out int behind)
-    {
-        ahead = 0;
-        behind = 0;
-        var counting = string.Empty;
-        foreach (var tok in track.Split(TrackSeparators, StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (tok is "ahead" or "behind") counting = tok;
-            else if (int.TryParse(tok, out var n))
-            {
-                if (counting == "ahead") ahead = n;
-                else if (counting == "behind") behind = n;
-                counting = string.Empty;
-            }
-        }
-    }
-
-    private static readonly char[] TrackSeparators = { ' ', ',', '[', ']' };
 
     // The `# branch.*` headers of a porcelain-v2 status, accumulated. Shared by the -z file-list read
     // and the \n summary probe so the two cannot drift: same headers, same order, same meaning.
@@ -1404,11 +1297,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     public ConflictContext? GetConflictContext(Repo repo, string path)
-    {
-        try
+        => Read<ConflictContext?>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return null;
-
             var stages = GetUnmergedStages(repo.Path, path);
             if (stages.Count == 0) return null;   // not a conflict — caller shows the normal diff
 
@@ -1418,7 +1308,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             var operation = GetOperationState(repo);
 
-            var oursSha = TrimOrNull(RunGit(repo.Path, out _, "rev-parse", "HEAD"));
+            var oursSha = RevSha(repo.Path, "HEAD");
             var oursMeta = GetCommitMeta(repo.Path, oursSha);
             var oursLabel = GetCurrentBranchLabel(repo.Path);
 
@@ -1433,23 +1323,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 new ConflictSideInfo(theirsLabel, ShortSha(theirsSha), theirsMeta.Subject, theirsMeta.When,
                     ChangeKind(hasBase, present: theirsPresent)),
                 hasBase);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, null);
 
     // `-z` both terminates each record with NUL and stops git C-quoting a non-ASCII path — a quoted
     // path is not one any other call would accept back.
     public IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo)
-    {
-        try
+        => Read<IReadOnlyList<ConflictedPath>>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return [];
-
-            var output = RunGit(repo.Path, out _, "ls-files", "-u", "-z");
-            if (string.IsNullOrEmpty(output)) return [];
+            var output = ProbeGit(repo.Path, "ls-files", "-u", "-z");
+            if (output.Length == 0) return [];
 
             var stages = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
             var order = new List<string>();
@@ -1475,19 +1357,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                     ChangeKind(stages[path].Contains(1), stages[path].Contains(2)),
                     ChangeKind(stages[path].Contains(1), stages[path].Contains(3))))
                 .ToArray();
-        }
-        catch
-        {
-            return [];
-        }
-    }
+        }, []);
 
     public ConflictStages? GetConflictStages(Repo repo, string path)
-    {
-        try
+        => Read<ConflictStages?>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return null;
-
             var stages = GetUnmergedStages(repo.Path, path);
             if (stages.Count == 0) return null;
 
@@ -1495,12 +1369,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 stages.Contains(1) ? ShowStage(repo.Path, 1, path) : null,
                 stages.Contains(2) ? ShowStage(repo.Path, 2, path) : null,
                 stages.Contains(3) ? ShowStage(repo.Path, 3, path) : null);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, null);
 
     private static ConflictChangeKind ChangeKind(bool hasBase, bool present)
     {
@@ -1511,9 +1380,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // The current branch name, or a short SHA when detached (e.g. mid-rebase).
     private string GetCurrentBranchLabel(string repoPath)
     {
-        var name = RunGit(repoPath, out _, "symbolic-ref", "--short", "-q", "HEAD");
+        var name = ProbeGit(repoPath, "symbolic-ref", "--short", "-q", "HEAD");
         if (!string.IsNullOrWhiteSpace(name)) return name.Trim();
-        var sha = RunGit(repoPath, out _, "rev-parse", "--short", "HEAD");
+        var sha = ProbeGit(repoPath, "rev-parse", "--short", "HEAD");
         return string.IsNullOrWhiteSpace(sha) ? "HEAD" : sha.Trim();
     }
 
@@ -1523,12 +1392,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         var gitDir = GetGitDir(repoPath);
         if (gitDir == null) return null;
 
-        string? Read(params string[] rel)
+        string? Sentinel(params string[] rel)
         {
-            var p = gitDir;
-            foreach (var r in rel) p = Path.Combine(p, r);
-            if (!File.Exists(p)) return null;
-            var text = File.ReadAllText(p).Trim();
+            var text = ReadSentinel(Path.Combine(gitDir, Path.Combine(rel)));
+            if (text == null) return null;
             // MERGE_HEAD can list several parents (octopus) — the first is enough to label.
             var nl = text.IndexOf('\n');
             return nl < 0 ? text : text[..nl];
@@ -1536,11 +1403,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
         return op switch
         {
-            RepoOperationState.Merge => Read("MERGE_HEAD"),
-            RepoOperationState.CherryPick => Read("CHERRY_PICK_HEAD"),
-            RepoOperationState.Revert => Read("REVERT_HEAD"),
-            RepoOperationState.Rebase => Read("rebase-merge", "stopped-sha") ?? Read("rebase-apply", "original-commit"),
-            _ => Read("MERGE_HEAD") ?? Read("CHERRY_PICK_HEAD") ?? Read("REVERT_HEAD"),
+            RepoOperationState.Merge => Sentinel("MERGE_HEAD"),
+            RepoOperationState.CherryPick => Sentinel("CHERRY_PICK_HEAD"),
+            RepoOperationState.Revert => Sentinel("REVERT_HEAD"),
+            RepoOperationState.Rebase => Sentinel("rebase-merge", "stopped-sha") ?? Sentinel("rebase-apply", "original-commit"),
+            _ => Sentinel("MERGE_HEAD") ?? Sentinel("CHERRY_PICK_HEAD") ?? Sentinel("REVERT_HEAD"),
         };
     }
 
@@ -1548,11 +1415,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private string? GetRefLabelForSha(string repoPath, string? sha)
     {
         if (string.IsNullOrEmpty(sha)) return null;
-        var pointed = RunGit(repoPath, out _, "for-each-ref", "--points-at", sha,
+        var pointed = ProbeGit(repoPath, "for-each-ref", "--points-at", sha,
             "--format=%(refname:short)", "refs/heads", "refs/remotes");
-        if (string.IsNullOrWhiteSpace(pointed)) return null;
-        var first = pointed.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        return first.Length > 0 ? first[0].Trim() : null;
+        return FirstLine(pointed);
     }
 
     private static string DescribeIncoming(RepoOperationState op, string? sha)
@@ -1572,7 +1437,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private (string Subject, DateTimeOffset When) GetCommitMeta(string repoPath, string? sha)
     {
         if (string.IsNullOrEmpty(sha)) return (string.Empty, DateTimeOffset.MinValue);
-        var output = RunGit(repoPath, out _, "show", "-s", "--format=%s%x1f%cI", sha);
+        var output = ProbeGit(repoPath, "show", "-s", "--format=%s%x1f%cI", sha);
         if (string.IsNullOrWhiteSpace(output)) return (string.Empty, DateTimeOffset.MinValue);
         var parts = output.Trim().Split('\x1f');
         var subject = parts.Length > 0 ? parts[0] : string.Empty;
@@ -1585,9 +1450,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         var state = GetOperationState(repo);
         if (state == RepoOperationState.None) return null;
         var path = repo.Path;
-        int conflicts;
-        try { conflicts = CountUnmergedPaths(path); }
-        catch { conflicts = 0; }
+        var conflicts = CountUnmergedPaths(path);
 
         switch (state)
         {
@@ -1618,25 +1481,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     private string? SubjectFor(string repoPath, RepoOperationState state)
     {
-        try
-        {
-            var sha = GetIncomingSha(repoPath, state);
-            if (string.IsNullOrEmpty(sha)) return null;
-            var (subject, _) = GetCommitMeta(repoPath, sha);
-            return string.IsNullOrWhiteSpace(subject) ? null : subject;
-        }
-        catch { return null; }
+        var sha = GetIncomingSha(repoPath, state);
+        if (string.IsNullOrEmpty(sha)) return null;
+        var (subject, _) = GetCommitMeta(repoPath, sha);
+        return string.IsNullOrWhiteSpace(subject) ? null : subject;
     }
 
     private string? IncomingLabelFor(string repoPath, RepoOperationState state)
     {
-        try
-        {
-            var sha = GetIncomingSha(repoPath, state);
-            if (string.IsNullOrEmpty(sha)) return null;
-            return GetRefLabelForSha(repoPath, sha) ?? ShortSha(sha);
-        }
-        catch { return null; }
+        var sha = GetIncomingSha(repoPath, state);
+        if (string.IsNullOrEmpty(sha)) return null;
+        return GetRefLabelForSha(repoPath, sha) ?? ShortSha(sha);
     }
 
     private (int Step, int Total) ReadRebaseProgress(string repoPath)
@@ -1675,7 +1530,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     private int CountUnmergedPaths(string repoPath)
     {
-        var output = RunGit(repoPath, out _, "ls-files", "--unmerged");
+        var output = ProbeGit(repoPath, "ls-files", "--unmerged");
         if (string.IsNullOrWhiteSpace(output)) return 0;
         var paths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var line in output.Split('\n'))
@@ -1689,13 +1544,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private static int ReadCount(string path)
     {
         try { return File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var n) ? n : 0; }
-        catch { return 0; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
     }
 
     private static string? ReadSentinel(string path)
     {
         try { return File.Exists(path) ? File.ReadAllText(path).Trim() : null; }
-        catch { return null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
     private static string? TrimOrNull(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
@@ -1716,8 +1571,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private HashSet<int> GetUnmergedStages(string repoPath, string path)
     {
         var stages = new HashSet<int>();
-        var output = RunGit(repoPath, out _, "ls-files", "-u", "--", path);
-        if (string.IsNullOrEmpty(output)) return stages;
+        var output = ProbeGit(repoPath, "ls-files", "-u", "--", path);
+        if (output.Length == 0) return stages;
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var tab = line.IndexOf('\t');
@@ -1748,10 +1603,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // the index without touching the workdir. Otherwise let `git reset HEAD^`
             // copy parent blobs back into the index (or remove entries the parent didn't
             // have). The working tree is untouched in all paths.
-            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD") == null)
+            if (!RefExists(repo.Path, "HEAD"))
                 return GitOutcome.Ok;
-            var hasParent = RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD^") != null;
-            var preArgs = hasParent
+            var preArgs = RefExists(repo.Path, "HEAD^")
                 ? new[] { "reset", "HEAD^" }
                 : new[] { "rm", "--cached", "--force" };
             var result = RunPathspecOp(repo.Path, preArgs, paths);
@@ -1774,9 +1628,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             {
                 var lsArgs = new List<string>(batch.Count + 3) { "ls-files", "-z", "--" };
                 lsArgs.AddRange(batch);
-                var lsOutput = RunGit(repo.Path, out var lsErr, lsArgs.ToArray());
-                if (lsOutput == null) return new GitOutcome.Failed(lsErr ?? "git ls-files failed.");
-                foreach (var t in lsOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+                var lsOutput = RunGit(repo.Path, lsArgs.ToArray());
+                if (!lsOutput.Ok) return new GitOutcome.Failed(lsOutput.FirstLineError("git ls-files"));
+                foreach (var t in lsOutput.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
                     tracked.Add(t);
             }
 
@@ -1823,63 +1677,45 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         });
 
     public HeadCommitMessage? GetHeadCommitMessage(Repo repo)
-    {
-        try
+        => Read<HeadCommitMessage?>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return null;
             // %s is git's subject (first line), %b is the body (everything after the
             // blank line after the subject). NUL separates them so a body containing
             // any newline pattern can't be confused for the boundary. Fails if there
-            // are no commits yet (unborn branch) — RunGit returns null and we propagate.
-            var output = RunGit(repo.Path, out _, "log", "-1", "--format=%s%x00%b", "HEAD");
-            if (output == null) return null;
+            // are no commits yet (unborn branch), which reads as no message.
+            var result = RunGit(repo.Path, "log", "-1", "--format=%s%x00%b", "HEAD");
+            if (!result.Ok) return null;
+            var output = result.Stdout;
             var nul = output.IndexOf('\0');
             if (nul < 0) return new HeadCommitMessage(output.Trim(), string.Empty);
             var title = output[..nul].Trim();
             var body = output[(nul + 1)..].TrimEnd();
             return new HeadCommitMessage(title, body);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, null);
 
     public IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo)
-    {
-        try
+        => Read<IReadOnlyList<FileChange>>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return Array.Empty<FileChange>();
-            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD") == null)
-                return Array.Empty<FileChange>();
+            if (!RefExists(repo.Path, "HEAD")) return [];
 
             List<FileChange> files;
-            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD^") != null)
+            if (RefExists(repo.Path, "HEAD^"))
             {
                 // Index vs HEAD's parent — the contents the amended commit would record.
                 // Same NUL `--name-status` format as diff-tree, so the parser is shared.
-                var output = RunGit(repo.Path, out _, "diff", "--cached", "-M", "--name-status", "-z", "HEAD^");
-                if (output == null) return Array.Empty<FileChange>();
-                files = ParseDiffTreeNameStatusZ(output);
+                files = ParseDiffTreeNameStatusZ(ProbeGit(repo.Path, "diff", "--cached", "-M", "--name-status", "-z", "HEAD^"));
             }
             else
             {
                 // Amending the root commit: no parent to diff against, so every index
                 // entry is an add.
-                var output = RunGit(repo.Path, out _, "ls-files", "--cached", "-z");
-                if (output == null) return Array.Empty<FileChange>();
                 files = new List<FileChange>();
-                foreach (var path in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+                foreach (var path in ProbeGit(repo.Path, "ls-files", "--cached", "-z").Split('\0', StringSplitOptions.RemoveEmptyEntries))
                     files.Add(new FileChange(path, null, FileChangeStatus.Added));
             }
             files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             return files;
-        }
-        catch
-        {
-            return Array.Empty<FileChange>();
-        }
-    }
+        }, []);
 
     // Snapshot of HEAD's branch + upstream tracking state. We avoid `git status --branch`
     // here because porcelain v2 scans the entire working tree for file changes too — for
@@ -1895,29 +1731,26 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private HeadInfo GetHeadInfo(string repoPath)
     {
         // symbolic-ref returns nonzero on detached HEAD; @{u} returns nonzero with no upstream.
-        var branchOutput = RunGit(repoPath, out _, "symbolic-ref", "-q", "--short", "HEAD");
-        if (branchOutput == null)
-            return new HeadInfo(null, IsDetached: true, HasUpstream: false, Ahead: 0, Behind: 0);
-        var branchName = branchOutput.Trim();
+        var branchName = ProbeGit(repoPath, "symbolic-ref", "-q", "--short", "HEAD").Trim();
         if (branchName.Length == 0)
             return new HeadInfo(null, IsDetached: true, HasUpstream: false, Ahead: 0, Behind: 0);
 
-        var upstreamOutput = RunGit(repoPath, out _, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+        var upstreamOutput = ProbeGit(repoPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
         if (string.IsNullOrWhiteSpace(upstreamOutput))
             return new HeadInfo(branchName, IsDetached: false, HasUpstream: false, Ahead: 0, Behind: 0);
 
-        int ahead = 0, behind = 0;
-        var counts = RunGit(repoPath, out _, "rev-list", "--left-right", "--count", "HEAD...@{u}");
-        if (counts != null)
-        {
-            var parts = counts.Trim().Split('\t');
-            if (parts.Length == 2)
-            {
-                int.TryParse(parts[0], out ahead);
-                int.TryParse(parts[1], out behind);
-            }
-        }
+        var (ahead, behind) = ParseLeftRightCount(ProbeGit(repoPath, "rev-list", "--left-right", "--count", "HEAD...@{u}"));
         return new HeadInfo(branchName, IsDetached: false, HasUpstream: true, Ahead: ahead, Behind: behind);
+    }
+
+    // `rev-list --left-right --count A...B` prints "<only in A>\t<only in B>"; empty on failure.
+    private static (int Left, int Right) ParseLeftRightCount(string output)
+    {
+        var parts = output.Trim().Split('\t');
+        if (parts.Length != 2) return (0, 0);
+        int.TryParse(parts[0], out var left);
+        int.TryParse(parts[1], out var right);
+        return (left, right);
     }
 
     // `git rev-parse --git-dir` returns the per-worktree gitdir (the worktree's own
@@ -1926,7 +1759,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // so callers can decide whether that's a problem or just means "no in-progress op".
     private string? GetGitDir(string repoPath)
     {
-        var output = RunGit(repoPath, out _, "rev-parse", "--git-dir");
+        var output = ProbeGit(repoPath, "rev-parse", "--git-dir");
         if (string.IsNullOrWhiteSpace(output)) return null;
         var dir = output.Trim();
         if (!Path.IsPathRooted(dir)) dir = Path.GetFullPath(Path.Combine(repoPath, dir));
@@ -1936,22 +1769,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // `git ls-files --unmerged` prints stage-2/stage-3 entries — one line per unmerged
     // path. Empty output means the index is fully merged.
     private bool HasUnmergedPaths(string repoPath)
-    {
-        var output = RunGit(repoPath, out _, "ls-files", "--unmerged");
-        return !string.IsNullOrWhiteSpace(output);
-    }
+        => !string.IsNullOrWhiteSpace(ProbeGit(repoPath, "ls-files", "--unmerged"));
 
     public bool HasUnmergedPaths(Repo repo)
-    {
-        try { return IsGitRepo(repo.Path) && HasUnmergedPaths(repo.Path); }
-        catch { return false; }
-    }
+        => Read(repo, () => HasUnmergedPaths(repo.Path), false);
 
     public string? GetMergeMessage(Repo repo)
-    {
-        try
+        => Read<string?>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return null;
             var gitDir = GetGitDir(repo.Path);
             if (gitDir == null) return null;
             // MERGE_HEAD is the merge sentinel; gate on it so cherry-pick/revert (which use
@@ -1959,15 +1784,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (!File.Exists(Path.Combine(gitDir, "MERGE_HEAD"))) return null;
             var msgPath = Path.Combine(gitDir, "MERGE_MSG");
             return File.Exists(msgPath) ? File.ReadAllText(msgPath) : "Merge";
-        }
-        catch { return null; }
-    }
+        }, null);
 
     public DetachedHeadReport GetDetachedHeadReport(Repo repo)
-    {
-        try
+        => Read(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return DetachedHeadReport.None;
             if (GetOperationState(repo) != RepoOperationState.None) return DetachedHeadReport.None;
             if (!GetHeadInfo(repo.Path).IsDetached) return DetachedHeadReport.None;
 
@@ -1978,7 +1799,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (repo.IsSubmodule)
             {
                 // A local branch already at HEAD → plain checkout.
-                var localAtHead = FirstLine(RunGit(path, out _, "for-each-ref", "--points-at=HEAD",
+                var localAtHead = FirstLine(ProbeGit(path, "for-each-ref", "--points-at=HEAD",
                     "--format=%(refname:short)", "refs/heads"));
                 if (localAtHead != null)
                     return new DetachedHeadReport(DetachedHeadKind.OnBranchTip, localAtHead);
@@ -1999,7 +1820,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 // Not on a switchable tip. Only warn when the HEAD commit is contained in no
                 // branch at all — genuinely stranded commits. A submodule merely pinned to an
                 // older commit (an ancestor of a branch) is reachable, so stay silent.
-                var containing = RunGit(path, out _, "for-each-ref", "--contains=HEAD",
+                var containing = ProbeGit(path, "for-each-ref", "--contains=HEAD",
                     "--format=%(refname)", "refs/heads", "refs/remotes");
                 return string.IsNullOrWhiteSpace(containing)
                     ? new DetachedHeadReport(DetachedHeadKind.AtRisk)
@@ -2009,17 +1830,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // Top-level repo: if any branch/tag already points at the HEAD commit it's reachable
             // by name — nothing to lose. Only when no named ref lands on HEAD are these commits
             // reachable solely from HEAD and orphaned by a checkout.
-            var pointed = RunGit(path, out _, "for-each-ref", "--points-at=HEAD",
+            var pointed = ProbeGit(path, "for-each-ref", "--points-at=HEAD",
                 "--format=%(refname)", "refs/heads", "refs/remotes", "refs/tags");
             return string.IsNullOrWhiteSpace(pointed)
                 ? new DetachedHeadReport(DetachedHeadKind.AtRisk)
                 : DetachedHeadReport.None;
-        }
-        catch
-        {
-            return DetachedHeadReport.None;
-        }
-    }
+        }, DetachedHeadReport.None);
 
     // Attach a detached HEAD onto `branch`: checks it out when its tip is already at HEAD,
     // fast-forwards it onto HEAD when it's behind, or creates it tracking a remote branch that
@@ -2050,7 +1866,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     private IEnumerable<string> RemoteBranchesAtHead(string path)
     {
-        var raw = RunGit(path, out _, "for-each-ref", "--points-at=HEAD",
+        var raw = ProbeGit(path, "for-each-ref", "--points-at=HEAD",
             "--format=%(refname:short)", "refs/remotes");
         foreach (var line in raw.Split('\n'))
         {
@@ -2071,8 +1887,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         return null;
     }
 
-    private bool RefExists(string path, string fullRef)
-        => !string.IsNullOrWhiteSpace(RunGit(path, out _, "rev-parse", "--verify", "--quiet", fullRef));
+    // `--verify --quiet` exits non-zero, silently, when `rev` names nothing.
+    private bool RefExists(string path, string rev)
+        => RunGit(path, "rev-parse", "--verify", "--quiet", rev).Ok;
+
+    private string? RevSha(string path, string rev)
+    {
+        var result = RunGit(path, "rev-parse", "--verify", "--quiet", rev);
+        return result.Ok ? TrimOrNull(result.Stdout) : null;
+    }
 
     private bool IsAncestor(string path, string maybeAncestor, string descendant)
         => _runner.Run(path, new[] { "merge-base", "--is-ancestor", maybeAncestor, descendant }).Ok;
@@ -2085,20 +1908,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // the submodule's own (distinct) lock.
     private void ReattachSubmodulesOnBranchTip(Repo primary)
     {
-        try
+        foreach (var sub in ListSubmodules(primary))
         {
-            foreach (var sub in ListSubmodules(primary))
-            {
-                if (sub.Status == SubmoduleStatus.NotInitialized) continue;
-                var subRepo = new Repo(Guid.NewGuid(), sub.AbsolutePath, sub.Path) { Kind = RepoKind.Submodule };
-                var report = GetDetachedHeadReport(subRepo);
-                if (report.Kind == DetachedHeadKind.OnBranchTip && report.Branch is { } branch)
-                    AttachDetachedHead(subRepo, branch);
-            }
-        }
-        catch
-        {
-            // Reattachment is a convenience; a failure here must not fail the pull/update.
+            if (sub.Status == SubmoduleStatus.NotInitialized) continue;
+            var subRepo = new Repo(Guid.NewGuid(), sub.AbsolutePath, sub.Path) { Kind = RepoKind.Submodule };
+            var report = GetDetachedHeadReport(subRepo);
+            if (report.Kind == DetachedHeadKind.OnBranchTip && report.Branch is { } branch)
+                AttachDetachedHead(subRepo, branch);
         }
     }
 
@@ -2146,54 +1962,19 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         });
 
     public IReadOnlyList<string> GetRemoteNames(Repo repo)
-    {
-        try
+        => Read<IReadOnlyList<string>>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return Array.Empty<string>();
-            return ReadRemoteNames(repo.Path, inject: true, out _);
-        }
-        catch
-        {
-            return Array.Empty<string>();
-        }
-    }
+            var list = new List<string>();
+            foreach (var line in ProbeGit(repo.Path, "remote").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var name = line.Trim();
+                if (name.Length > 0) list.Add(name);
+            }
+            return list;
+        }, []);
 
     public string? GetRemoteUrl(Repo repo, string remoteName)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path)) return null;
-            return ReadRemoteUrl(repo.Path, remoteName, inject: true, out _);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    // Shared core for both the UI-facing remote reads (inject:true, errors swallowed) and the
-    // resolver's raw reads (inject:false, errors surfaced). `error` reports a git failure distinct
-    // from a successful read that found no remotes.
-    private IReadOnlyList<string> ReadRemoteNames(string repoPath, bool inject, out string? error)
-    {
-        var output = RunGitInternal(repoPath, allowExitCode1: false, out error, new[] { "remote" }, inject: inject);
-        if (error != null || string.IsNullOrEmpty(output)) return Array.Empty<string>();
-        var list = new List<string>();
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var name = line.Trim();
-            if (name.Length > 0) list.Add(name);
-        }
-        return list;
-    }
-
-    private string? ReadRemoteUrl(string repoPath, string remoteName, bool inject, out string? error)
-    {
-        var output = RunGitInternal(repoPath, allowExitCode1: false, out error, new[] { "remote", "get-url", remoteName }, inject: inject);
-        if (error != null || output == null) return null;
-        var url = output.Trim();
-        return url.Length == 0 ? null : url;
-    }
+        => Read(repo, () => TrimOrNull(ProbeGit(repo.Path, "remote", "get-url", remoteName)), null);
 
     public GitOutcome EditRemote(Repo repo, string oldName, string newName, string url)
         => RunOperation(repo, () =>
@@ -2307,7 +2088,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // fine. A destination whose HEAD resolves got through fetch, ref setup and checkout —
             // treat that as cloned and carry git's complaint as a warning, rather than discarding a
             // working tree the user would then have to delete by hand before retrying.
-            if (RepoStateStore.IsGitRepo(fullTarget) && HasResolvableHead(fullTarget))
+            if (RepoStateStore.IsGitRepo(fullTarget) && RefExists(fullTarget, "HEAD"))
             {
                 var warning = GitProcessRunner.ErrorTail(captureText);
                 return new CloneOutcome.Cloned(
@@ -2349,9 +2130,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             return GitOutcome.Fail(ex.Message);
         }
     }
-
-    private bool HasResolvableHead(string repoPath)
-        => _runner.Run(repoPath, new[] { "rev-parse", "--verify", "HEAD" }).Ok;
 
     public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
         => RunOperation(repo, () =>
@@ -2435,23 +2213,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // maybeAncestor forward to descendant is a fast-forward that orphans nothing. Exit 0 =
     // ancestor, 1 = not, other = error (treated as "not", so callers confirm before forcing).
     public bool IsAncestor(Repo repo, string maybeAncestor, string descendant)
-    {
-        if (!IsGitRepo(repo.Path)) return false;
-        var result = _runner.Run(
-            repo.Path,
-            new[] { "merge-base", "--is-ancestor", maybeAncestor, descendant });
-        return result.ExitCode == 0;
-    }
+        => Read(repo, () => IsAncestor(repo.Path, maybeAncestor, descendant), false);
 
     // The merge-base (common-ancestor) SHA of two refs/SHAs via `git merge-base a b`, trimmed.
-    // Null when git fails (bad ref, exit 128) or the histories are unrelated (exit 1) — RunGit
-    // returns null on any non-zero exit. Used to anchor a review range at the divergence point.
+    // Null when git fails (bad ref, exit 128) or the histories are unrelated (exit 1). Used to
+    // anchor a review range at the divergence point.
     public string? MergeBase(Repo repo, string a, string b)
-    {
-        if (!IsGitRepo(repo.Path)) return null;
-        var output = RunGit(repo.Path, out _, "merge-base", a, b);
-        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
-    }
+        => Read(repo, () => TrimOrNull(ProbeGit(repo.Path, "merge-base", a, b)), null);
 
     // Resolves the default review base for headRef when the session pins no explicit base: the
     // merge-base with the branch's upstream, falling back to the merge-base with the repo's default
@@ -2459,45 +2227,38 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // was, so the header can name the base instead of showing a bare SHA. Null when none resolves —
     // e.g. an orphan branch with no upstream and no default. (Open decision #3: upstream → default → …)
     public ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef)
-    {
-        if (!IsGitRepo(repo.Path)) return null;
-        string? target;
-        ReviewBaseKind kind;
-        if (GetUpstreamRef(repo.Path, headRef) is { } upstream)
+        => Read<ResolvedReviewBase?>(repo, () =>
         {
-            target = upstream;
-            kind = ReviewBaseKind.Upstream;
-        }
-        else
-        {
-            target = GetDefaultBranchRef(repo.Path);
-            kind = ReviewBaseKind.DefaultBranch;
-        }
-        if (target == null) return null;
-        var sha = MergeBase(repo, target, headRef);
-        return sha == null ? null : new ResolvedReviewBase(sha, target, kind);
-    }
+            string? target;
+            ReviewBaseKind kind;
+            if (GetUpstreamRef(repo.Path, headRef) is { } upstream)
+            {
+                target = upstream;
+                kind = ReviewBaseKind.Upstream;
+            }
+            else
+            {
+                target = GetDefaultBranchRef(repo.Path);
+                kind = ReviewBaseKind.DefaultBranch;
+            }
+            if (target == null) return null;
+            var sha = MergeBase(repo, target, headRef);
+            return sha == null ? null : new ResolvedReviewBase(sha, target, kind);
+        }, null);
 
     // The upstream (remote-tracking) ref of branchRef, e.g. "origin/main", or null when the
     // branch has no configured upstream (a local-only or remote-tracking head).
     private string? GetUpstreamRef(string repoPath, string branchRef)
-    {
-        var output = RunGit(repoPath, out _, "rev-parse", "--abbrev-ref",
-            "--symbolic-full-name", branchRef + "@{upstream}");
-        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
-    }
+        => TrimOrNull(ProbeGit(repoPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", branchRef + "@{upstream}"));
 
     // The repo's default branch: origin/HEAD's target (e.g. "origin/main") for a cloned repo,
     // else a local "main"/"master" when no remote default exists. Null when none is found.
     private string? GetDefaultBranchRef(string repoPath)
     {
-        var originHead = RunGit(repoPath, out _, "symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD");
-        if (!string.IsNullOrWhiteSpace(originHead)) return originHead.Trim();
+        var originHead = TrimOrNull(ProbeGit(repoPath, "symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"));
+        if (originHead != null) return originHead;
         foreach (var name in DefaultBranchCandidates)
-        {
-            var verified = RunGit(repoPath, out _, "rev-parse", "--verify", "-q", "refs/heads/" + name);
-            if (!string.IsNullOrWhiteSpace(verified)) return name;
-        }
+            if (RefExists(repoPath, "refs/heads/" + name)) return name;
         return null;
     }
 
@@ -2527,15 +2288,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             }
             tagArgs.Add(commitSha);
 
-            var (tagged, tagError) = RunMutation(repo.Path, tagArgs);
-            if (!tagged) return new GitOutcome.Failed(tagError ?? "Failed to create tag.");
+            var tagged = Mutate(repo.Path, tagArgs.ToArray());
+            if (tagged is GitOutcome.Failed) return tagged;
 
             if (pushToAllRemotes)
             {
                 foreach (var remote in GetRemoteNames(repo))
                 {
-                    var (pushed, pushError) = RunMutation(repo.Path, new[] { "push", remote, "refs/tags/" + name });
-                    if (!pushed) return new GitOutcome.Failed(pushError ?? $"Failed to push tag to '{remote}'.");
+                    var pushed = Mutate(repo.Path, "push", remote, "refs/tags/" + name);
+                    if (pushed is GitOutcome.Failed) return pushed;
                 }
             }
 
@@ -2552,7 +2313,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (string.IsNullOrWhiteSpace(name))
                 return new GitOutcome.Failed("Tag name is required.");
 
-            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "--quiet", "refs/tags/" + name) is null)
+            if (!RefExists(repo.Path, "refs/tags/" + name))
                 return new GitOutcome.Failed($"There is no tag named '{name}' in this repository.");
 
             var remotes = remoteName is { Length: > 0 } named ? [named] : GetRemoteNames(repo);
@@ -2561,8 +2322,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             foreach (var remote in remotes)
             {
-                var (pushed, error) = RunMutation(repo.Path, new[] { "push", remote, "refs/tags/" + name });
-                if (!pushed) return new GitOutcome.Failed(error ?? $"Failed to push tag to '{remote}'.");
+                var pushed = Mutate(repo.Path, "push", remote, "refs/tags/" + name);
+                if (pushed is GitOutcome.Failed) return pushed;
             }
 
             return GitOutcome.Ok;
@@ -2599,12 +2360,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         => RunSimple(repo, "git branch", "branch", force ? "-M" : "-m", oldName, newName);
 
     public MergePreviewResult PreviewMerge(Repo repo, string sourceRef)
-    {
-        try
+        => Read(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new MergePreviewResult(MergePreviewState.Unknown, "Not a git repository.");
-
             // git 2.38+: real-merge mode. Exit 0 = clean, 1 = conflicts, >1 = error
             // (old git, missing ref, no merge base, etc). Treat errors as Unknown so the
             // dialog quietly skips the preview rather than blocking the user from merging.
@@ -2619,12 +2376,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 1 => new MergePreviewResult(MergePreviewState.Conflicts, null),
                 _ => new MergePreviewResult(MergePreviewState.Unknown, GitProcessRunner.FirstMeaningfulLine(result.Stderr)),
             };
-        }
-        catch (Exception ex)
-        {
-            return new MergePreviewResult(MergePreviewState.Unknown, ex.Message);
-        }
-    }
+        }, new MergePreviewResult(MergePreviewState.Unknown, "Not a git repository."));
 
     // `git merge <ref>` against HEAD. Conflicts produce a non-zero exit but git still
     // writes MERGE_HEAD and stages the resolvable hunks — surface that as "success with
@@ -2647,16 +2399,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // Conflict path: MERGE_HEAD exists in the per-worktree gitdir.
             // --squash and --ff-only never create MERGE_HEAD, so failures there are
             // always real errors.
-            if (strategy != MergeStrategy.Squash && strategy != MergeStrategy.FastForwardOnly)
-            {
-                try
-                {
-                    var gitDir = GetGitDir(repo.Path);
-                    if (gitDir != null && File.Exists(Path.Combine(gitDir, "MERGE_HEAD")))
-                        return new MergeLikeOutcome.Conflicted();
-                }
-                catch { /* fall through to error */ }
-            }
+            if (strategy != MergeStrategy.Squash && strategy != MergeStrategy.FastForwardOnly
+                && GetGitDir(repo.Path) is { } gitDir && File.Exists(Path.Combine(gitDir, "MERGE_HEAD")))
+                return new MergeLikeOutcome.Conflicted();
 
             return new MergeLikeOutcome.Failed(result.BlockError("git merge"));
         });
@@ -2666,12 +2411,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // even though rebase actually replays each commit individually. Good enough to give
     // the user a green/amber heads-up; the real outcome surfaces via the rebase op banner.
     public RebasePreviewResult PreviewRebase(Repo repo, string targetRef)
-    {
-        try
+        => Read(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new RebasePreviewResult(RebasePreviewState.Unknown, "Not a git repository.");
-
             var result = _runner.Run(
                 repo.Path,
                 new[] { "merge-tree", "--write-tree", "--no-messages", targetRef, "HEAD" });
@@ -2683,12 +2424,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 1 => new RebasePreviewResult(RebasePreviewState.Conflicts, null),
                 _ => new RebasePreviewResult(RebasePreviewState.Unknown, GitProcessRunner.FirstMeaningfulLine(result.Stderr)),
             };
-        }
-        catch (Exception ex)
-        {
-            return new RebasePreviewResult(RebasePreviewState.Unknown, ex.Message);
-        }
-    }
+        }, new RebasePreviewResult(RebasePreviewState.Unknown, "Not a git repository."));
 
     // `git rebase <target>` replays HEAD's commits onto <target>. With --autostash, git
     // stashes a dirty working tree before the rebase and pops it after success — that
@@ -2710,17 +2446,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // per-worktree gitdir. If either exists, treat the failure as a successful
             // start that produced conflicts — the operation banner will guide the user
             // through resolve/continue/abort.
-            try
-            {
-                var gitDir = GetGitDir(repo.Path);
-                if (gitDir != null
-                    && (Directory.Exists(Path.Combine(gitDir, "rebase-apply"))
-                        || Directory.Exists(Path.Combine(gitDir, "rebase-merge"))))
-                {
-                    return new MergeLikeOutcome.Conflicted();
-                }
-            }
-            catch { /* fall through to error */ }
+            if (GetGitDir(repo.Path) is { } gitDir
+                && (Directory.Exists(Path.Combine(gitDir, "rebase-apply"))
+                    || Directory.Exists(Path.Combine(gitDir, "rebase-merge"))))
+                return new MergeLikeOutcome.Conflicted();
 
             return new MergeLikeOutcome.Failed(result.BlockError("git rebase"));
         });
@@ -2736,13 +2465,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             var result = _runner.Run(repo.Path, new[] { "cherry-pick", commitSha });
             if (result.Ok) return MergeLikeOutcome.Ok;
 
-            try
-            {
-                var gitDir = GetGitDir(repo.Path);
-                if (gitDir != null && File.Exists(Path.Combine(gitDir, "CHERRY_PICK_HEAD")))
-                    return new MergeLikeOutcome.Conflicted();
-            }
-            catch { /* fall through to error */ }
+            if (GetGitDir(repo.Path) is { } gitDir && File.Exists(Path.Combine(gitDir, "CHERRY_PICK_HEAD")))
+                return new MergeLikeOutcome.Conflicted();
 
             return new MergeLikeOutcome.Failed(result.BlockError("git cherry-pick"));
         });
@@ -2757,13 +2481,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             var result = _runner.Run(repo.Path, new[] { "revert", "--no-edit", commitSha });
             if (result.Ok) return MergeLikeOutcome.Ok;
 
-            try
-            {
-                var gitDir = GetGitDir(repo.Path);
-                if (gitDir != null && File.Exists(Path.Combine(gitDir, "REVERT_HEAD")))
-                    return new MergeLikeOutcome.Conflicted();
-            }
-            catch { /* fall through to error */ }
+            if (GetGitDir(repo.Path) is { } gitDir && File.Exists(Path.Combine(gitDir, "REVERT_HEAD")))
+                return new MergeLikeOutcome.Conflicted();
 
             return new MergeLikeOutcome.Failed(result.BlockError("git revert"));
         });
@@ -2838,8 +2557,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // git has no native stash rename. Resolve the stash commit, drop the entry,
             // then re-store it under the new message. `git stash store` pushes the entry
             // back onto refs/stash, so a renamed stash moves to the top (stash@{0}).
-            var sha = RunGit(repo.Path, out _, "rev-parse", $"stash@{{{index}}}")?.Trim();
-            if (string.IsNullOrEmpty(sha))
+            var sha = RevSha(repo.Path, $"stash@{{{index}}}");
+            if (sha == null)
                 return new GitOutcome.Failed("Could not resolve stash commit.");
 
             var dropped = ToOutcome(_runner.Run(repo.Path, new[] { "stash", "drop", $"stash@{{{index}}}" }), "git stash drop");
@@ -2849,18 +2568,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         });
 
     public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary)
-    {
-        try
+        => Read<IReadOnlyList<WorktreeInfo>>(primary, () =>
         {
-            if (!IsGitRepo(primary.Path)) return Array.Empty<WorktreeInfo>();
-            var stdout = RunGit(primary.Path, out var err, "worktree", "list", "--porcelain");
-            return err != null ? Array.Empty<WorktreeInfo>() : ParseWorktreePorcelain(stdout);
-        }
-        catch
-        {
-            return Array.Empty<WorktreeInfo>();
-        }
-    }
+            var result = RunGit(primary.Path, "worktree", "list", "--porcelain");
+            return result.Ok ? ParseWorktreePorcelain(result.Stdout) : [];
+        }, []);
 
     // Porcelain format: blank-line-separated records, one field per line.
     //   worktree <abs-path>
@@ -2966,7 +2678,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private static string WorktreeFullPath(Repo primary, string path)
     {
         try { return Path.GetFullPath(path, primary.Path); }
-        catch { return path; }
+        catch (ArgumentException) { return path; }
     }
 
     // Git owns the policy here (dirty, untracked, locked, submodules, "that's the main working
@@ -3031,33 +2743,23 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // ────────── submodules ──────────
 
     public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary)
-    {
-        try
+        => Read<IReadOnlyList<SubmoduleInfo>>(primary, () =>
         {
-            if (!IsGitRepo(primary.Path)) return Array.Empty<SubmoduleInfo>();
-            if (!File.Exists(System.IO.Path.Combine(primary.Path, ".gitmodules")))
-                return Array.Empty<SubmoduleInfo>();
+            if (!File.Exists(System.IO.Path.Combine(primary.Path, ".gitmodules"))) return [];
 
-            var byName = ParseGitmodules(primary.Path);
-            if (byName == null) return Array.Empty<SubmoduleInfo>();
+            var configOut = RunGit(primary.Path, "config", "--file", ".gitmodules", "--list");
+            if (!configOut.Ok) return [];
 
+            var byName = ParseGitmodules(configOut.Stdout);
             var statusByPath = ParseSubmoduleStatus(primary.Path);
             var recordedByPath = ParseRecordedSubmodulePointers(primary.Path);
             return BuildSubmoduleInfos(primary, byName, statusByPath, recordedByPath);
-        }
-        catch
-        {
-            return Array.Empty<SubmoduleInfo>();
-        }
-    }
+        }, []);
 
-    // Logical entries from .gitmodules. Each `submodule.<name>.path` row gives us one submodule;
-    // .url and .branch hang off the same <name>. Returns null on a git config failure.
-    private Dictionary<string, (string? Path, string? Url, string? Branch)>? ParseGitmodules(string repoPath)
+    // Logical entries from `git config --file .gitmodules --list`. Each `submodule.<name>.path` row
+    // gives us one submodule; .url and .branch hang off the same <name>.
+    private static Dictionary<string, (string? Path, string? Url, string? Branch)> ParseGitmodules(string configOut)
     {
-        var configOut = RunGit(repoPath, out var cfgErr, "config", "--file", ".gitmodules", "--list");
-        if (cfgErr != null) return null;
-
         var byName = new Dictionary<string, (string? Path, string? Url, string? Branch)>(StringComparer.Ordinal);
         foreach (var raw in configOut.Split('\n'))
         {
@@ -3092,9 +2794,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // initialized, 'U' = conflict.
     private Dictionary<string, (char Flag, string? Sha, string? Describe)> ParseSubmoduleStatus(string repoPath)
     {
-        var statusOut = RunGit(repoPath, out _, "submodule", "status");
+        var statusOut = ProbeGit(repoPath, "submodule", "status");
         var statusByPath = new Dictionary<string, (char Flag, string? Sha, string? Describe)>(StringComparer.Ordinal);
-        foreach (var raw in (statusOut ?? string.Empty).Split('\n'))
+        foreach (var raw in statusOut.Split('\n'))
         {
             if (raw.Length < 2) continue;
             var flag = raw[0];
@@ -3125,9 +2827,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // records. ls-tree gives the recorded pointer directly.
     private Dictionary<string, string> ParseRecordedSubmodulePointers(string repoPath)
     {
-        var lsTreeOut = RunGit(repoPath, out _, "ls-tree", "-r", "HEAD");
+        var lsTreeOut = ProbeGit(repoPath, "ls-tree", "-r", "HEAD");
         var recordedByPath = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var raw in (lsTreeOut ?? string.Empty).Split('\n'))
+        foreach (var raw in lsTreeOut.Split('\n'))
         {
             // <mode> SP <type> SP <sha> TAB <path>; gitlinks have mode 160000.
             if (!raw.StartsWith("160000 ", StringComparison.Ordinal)) continue;
@@ -3255,16 +2957,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         });
 
     public bool StageSubmodulePointer(Repo parent, string relativePath)
-    {
-        try
+        => RunLocked(parent, GitResource.LocalState, () =>
         {
-            if (string.IsNullOrWhiteSpace(relativePath)) return false;
-            if (!IsGitRepo(parent.Path)) return false;
-
             var rel = NormalizeRelPath(relativePath);
-            if (rel.Length == 0 || rel == ".") return false;
-
-            using var _ = _locks.Acquire(GitResource.LocalState, parent.Path);
+            if (string.IsNullOrWhiteSpace(rel) || rel == ".") return false;
 
             // --ignore-submodules=dirty so only a moved HEAD commit counts, not uncommitted
             // changes inside the submodule's working tree (which `git add` wouldn't record
@@ -3272,28 +2968,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             var diff = _runner.Run(parent.Path, new[] { "diff", "--quiet", "--ignore-submodules=dirty", "HEAD", "--", rel });
             if (diff.Ok) return false;
 
-            var (ok, _err) = RunMutation(parent.Path, new[] { "add", "--", rel });
-            return ok;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+            return Mutate(parent.Path, "add", "--", rel) is GitOutcome.Success;
+        }, static _ => false);
 
     public IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha)
-    {
-        try
+        => Read<IReadOnlyList<SubmodulePointerChange>>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path) || string.IsNullOrWhiteSpace(commitSha))
-                return Array.Empty<SubmodulePointerChange>();
+            if (string.IsNullOrWhiteSpace(commitSha)) return [];
 
             // diff-tree raw output: ":<src-mode> <dst-mode> <src-sha> <dst-sha> <status>\t<path>"
             // --root makes the first commit produce its own additions instead of erroring.
-            var rawOut = RunGit(repo.Path, out var err, "diff-tree", "-r", "--no-commit-id",
-                "--root", "--raw", commitSha);
-            if (err != null || string.IsNullOrEmpty(rawOut))
-                return Array.Empty<SubmodulePointerChange>();
+            var rawOut = ProbeGit(repo.Path, "diff-tree", "-r", "--no-commit-id", "--root", "--raw", commitSha);
 
             var results = new List<SubmodulePointerChange>();
             foreach (var raw in rawOut.Split('\n'))
@@ -3302,12 +2987,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 if (change != null) results.Add(change);
             }
             return results;
-        }
-        catch
-        {
-            return Array.Empty<SubmodulePointerChange>();
-        }
-    }
+        }, []);
 
     private SubmodulePointerChange? ParseSubmodulePointerLine(Repo repo, string raw)
     {
@@ -3350,18 +3030,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         ahead = 0;
         behind = 0;
         shortLog = null;
-        var rl = RunGit(subPath, out _, "rev-list", "--left-right", "--count", $"{srcSha}...{dstSha}");
-        if (rl != null)
-        {
-            var rlParts = rl.Trim().Split('\t');
-            if (rlParts.Length == 2)
-            {
-                int.TryParse(rlParts[0], out behind);
-                int.TryParse(rlParts[1], out ahead);
-            }
-        }
-        var log = RunGit(subPath, out _, "log", "--oneline", "--no-decorate", "-n", "20", $"{srcSha}..{dstSha}");
-        if (!string.IsNullOrWhiteSpace(log)) shortLog = log;
+        (behind, ahead) = ParseLeftRightCount(ProbeGit(subPath, "rev-list", "--left-right", "--count", $"{srcSha}...{dstSha}"));
+        var log = ProbeGit(subPath, "log", "--oneline", "--no-decorate", "-n", "20", $"{srcSha}..{dstSha}");
+        shortLog = string.IsNullOrWhiteSpace(log) ? null : log;
     }
 
     // Writes an identity into the repo's --local config ("pin to repo"). After this the resolver
@@ -3374,10 +3045,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         {
             foreach (var (key, value) in config.Entries())
             {
-                var (ok, err) = value != null
-                    ? RunMutation(repo.Path, new[] { "config", "--local", key, value })
+                var written = value != null
+                    ? Mutate(repo.Path, "config", "--local", key, value)
                     : UnsetLocalConfig(repo.Path, key);
-                if (!ok) return new GitOutcome.Failed(err!);
+                if (written is GitOutcome.Failed) return written;
             }
             return GitOutcome.Ok;
         });
@@ -3393,35 +3064,26 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // An explicit value — either way — is the user's, so write only into the vacuum: this
             // can never re-flip a hand-set false, on this open or any future one. --get exits 1
             // (allowed) when the key is unset.
-            var existing = RunGitInternal(repo.Path, allowExitCode1: true, out var readErr,
-                new[] { "config", "--local", "--get", "core.untrackedCache" })?.Trim();
-            if (readErr != null) return new GitOutcome.Failed(readErr);
-            if (!string.IsNullOrEmpty(existing)) return GitOutcome.Ok;
+            var existing = RunGit(repo.Path, "config", "--local", "--get", "core.untrackedCache");
+            if (!existing.Ok && existing.ExitCode != 1)
+                return new GitOutcome.Failed(existing.FirstLineError("git config"));
+            if (!string.IsNullOrWhiteSpace(existing.Stdout)) return GitOutcome.Ok;
 
             // The cache is unsafe where directory mtime is unreliable (network / some virtualized
             // mounts); this probe exits 0 only where it's sound. Declining there isn't a failure.
             if (!_runner.Run(repo.Path, new[] { "update-index", "--test-untracked-cache" }).Ok)
                 return GitOutcome.Ok;
 
-            var (ok, err) = RunMutation(repo.Path, new[] { "config", "--local", "core.untrackedCache", "true" });
-            return ok ? GitOutcome.Ok : new GitOutcome.Failed(err!);
+            return Mutate(repo.Path, "config", "--local", "core.untrackedCache", "true");
         });
 
     // `git config --local --unset` exits 5 when the key was already absent — that's the desired
     // end state, not a failure, so it's treated as success.
-    private (bool Ok, string? Error) UnsetLocalConfig(string repoPath, string key)
+    private GitOutcome UnsetLocalConfig(string repoPath, string key)
     {
         var result = _runner.Run(repoPath, new[] { "config", "--local", "--unset", key });
-        if (result.Ok || result.ExitCode == 5) return (true, null);
-        return (false, result.BlockError($"git config --local --unset {key}"));
-    }
-
-    // Small shared helper for "spawn git, return (ok, errorOrNull)". Used where multiple
-    // successive mutations need to be sequenced inside a single repo lock.
-    private (bool Ok, string? Error) RunMutation(string repoPath, IReadOnlyList<string> args)
-    {
-        var result = _runner.Run(repoPath, args);
-        return result.Ok ? (true, null) : (false, result.BlockError($"git {string.Join(' ', args)}"));
+        if (result.Ok || result.ExitCode == 5) return GitOutcome.Ok;
+        return new GitOutcome.Failed(result.BlockError($"git config --local --unset {key}"));
     }
 
     // Owns the not-a-repo guard, the resource lock, and the exception fold shared by every
@@ -3461,11 +3123,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private static GitOutcome ToOutcome(GitProcessRunner.GitResult result, string label)
         => result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError(label));
 
+    // One mutation inside a lock some caller already holds, its failure labelled with the command.
     private GitOutcome Mutate(string repoPath, params string[] args)
-    {
-        var (ok, err) = RunMutation(repoPath, args);
-        return ok ? GitOutcome.Ok : new GitOutcome.Failed(err!);
-    }
+        => ToOutcome(_runner.Run(repoPath, args), $"git {string.Join(' ', args)}");
 
     // Bulk file operations must never put an unbounded path list on the command line:
     // Windows CreateProcess caps the whole line at 32,767 chars, so "Stage All" in a repo
@@ -3531,90 +3191,71 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         => ToOutcome(_runner.Run(repoPath, gitArgs), "git checkout");
 
     public DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null)
+        => Read(repo, () => RunDiffForSide(repo, path, side, commitSha, baseSha) switch
+        {
+            Fetched<string>.Failed failed => DiffError(repo, path, side, failed.Message),
+            Fetched<string>.Ok patch => ParseDiff(repo, path, side, patch.Value),
+            _ => throw new System.Diagnostics.UnreachableException(),
+        }, DiffError(repo, path, side, "Not a git repository."));
+
+    // LFS status only matters for binary files (the diff body is hidden, so the badge is the only
+    // place the user learns how the blob is stored). Querying check-attr is an extra git
+    // invocation, so we skip it for ordinary text diffs.
+    private DiffResult ParseDiff(Repo repo, string path, DiffSide side, string patchText)
     {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return DiffError(repo, path, side, "Not a git repository.");
-
-            var patchText = RunDiffForSide(repo, path, side, commitSha, baseSha, out var error);
-            if (patchText == null)
-                return DiffError(repo, path, side, error ?? "git diff failed.");
-
-            var result = ParseGitDiff(repo.Id, path, side, patchText);
-            // LFS status only matters for binary files (the diff body is hidden, so the badge is
-            // the only place the user learns how the blob is stored). Querying check-attr is an
-            // extra git invocation, so we skip it for ordinary text diffs.
-            if (result.IsBinary)
-                result = result with { IsLfs = IsLfsTracked(repo.Path, path) };
-            return result;
-        }
-        catch (Exception ex)
-        {
-            return DiffError(repo, path, side, ex.Message);
-        }
+        var result = ParseGitDiff(repo.Id, path, side, patchText);
+        return result.IsBinary ? result with { IsLfs = IsLfsTracked(repo.Path, path) } : result;
     }
 
     // Runs the right git command for the requested diff side and returns its raw patch text, or
-    // null with `error` set on a validation or git failure.
-    private string? RunDiffForSide(
-        Repo repo, string path, DiffSide side, string? commitSha, string? baseSha, out string? error)
+    // why it couldn't: a validation or git failure.
+    private Fetched<string> RunDiffForSide(Repo repo, string path, DiffSide side, string? commitSha, string? baseSha)
     {
-        error = null;
         var contextArg = $"--unified={DiffOptions.ContextLines}";
         switch (side)
         {
             case DiffSide.Commit:
                 if (string.IsNullOrEmpty(commitSha))
-                {
-                    error = "Commit SHA required for commit diff.";
-                    return null;
-                }
+                    return Fetched<string>.Fail("Commit SHA required for commit diff.");
                 // `git show` handles root commits and merges correctly; --format= suppresses the
                 // commit message header so the output is a plain patch parseable by ParseGitDiff.
-                return RunGitDiff(repo.Path, out error,
+                return RunGitDiff(repo.Path,
                     "show", "--no-color", "--format=", "-M", contextArg, commitSha, "--", path);
             case DiffSide.Range:
                 if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha))
-                {
-                    error = "Base and head SHAs required for range diff.";
-                    return null;
-                }
+                    return Fetched<string>.Fail("Base and head SHAs required for range diff.");
                 // The range's net diff for one file: base→head directly (two-dot). base is already
                 // the resolved merge-base, so this is the sum of the range's increments for this path.
-                return RunGitDiff(repo.Path, out error,
+                return RunGitDiff(repo.Path,
                     "diff", "--no-color", "-M", contextArg, baseSha, commitSha, "--", path);
             case DiffSide.Staged:
-                return RunGitDiff(repo.Path, out error,
+                return RunGitDiff(repo.Path,
                     "diff", "--cached", "--no-color", "-M", contextArg, "--", path);
             case DiffSide.WorkingTree:
                 // Everything the file has changed since HEAD, index state ignored, so staging a
                 // file leaves its diff untouched.
                 if (IsTracked(repo.Path, path))
-                    return RunGitDiff(repo.Path, out error,
+                    return RunGitDiff(repo.Path,
                         "diff", "HEAD", "--no-color", "-M", contextArg, "--", path);
-                return RunUntrackedFileDiff(repo, path, contextArg, out error);
+                return RunUntrackedFileDiff(repo, path, contextArg);
             default:
                 if (IsTracked(repo.Path, path))
-                    return RunGitDiff(repo.Path, out error,
+                    return RunGitDiff(repo.Path,
                         "diff", "--no-color", "-M", contextArg, "--", path);
-                return RunUntrackedFileDiff(repo, path, contextArg, out error);
+                return RunUntrackedFileDiff(repo, path, contextArg);
         }
     }
 
     // Untracked file: `git diff` ignores it, so render it as an addition by diffing against the
     // platform null device. `--no-index` is the one diff that reads whatever the filesystem offers
     // rather than something git already tracks, so the path is confined to the checkout here too.
-    private string? RunUntrackedFileDiff(Repo repo, string path, string contextArg, out string? error)
+    private Fetched<string> RunUntrackedFileDiff(Repo repo, string path, string contextArg)
     {
         if (!TryResolveInsideRepo(repo.Path, path, out var absPath))
-        {
-            error = "Diff paths must be repository-relative.";
-            return null;
-        }
+            return Fetched<string>.Fail("Diff paths must be repository-relative.");
 
         var nullPath = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
-        return RunGitDiff(repo.Path, out error,
+        return RunGitDiff(repo.Path,
             "diff", "--no-color", "--no-index", contextArg, "--", nullPath, absPath);
     }
 
@@ -3642,34 +3283,20 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null)
-    {
-        try
+        => Read<string?>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return null;
             var (revPath, onDisk) = ResolveBlobSource(path, side, oldSide, commitSha, baseSha);
             if (onDisk) return ReadWorkingFile(repo.Path, path);
             return revPath == null ? null : ShowBlob(repo.Path, revPath);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, null);
 
     public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null)
-    {
-        try
+        => Read<byte[]?>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return null;
             var (revPath, onDisk) = ResolveBlobSource(path, side, oldSide, commitSha, baseSha);
             if (onDisk) return ReadWorkingFileBytes(repo.Path, path, maxBytes);
             return revPath == null ? null : ShowBlobBytes(repo.Path, revPath, maxBytes);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+        }, null);
 
     // Where one side of a diff's content lives: a `git show` rev spec, or the working-tree file
     // on disk. RevPath is null when the side isn't addressable (a required sha is missing).
@@ -3707,10 +3334,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // when this spawned `git show` — the line cap that keeps a huge file drawable is DiffOptions'.
     private string? ShowBlob(string workingDir, string revPath)
     {
-        switch (_blobs.TryRead(workingDir, revPath, long.MaxValue, out var bytes))
+        switch (_blobs.TryRead(workingDir, revPath, long.MaxValue))
         {
-            case GitBlobReader.Status.Found: return DecodeBlobText(bytes!);
-            case GitBlobReader.Status.Missing: return null;
+            case GitBlobReader.Blob.Found found: return DecodeBlobText(found.Content);
+            case GitBlobReader.Blob.Missing: return null;
         }
 
         var result = _runner.Run(workingDir, new[] { "show", revPath });
@@ -3719,10 +3346,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     private byte[]? ShowBlobBytes(string workingDir, string revPath, int maxBytes)
     {
-        switch (_blobs.TryRead(workingDir, revPath, maxBytes, out var bytes))
+        switch (_blobs.TryRead(workingDir, revPath, maxBytes))
         {
-            case GitBlobReader.Status.Found: return bytes;
-            case GitBlobReader.Status.Missing: return null;
+            case GitBlobReader.Blob.Found found: return found.Content;
+            case GitBlobReader.Blob.Missing: return null;
         }
 
         var result = _runner.RunBytes(workingDir, new[] { "show", revPath }, maxBytes);
@@ -3745,7 +3372,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             var full = Path.IsPathRooted(path) ? path : Path.Combine(workingDir, path);
             return File.Exists(full) ? File.ReadAllText(full) : null;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return null;
         }
@@ -3759,27 +3386,39 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (!File.Exists(full)) return null;
             return new FileInfo(full).Length > maxBytes ? null : File.ReadAllBytes(full);
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             return null;
         }
     }
 
-    private string RunGit(string workingDir, out string? error, params string[] args)
-        => RunGitInternal(workingDir, allowExitCode1: false, out error, args)!;
+    private GitProcessRunner.GitResult RunGit(string workingDir, params string[] args)
+        => _runner.Run(workingDir, args);
+
+    // Stdout of a run whose non-zero exit is an answer rather than a failure: no upstream, no
+    // unmerged paths, nothing at that ref. Empty either way.
+    private string ProbeGit(string workingDir, params string[] args)
+    {
+        var result = _runner.Run(workingDir, args);
+        return result.Ok ? result.Stdout : string.Empty;
+    }
 
     // `git diff --no-index` exits 1 when the two inputs differ — that's normal output, not failure.
-    private string? RunGitDiff(string workingDir, out string? error, params string[] args)
-        => RunGitInternal(workingDir, allowExitCode1: true, out error, args);
-
-    private string? RunGitInternal(string workingDir, bool allowExitCode1, out string? error, string[] args, bool inject = true)
+    private Fetched<string> RunGitDiff(string workingDir, params string[] args)
     {
-        error = null;
-        var result = _runner.Run(workingDir, args, inject: inject);
-        if (result.Ok || (allowExitCode1 && result.ExitCode == 1)) return result.Stdout;
-        error = result.FirstLineError("git");
-        return null;
+        var result = _runner.Run(workingDir, args);
+        return result.Ok || result.ExitCode == 1
+            ? result.Stdout
+            : Fetched<string>.Fail(result.FirstLineError($"git {args[0]}"));
     }
+
+    // Owns the not-a-repo guard shared by every read. Nothing is caught here: the runner folds a
+    // git that never started into its result, and a parser that can't read git's output is a bug.
+    private static T Read<T>(Repo repo, Func<T> body, T notARepo)
+        => IsGitRepo(repo.Path) ? body() : notARepo;
+
+    private static Fetched<T> Read<T>(Repo repo, Func<Fetched<T>> body)
+        => Read(repo, body, Fetched<T>.Fail("Not a git repository."));
 
     // ────────── raw (non-injecting) config reads for GitIdentityService ──────────
     // These MUST pass inject:false: the identity resolver calls them, and the runner would
@@ -3864,11 +3503,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // back to one path.
     private IReadOnlyList<string> ListFiles(Repo repo, params string[] args)
     {
-        var output = RunGit(repo.Path, out _, args);
-        if (output == null) return [];
-
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var path in ProbeGit(repo.Path, args).Split('\0', StringSplitOptions.RemoveEmptyEntries))
             seen.Add(path);
 
         var paths = seen.ToList();
@@ -3941,7 +3577,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private static int? TryParseOctal(string s)
     {
         try { return Convert.ToInt32(s, 8); }
-        catch { return null; }
+        catch (Exception ex) when (ex is FormatException or OverflowException or ArgumentException) { return null; }
     }
 
     private static DiffResult DiffError(Repo repo, string path, DiffSide side, string message)
@@ -3968,9 +3604,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
         private int _oldStart, _oldLines, _newStart, _newLines;
         private string? _header;
+        // Null between hunks: set by a header that parsed, cleared when the hunk is flushed.
         private List<DiffLine>? _lines;
         private int _oldCursor, _newCursor;
-        private bool _inHunk;
 
         public void Consume(string raw)
         {
@@ -3979,13 +3615,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 BeginHunk(raw);
                 return;
             }
-            if (!_inHunk || _lines == null || raw.Length == 0) return;
+            if (_lines is not { } lines || raw.Length == 0) return;
             if (raw[0] == '\\')
             {
-                MarkNoNewlineAtEof();
+                MarkNoNewlineAtEof(lines);
                 return;
             }
-            AppendBodyLine(raw);
+            AppendBodyLine(lines, raw);
         }
 
         public (IReadOnlyList<DiffHunk> Hunks, bool Truncated) Finish()
@@ -3998,26 +3634,22 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         {
             Flush();
             if (!TryParseHunkHeader(raw, out _oldStart, out _oldLines, out _newStart, out _newLines, out _header))
-            {
-                _inHunk = false;
                 return;
-            }
             _lines = new List<DiffLine>();
             _oldCursor = _oldStart;
             _newCursor = _newStart;
-            _inHunk = true;
         }
 
         // "\ No newline at end of file" applies to the line just emitted. Flag it so the patch
         // builder can reproduce the marker rather than silently appending a trailing newline when
         // the hunk is staged/discarded.
-        private void MarkNoNewlineAtEof()
+        private static void MarkNoNewlineAtEof(List<DiffLine> lines)
         {
-            if (_lines!.Count > 0)
-                _lines[^1] = _lines[^1] with { NoNewlineAtEof = true };
+            if (lines.Count > 0)
+                lines[^1] = lines[^1] with { NoNewlineAtEof = true };
         }
 
-        private void AppendBodyLine(string raw)
+        private void AppendBodyLine(List<DiffLine> lines, string raw)
         {
             var text = raw.Length > 1 ? raw[1..] : string.Empty;
             DiffLine? line = raw[0] switch
@@ -4033,14 +3665,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
                 _truncated = true;
                 return;
             }
-            _lines!.Add(line);
+            lines.Add(line);
             _totalLines++;
         }
 
         private void Flush()
         {
-            if (!_inHunk || _lines == null) return;
+            if (_lines == null) return;
             _hunks.Add(new DiffHunk(_oldStart, _oldLines, _newStart, _newLines, _header, _lines));
+            _lines = null;
         }
     }
 
@@ -4092,10 +3725,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // the per-worktree gitdir, not the main one). Returns None when nothing is in progress
     // or when the repo path is invalid — banner callers treat None as "hide".
     public RepoOperationState GetOperationState(Repo repo)
-    {
-        try
+        => Read(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return RepoOperationState.None;
             var gitDir = GetGitDir(repo.Path);
             if (gitDir == null) return RepoOperationState.None;
             // Defer the unmerged-paths probe until after the sentinel checks: a real
@@ -4121,12 +3752,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // partway. Fall back to a generic banner so the user isn't left wondering
             // why their working tree is full of conflict markers.
             return HasUnmergedPaths(repo.Path) ? RepoOperationState.UnmergedPaths : RepoOperationState.None;
-        }
-        catch
-        {
-            return RepoOperationState.None;
-        }
-    }
+        }, RepoOperationState.None);
 
     // Runs `git <op> --abort` (or the appropriate equivalent) for the in-progress state. For
     // UnmergedPaths — a stash-apply / checkout -m conflict that leaves the index unmerged
@@ -4280,7 +3906,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private static void TryDeleteFile(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
-        catch { /* best-effort */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private static void TryDeleteDir(string path) => DirectoryTree.Delete(path);
@@ -4341,12 +3967,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         });
         if (result.Ok) return ContinueOutcome.Ok;
 
-        bool hasMoreConflicts;
-        try { hasMoreConflicts = HasUnmergedPaths(repo.Path); }
-        catch { hasMoreConflicts = false; }
-
         var message = result.BlockError($"git {string.Join(' ', args)}");
-        return hasMoreConflicts
+        return HasUnmergedPaths(repo.Path)
             ? new ContinueOutcome.MoreConflicts(message)
             : new ContinueOutcome.Failed(message);
     }
