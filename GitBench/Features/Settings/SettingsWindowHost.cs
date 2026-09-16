@@ -60,6 +60,7 @@ internal sealed record SettingsWindowHost : Widget
                 Width = size.Width,
                 Height = size.Height,
                 IsUndecorated = true,
+                IsModal = true,
                 CenterOnMainWindow = true,
                 BuildRoot = ctx => Direction.Wrap(new Padding
                 {

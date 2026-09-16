@@ -35,6 +35,7 @@ internal static class PlatformServices
                 context.AddService<IPlatformShell>(new WindowsPlatformShell());
                 context.AddService<IPopupNativeDecorator>(new WindowsPopupDecorator());
                 context.AddService<IWindowChrome>(new WindowsWindowChrome());
+                context.AddService<IWindowModality>(new WindowsWindowModality());
                 context.AddService<IAppMenu>(new NoopAppMenu());
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
