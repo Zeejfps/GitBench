@@ -25,6 +25,9 @@ internal sealed record AssistantSettingsCard : Widget
     public const string SaveId = "assistant-key-save";
     public const string CancelId = "assistant-settings-cancel";
 
+    /// <summary>Uses the surrounding settings page's heading and spacing, and resets edits in place.</summary>
+    public bool Embedded { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<AssistantViewModel>();
@@ -32,13 +35,13 @@ internal sealed record AssistantSettingsCard : Widget
 
         return new Box
         {
-            BorderSize = new BorderSizeStyle { Top = 1 },
+            BorderSize = new BorderSizeStyle { Top = Embedded ? 0 : 1 },
             BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.Palette.Border }),
             Children =
             [
                 new Padding
                 {
-                    Amount = PaddingStyle.All(Spacing.Lg),
+                    Amount = PaddingStyle.All(Embedded ? 0 : Spacing.Lg),
                     Children =
                     [
                         new Column
@@ -55,6 +58,7 @@ internal sealed record AssistantSettingsCard : Widget
                                     Weight = FontWeight.Bold,
                                     FontSize = FontSize.Body,
                                     Color = Theme.Color(s => s.Palette.TextPrimary),
+                                    Visible = !Embedded,
                                 },
                                 new Text
                                 {
@@ -62,7 +66,7 @@ internal sealed record AssistantSettingsCard : Widget
                                     Wrap = TextWrap.Wrap,
                                     FontSize = FontSize.Caption,
                                     Color = Theme.Color(s => s.Palette.TextMuted),
-                                    Visible = Prop.Bind(vm.NeedsSetup),
+                                    Visible = Prop.Bind(() => !Embedded && vm.NeedsSetup.Value),
                                 },
                                 new AssistantProviderPicker(),
                                 new AssistantSettingsField
@@ -119,11 +123,11 @@ internal sealed record AssistantSettingsCard : Widget
                                         {
                                             Id = CancelId,
                                             Style = ButtonStyle.Outline(static s => s.Palette.TextMuted),
-                                            Command = vm.CloseSettings,
-                                            Visible = Prop.Bind(() => !vm.NeedsSetup.Value),
+                                            Command = Embedded ? vm.ResetSettings : vm.CloseSettings,
+                                            Visible = Prop.Bind(() => Embedded || !vm.NeedsSetup.Value),
                                             Children =
                                             [
-                                                new ButtonLabel { Value = L.T(s => s.AssistantSettingsCancel) },
+                                                new ButtonLabel { Value = L.T(s => Embedded ? s.SettingsAgentReset : s.AssistantSettingsCancel) },
                                             ],
                                         }.WithController<KbmController>(),
                                         new ButtonWidget
@@ -133,7 +137,7 @@ internal sealed record AssistantSettingsCard : Widget
                                             Command = vm.SaveSettings,
                                             Children =
                                             [
-                                                new ButtonLabel { Value = L.T(s => s.AssistantSetupSave) },
+                                                new ButtonLabel { Value = L.T(s => Embedded ? s.SettingsAgentSave : s.AssistantSetupSave) },
                                             ],
                                         }.WithController<KbmController>(),
                                     ],

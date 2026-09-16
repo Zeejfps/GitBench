@@ -111,6 +111,7 @@ internal sealed class AssistantViewModel : IDisposable
         GenerateCommitMessage = new Command(() => store.CommitMessage.Value?.Run(), _canGenerateMessage);
         ReviewBranch = new Command(RunBranchReview, _canReviewBranch);
         OpenSettings = new Command(ShowSettingsCard);
+        ResetSettings = new Command(SeedDrafts);
         // Dismissing the card is only offered once there is a working connection behind it.
         CloseSettings = new Command(() => _settingsOpen.Value = false, store.IsConfigured);
         SaveSettings = new Command(ApplySettings);
@@ -234,6 +235,8 @@ internal sealed class AssistantViewModel : IDisposable
     public ICommand ReviewBranch { get; }
 
     public ICommand OpenSettings { get; }
+    /// <summary>Reloads saved connection values without opening or closing chat.</summary>
+    public ICommand ResetSettings { get; }
     public ICommand CloseSettings { get; }
     public ICommand SaveSettings { get; }
 

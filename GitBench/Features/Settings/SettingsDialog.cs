@@ -1,15 +1,19 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Assistant;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Settings;
 
-internal sealed record SettingsDialog : Widget<DialogState>
+internal sealed record SettingsDialog : Widget<SettingsDialogState>
 {
     public const string ThemePickerId = SettingsSections.ThemePickerId;
     public const string LanguagePickerId = SettingsSections.LanguagePickerId;
@@ -17,16 +21,20 @@ internal sealed record SettingsDialog : Widget<DialogState>
     public const string UntrackedCacheId = SettingsSections.UntrackedCacheId;
     public const string LanguageServersId = SettingsSections.LanguageServersId;
     public const string KeyboardShortcutsId = SettingsSections.KeyboardShortcutsId;
+    public const string GeneralTabId = "settings-tab-general";
+    public const string AgentTabId = "settings-tab-agent";
+    public const string ConnectionsTabId = "settings-tab-connections";
 
     private const float DialogHeight = 600f;
 
     public required Action OnClose { get; init; }
 
-    protected override DialogState CreateState(Context ctx) => new(OnClose);
+    protected override SettingsDialogState CreateState(Context ctx) => new(
+        OnClose, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>());
 
-    protected override IWidget Build(Context ctx, DialogState state) => new Box
+    protected override IWidget Build(Context ctx, SettingsDialogState state) => new Box
     {
-        Width = DialogFrame.WidthStandard,
+        Width = DialogFrame.WidthWide,
         Height = DialogHeight,
         BorderSize = BorderSizeStyle.All(1),
         BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
@@ -64,16 +72,44 @@ internal sealed record SettingsDialog : Widget<DialogState>
                                     new DialogCloseButton { OnClose = OnClose },
                                 ],
                             },
+                            new Box
+                            {
+                                Height = 36,
+                                BorderSize = new BorderSizeStyle { Bottom = 1 },
+                                BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Palette.Border }),
+                                Children =
+                                [
+                                    new HorizontalScrollArea
+                                    {
+                                        VerticalWheelPans = true,
+                                        Child = new Row
+                                        {
+                                            Gap = Spacing.Sm,
+                                            CrossAxis = CrossAxisAlignment.Stretch,
+                                            Children =
+                                            [
+                                                Tab(GeneralTabId, L.T(s => s.SettingsGeneral), SettingsPage.General, state),
+                                                Tab(AgentTabId, L.T(s => s.SettingsAgent), SettingsPage.Agent, state),
+                                                Tab(ConnectionsTabId, L.T(s => s.SettingsAgentConnections), SettingsPage.Connections, state),
+                                            ],
+                                        },
+                                    },
+                                ],
+                            },
                             new Grow
                             {
-                                Child = new ScrollRegion
+                                Child = new Switch<SettingsPage>
                                 {
-                                    FillParent = true,
-                                    Content = new Padding
+                                    Value = state.Page,
+                                    KeepAlive = true,
+                                    Case = page => new ScrollRegion
                                     {
-                                        // Keeps the controls off the scrollbar when it appears.
-                                        Amount = new PaddingStyle { Right = Spacing.Sm },
-                                        Children = [new SettingsSections { OnClose = OnClose }],
+                                        FillParent = true,
+                                        Content = new Padding
+                                        {
+                                            Amount = new PaddingStyle { Right = Spacing.Sm },
+                                            Children = [PageContent(page, state)],
+                                        },
                                     },
                                 },
                             },
@@ -83,4 +119,114 @@ internal sealed record SettingsDialog : Widget<DialogState>
             },
         ],
     };
+
+    private static IWidget Tab(string id, Prop<string?> label, SettingsPage page, SettingsDialogState state) =>
+        new Box
+        {
+            Id = id,
+            BorderSize = new BorderSizeStyle { Bottom = 2 },
+            BorderColor = Theme.BorderColor(s => new BorderColorStyle
+            {
+                Bottom = state.Page.Value == page ? s.Palette.Accent : s.DialogFrame.Background,
+            }),
+            Children =
+            [
+                new ButtonWidget
+                {
+                    Command = new Command(() => state.Page.Value = page),
+                    ContentInset = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg },
+                    Children =
+                    [
+                        // Category names stay at their natural width. File-tab ellipsis would
+                        // truncate a fitting name when scaled layout loses a fraction of a pixel.
+                        new Text
+                        {
+                            Value = label,
+                            FontSize = FontSize.Body,
+                            VAlign = TextAlignment.Center,
+                            Color = Theme.Color(s => state.Page.Value == page
+                                ? s.Palette.TextPrimary : s.Palette.TextSecondary),
+                        },
+                    ],
+                }.WithController<KbmController>(),
+            ],
+        };
+
+    private IWidget PageContent(SettingsPage page, SettingsDialogState state) => page switch
+    {
+        SettingsPage.General => Page(L.T(s => s.SettingsGeneralDesc), new SettingsSections { OnClose = OnClose }),
+        SettingsPage.Agent => Page(L.T(s => s.SettingsAgentDesc),
+            new Provide<AssistantViewModel>
+            {
+                Value = state.Agent,
+                Child = new Column
+                {
+                    Gap = Spacing.Lg,
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Children =
+                    [
+                        new SettingsSectionHeader { Value = L.T(s => s.AssistantSettingsTitle) },
+                        new Text
+                        {
+                            Value = Prop.Bind<string?>(() => state.ActiveConnection.Value),
+                            Wrap = TextWrap.Wrap,
+                            FontSize = FontSize.Caption,
+                            Color = Theme.Color(s => s.Palette.TextMuted),
+                        },
+                        new AssistantSettingsCard { Embedded = true },
+                    ],
+                },
+            }),
+        SettingsPage.Connections => Page(L.T(s => s.SettingsConnectionsDesc), new AgentConnectionsSettingsSection()),
+        _ => throw new ArgumentOutOfRangeException(nameof(page), page, null),
+    };
+
+    private static IWidget Page(Prop<string?> description, IWidget content) => new Column
+    {
+        Gap = Spacing.Lg,
+        CrossAxis = CrossAxisAlignment.Stretch,
+        Children =
+        [
+            new Text
+            {
+                Value = description,
+                Wrap = TextWrap.Wrap,
+                FontSize = FontSize.Caption,
+                Color = Theme.Color(s => s.Palette.TextMuted),
+            },
+            content,
+        ],
+    };
+}
+
+internal enum SettingsPage { General, Agent, Connections }
+
+/// <summary>Owns the dialog's edit session; chat retains its own drafts and visibility.</summary>
+internal sealed class SettingsDialogState : IDialog, IDisposable
+{
+    private readonly Action _close;
+    public State<SettingsPage> Page { get; } = new(SettingsPage.General);
+    public AssistantViewModel Agent { get; }
+    public Derived<string> ActiveConnection { get; }
+
+    public SettingsDialogState(Action close, IAssistantSessionStore store, ILocalizationService loc, IMessageBus bus)
+    {
+        _close = close;
+        Agent = new AssistantViewModel(store, loc, bus);
+        Agent.ResetSettings.Execute();
+        ActiveConnection = new Derived<string>(() => loc.Strings.Value.SettingsAgentActive(
+            store.Settings.Value.Provider.DisplayName,
+            store.Settings.Value.Model ?? store.Settings.Value.Provider.ChatModel));
+    }
+
+    // Enter in an ordinary settings field must not dismiss the whole dialog or save credentials.
+    public void Confirm() { }
+    public void Cancel() => _close();
+
+    public void Dispose()
+    {
+        ActiveConnection.Dispose();
+        Agent.Dispose();
+        Page.Dispose();
+    }
 }

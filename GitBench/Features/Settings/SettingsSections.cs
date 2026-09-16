@@ -1,6 +1,5 @@
 using GitBench.App;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.AgentConnections;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -15,7 +14,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Settings;
 
-/// <summary>The settings dialog's body: every section header and its rows, top to bottom.</summary>
+/// <summary>The general settings page: appearance, repository, editor and keyboard preferences.</summary>
 internal sealed record SettingsSections : Widget
 {
     public const string ThemePickerId = "settings-theme";
@@ -124,8 +123,6 @@ internal sealed record SettingsSections : Widget
                         Height = Sizes.ControlHeight,
                     }.WithController<KbmController>(),
                 },
-                new SettingsSectionHeader { Value = L.T(s => s.SettingsAgentConnections) },
-                new AgentConnectionsSettingsSection(),
             ],
         };
     }
