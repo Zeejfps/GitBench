@@ -24,13 +24,16 @@ external agent connections rather than adding more controls to one scrolling lis
 
 ## Implemented changes
 
-- Use the existing 600px wide-dialog size with three persistent tabs: General,
-  Agent, and Agent connections. The title, close control, and navigation stay above
+- Use the existing 600px wide-dialog size with four persistent tabs: General,
+  Keyboard, Agent, and Agent connections. The title, close control, and navigation stay above
   the scrolling content. Each page retains its scroll position and controls.
   Categories use natural-width labels and an underline, without file-tab dividers
   or ellipsis that can truncate fitting labels at fractional display scales.
 - Keep existing general preferences and MCP controls, with descriptions explaining
   their scope and immediate application.
+- Put the searchable shortcut editor directly in Keyboard, with search and reset
+  controls pinned around its scrolling list. Search survives tab changes; leaving
+  a tab releases its keyboard focus and cancels any unfinished shortcut recording.
 - Embed the existing assistant configuration form in Agent, including provider
   readiness labels, model presets and custom names, conditional endpoint input,
   masked keys, and environment-key guidance.
@@ -47,8 +50,8 @@ external agent connections rather than adding more controls to one scrolling lis
 
 ## Scope and follow-up
 
-Three categories keep the current setting count small enough to browse without a
-search field. Revisit search when more settings are added. Endpoint validation,
+Four categories keep the current setting count small enough to browse without a
+global search field. Revisit search when more settings are added. Endpoint validation,
 connection testing, and unsaved drafts across provider switches would improve the
 shared chat editor too, and should be implemented there once for both surfaces.
 

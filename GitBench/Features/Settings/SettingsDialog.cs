@@ -7,6 +7,7 @@ using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -20,8 +21,8 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public const string UiScalePickerId = SettingsSections.UiScalePickerId;
     public const string UntrackedCacheId = SettingsSections.UntrackedCacheId;
     public const string LanguageServersId = SettingsSections.LanguageServersId;
-    public const string KeyboardShortcutsId = SettingsSections.KeyboardShortcutsId;
     public const string GeneralTabId = "settings-tab-general";
+    public const string KeyboardTabId = "settings-tab-keyboard";
     public const string AgentTabId = "settings-tab-agent";
     public const string ConnectionsTabId = "settings-tab-connections";
 
@@ -30,7 +31,8 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public required Action OnClose { get; init; }
 
     protected override SettingsDialogState CreateState(Context ctx) => new(
-        OnClose, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>());
+        OnClose, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>(),
+        ctx.Require<InputSystem>());
 
     protected override IWidget Build(Context ctx, SettingsDialogState state) => new Box
     {
@@ -89,6 +91,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
                                             Children =
                                             [
                                                 Tab(GeneralTabId, L.T(s => s.SettingsGeneral), SettingsPage.General, state),
+                                                Tab(KeyboardTabId, L.T(s => s.SettingsKeyboard), SettingsPage.Keyboard, state),
                                                 Tab(AgentTabId, L.T(s => s.SettingsAgent), SettingsPage.Agent, state),
                                                 Tab(ConnectionsTabId, L.T(s => s.SettingsAgentConnections), SettingsPage.Connections, state),
                                             ],
@@ -102,15 +105,19 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
                                 {
                                     Value = state.Page,
                                     KeepAlive = true,
-                                    Case = page => new ScrollRegion
-                                    {
-                                        FillParent = true,
-                                        Content = new Padding
+                                    // The shortcut editor owns its scroll region so search and reset
+                                    // stay visible while the list scrolls.
+                                    Case = page => page == SettingsPage.Keyboard
+                                        ? new KeyboardShortcutsEditor()
+                                        : new ScrollRegion
                                         {
-                                            Amount = new PaddingStyle { Right = Spacing.Sm },
-                                            Children = [PageContent(page, state)],
+                                            FillParent = true,
+                                            Content = new Padding
+                                            {
+                                                Amount = new PaddingStyle { Right = Spacing.Sm },
+                                                Children = [PageContent(page, state)],
+                                            },
                                         },
-                                    },
                                 },
                             },
                         ],
@@ -133,7 +140,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
             [
                 new ButtonWidget
                 {
-                    Command = new Command(() => state.Page.Value = page),
+                    Command = new Command(() => state.SelectPage(page)),
                     ContentInset = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg },
                     Children =
                     [
@@ -199,24 +206,36 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     };
 }
 
-internal enum SettingsPage { General, Agent, Connections }
+internal enum SettingsPage { General, Keyboard, Agent, Connections }
 
 /// <summary>Owns the dialog's edit session; chat retains its own drafts and visibility.</summary>
 internal sealed class SettingsDialogState : IDialog, IDisposable
 {
     private readonly Action _close;
+    private readonly InputSystem _input;
     public State<SettingsPage> Page { get; } = new(SettingsPage.General);
     public AssistantViewModel Agent { get; }
     public Derived<string> ActiveConnection { get; }
 
-    public SettingsDialogState(Action close, IAssistantSessionStore store, ILocalizationService loc, IMessageBus bus)
+    public SettingsDialogState(Action close, IAssistantSessionStore store, ILocalizationService loc, IMessageBus bus,
+        InputSystem input)
     {
         _close = close;
+        _input = input;
         Agent = new AssistantViewModel(store, loc, bus);
         Agent.ResetSettings.Execute();
         ActiveConnection = new Derived<string>(() => loc.Strings.Value.SettingsAgentActive(
             store.Settings.Value.Provider.DisplayName,
             store.Settings.Value.Model ?? store.Settings.Value.Provider.ChatModel));
+    }
+
+    public void SelectPage(SettingsPage page)
+    {
+        if (Page.Value == page) return;
+        // Cached pages stay mounted. Release their input before hiding them so a search field
+        // or shortcut recorder cannot consume keys intended for the new page.
+        if (_input.FocusedComponent is { } focused) _input.Blur(focused);
+        Page.Value = page;
     }
 
     // Enter in an ordinary settings field must not dismiss the whole dialog or save credentials.

@@ -14,7 +14,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Settings;
 
-/// <summary>The general settings page: appearance, repository, editor and keyboard preferences.</summary>
+/// <summary>The general settings page: appearance, repository and editor preferences.</summary>
 internal sealed record SettingsSections : Widget
 {
     public const string ThemePickerId = "settings-theme";
@@ -22,7 +22,6 @@ internal sealed record SettingsSections : Widget
     public const string UiScalePickerId = "settings-ui-scale";
     public const string UntrackedCacheId = "settings-untracked-cache";
     public const string LanguageServersId = "settings-language-servers";
-    public const string KeyboardShortcutsId = "settings-keyboard-shortcuts";
 
     private const float ControlWidth = 160f;
 
@@ -110,19 +109,6 @@ internal sealed record SettingsSections : Widget
                         Height = Sizes.ControlHeight,
                     }.WithController<KbmController>(),
                 },
-                new SettingsSectionHeader { Value = L.T(s => s.SettingsKeyboard) },
-                new SettingsRow
-                {
-                    Label = L.T(s => s.ShortcutsTitle),
-                    Description = L.T(s => s.SettingsKeyboardShortcutsDesc),
-                    Control = new SecondaryDialogButton
-                    {
-                        Id = KeyboardShortcutsId,
-                        Label = L.T(s => s.SettingsView),
-                        Command = new Command(() => OpenKeyboardShortcuts(ctx)),
-                        Height = Sizes.ControlHeight,
-                    }.WithController<KbmController>(),
-                },
             ],
         };
     }
@@ -134,15 +120,6 @@ internal sealed record SettingsSections : Widget
         OnClose();
         bus.Broadcast(new ShowDialogMessage(onClose =>
             new LanguageServersDialog { OnClose = onClose }));
-    }
-
-    private void OpenKeyboardShortcuts(Context ctx)
-    {
-        var bus = ctx.Get<IMessageBus>();
-        if (bus is null) return;
-        OnClose();
-        bus.Broadcast(new ShowDialogMessage(onClose =>
-            new KeyboardShortcutsDialog { OnClose = onClose }.WithController<DialogKbmController>()));
     }
 
     private static string ThemeLabel(Strings strings, ThemeMode mode) => mode switch

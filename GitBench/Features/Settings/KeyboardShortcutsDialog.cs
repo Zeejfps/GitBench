@@ -34,135 +34,149 @@ internal sealed record KeyboardShortcutsDialog : Widget<DialogState>
 
     protected override DialogState CreateState(Context ctx) => new(OnClose);
 
-    protected override IWidget Build(Context ctx, DialogState state)
+    protected override IWidget Build(Context ctx, DialogState state) => new Box
+    {
+        Width = DialogFrame.WidthWide,
+        Height = DialogHeight,
+        BorderSize = BorderSizeStyle.All(1),
+        BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
+        Background = Theme.Color(s => s.DialogFrame.Background),
+        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.DialogFrame.Border)),
+        Children =
+        [
+            new Padding
+            {
+                Amount = PaddingStyle.All(DialogFrame.DefaultPadding),
+                Children =
+                [
+                    new Column
+                    {
+                        Gap = Spacing.Lg,
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                        Children =
+                        [
+                            new Row
+                            {
+                                Height = Sizes.ControlHeight,
+                                CrossAxis = CrossAxisAlignment.Center,
+                                Children =
+                                [
+                                    new Grow
+                                    {
+                                        Child = new Text
+                                        {
+                                            Value = L.T(s => s.ShortcutsTitle),
+                                            FontSize = FontSize.Title,
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(s => s.DialogFrame.TitleText),
+                                        },
+                                    },
+                                    new DialogCloseButton { OnClose = OnClose },
+                                ],
+                            },
+                            new Grow { Child = new KeyboardShortcutsEditor() },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
+}
+
+/// <summary>The shared shortcut editor, with pinned search and reset controls around its scrolling list.</summary>
+internal sealed record KeyboardShortcutsEditor : Widget
+{
+    protected override IWidget Build(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
         var vm = new KeyboardShortcutsViewModel(ctx.Require<KeyMap>(), ctx.Localization());
 
-        return new Box
+        return new Column
         {
-            Width = DialogFrame.WidthWide,
-            Height = DialogHeight,
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
-            Background = Theme.Color(s => s.DialogFrame.Background),
-            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.DialogFrame.Border)),
+            Gap = Spacing.Lg,
+            CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                new Padding
+                new Text
                 {
-                    Amount = PaddingStyle.All(DialogFrame.DefaultPadding),
-                    Children =
-                    [
-                        new Column
+                    Value = L.T(s => s.ShortcutsDescription),
+                    Wrap = TextWrap.Wrap,
+                    FontSize = FontSize.Caption,
+                    Color = Theme.Color(s => s.Palette.TextMuted),
+                },
+                new SearchInputBox
+                {
+                    Input = new TextInput
+                    {
+                        Id = KeyboardShortcutsDialog.SearchInputId,
+                        Value = vm.Query,
+                        AutoFocus = true,
+                        Placeholder = L.T(s => s.ShortcutsSearchPlaceholder),
+                        Wrap = TextWrap.NoWrap,
+                        Height = Sizes.RowHeight,
+                        VAlign = TextAlignment.Center,
+                        Background = Theme.Color(s => s.TextInput.Background),
+                        Color = Theme.Color(s => s.TextInput.Text),
+                        CaretColor = Theme.Color(s => s.TextInput.Caret),
+                        SelectionColor = Theme.Color(s => s.TextInput.Selection),
+                        PlaceholderColor = Theme.Color(s => s.TextInput.PlaceholderText),
+                    },
+                },
+                new Grow
+                {
+                    Child = new ScrollRegion
+                    {
+                        FillParent = true,
+                        StretchContent = true,
+                        Content = new Padding
                         {
-                            Gap = Spacing.Lg,
-                            CrossAxis = CrossAxisAlignment.Stretch,
+                            // Keeps the cards off the scrollbar when it appears.
+                            Amount = new PaddingStyle { Right = Spacing.Sm },
                             Children =
                             [
-                                new Row
+                                new Column
                                 {
-                                    Height = Sizes.ControlHeight,
-                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Gap = Spacing.Lg,
+                                    CrossAxis = CrossAxisAlignment.Stretch,
                                     Children =
                                     [
-                                        new Grow
+                                        new Show
                                         {
-                                            Child = new Text
+                                            When = vm.NoMatches,
+                                            Then = () => new Text
                                             {
-                                                Value = L.T(s => s.ShortcutsTitle),
-                                                FontSize = FontSize.Title,
-                                                VAlign = TextAlignment.Center,
-                                                Color = Theme.Color(s => s.DialogFrame.TitleText),
+                                                Value = L.T(s => s.ShortcutsNoMatches),
+                                                FontSize = FontSize.Caption,
+                                                Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                                             },
                                         },
-                                        new DialogCloseButton { OnClose = OnClose },
-                                    ],
-                                },
-                                new Text
-                                {
-                                    Value = L.T(s => s.ShortcutsDescription),
-                                    Wrap = TextWrap.Wrap,
-                                    FontSize = FontSize.Caption,
-                                    Color = Theme.Color(s => s.Palette.TextMuted),
-                                },
-                                new SearchInputBox
-                                {
-                                    Input = new TextInput
-                                    {
-                                        Id = SearchInputId,
-                                        Value = vm.Query,
-                                        AutoFocus = true,
-                                        Placeholder = L.T(s => s.ShortcutsSearchPlaceholder),
-                                        Wrap = TextWrap.NoWrap,
-                                        Height = Sizes.RowHeight,
-                                        VAlign = TextAlignment.Center,
-                                        Background = Theme.Color(s => s.TextInput.Background),
-                                        Color = Theme.Color(s => s.TextInput.Text),
-                                        CaretColor = Theme.Color(s => s.TextInput.Caret),
-                                        SelectionColor = Theme.Color(s => s.TextInput.Selection),
-                                        PlaceholderColor = Theme.Color(s => s.TextInput.PlaceholderText),
-                                    },
-                                },
-                                new Grow
-                                {
-                                    Child = new ScrollRegion
-                                    {
-                                        FillParent = true,
-                                        StretchContent = true,
-                                        Content = new Padding
+                                        new Column<ShortcutSection>
                                         {
-                                            // Keeps the cards off the scrollbar when it appears.
-                                            Amount = new PaddingStyle { Right = Spacing.Sm },
-                                            Children =
-                                            [
-                                                new Column
-                                                {
-                                                    Gap = Spacing.Lg,
-                                                    CrossAxis = CrossAxisAlignment.Stretch,
-                                                    Children =
-                                                    [
-                                                        new Show
-                                                        {
-                                                            When = vm.NoMatches,
-                                                            Then = () => new Text
-                                                            {
-                                                                Value = L.T(s => s.ShortcutsNoMatches),
-                                                                FontSize = FontSize.Caption,
-                                                                Color = Theme.Color(s => s.DialogBody.RowTextMissing),
-                                                            },
-                                                        },
-                                                        new Column<ShortcutSection>
-                                                        {
-                                                            Gap = Spacing.Lg,
-                                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                                            Items = Prop.Bind(vm.Sections),
-                                                            Template = section => new ShortcutSectionWidget { Model = vm, Section = section },
-                                                        },
-                                                    ],
-                                                },
-                                            ],
+                                            Gap = Spacing.Lg,
+                                            CrossAxis = CrossAxisAlignment.Stretch,
+                                            Items = Prop.Bind(vm.Sections),
+                                            Template = section => new ShortcutSectionWidget { Model = vm, Section = section },
                                         },
-                                    },
-                                },
-                                new Row
-                                {
-                                    MainAxis = MainAxisAlignment.End,
-                                    CrossAxis = CrossAxisAlignment.Center,
-                                    Visible = Prop.Bind(vm.HasOverrides),
-                                    Children =
-                                    [
-                                        new SecondaryDialogButton
-                                        {
-                                            Id = ResetAllId,
-                                            Label = L.T(s => s.ShortcutsResetAll),
-                                            Command = new Command(vm.ResetAll),
-                                            Height = Sizes.ControlHeight,
-                                        }.WithController<KbmController>(),
                                     ],
                                 },
                             ],
                         },
+                    },
+                },
+                new Row
+                {
+                    MainAxis = MainAxisAlignment.End,
+                    CrossAxis = CrossAxisAlignment.Center,
+                    Visible = Prop.Bind(vm.HasOverrides),
+                    Children =
+                    [
+                        new SecondaryDialogButton
+                        {
+                            Id = KeyboardShortcutsDialog.ResetAllId,
+                            Label = L.T(s => s.ShortcutsResetAll),
+                            Command = new Command(vm.ResetAll),
+                            Height = Sizes.ControlHeight,
+                        }.WithController<KbmController>(),
                     ],
                 },
             ],

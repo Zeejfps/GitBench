@@ -5,6 +5,7 @@ using GitBench.Features.AgentConnections;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Settings;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -13,6 +14,7 @@ using ZGF.Fonts;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Inspection;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Testing;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -32,6 +34,7 @@ public sealed class SettingsDialogTests : IDisposable
     private readonly State<AgentConnectionState> _connectionState = new(new AgentConnectionState.Off());
     private readonly FakeAssistantSessionStore _store = new();
     private readonly MessageBus _bus = new();
+    private readonly KeyMap _keys = new();
     private readonly LocalizationService _loc;
     private readonly AssistantViewModel _chat;
     private bool _closed;
@@ -67,6 +70,8 @@ public sealed class SettingsDialogTests : IDisposable
         ctx.AddService<IMessageBus>(_bus);
         ctx.AddService<IClipboard>(new Clipboard());
         ctx.AddService(_chat);
+        ctx.AddService(_keys);
+        ctx.AddService<IKeyMap>(_keys);
     }
 
     [Fact]
@@ -159,6 +164,91 @@ public sealed class SettingsDialogTests : IDisposable
         Assert.Empty(_store.Writes);
     }
 
+    [Fact]
+    public void KeyboardTabSearchesAndRebindsWithoutLeavingSettings_AndKeepsItsSearch()
+    {
+        using var h = Mount();
+        h.ClickOn(SettingsDialog.KeyboardTabId);
+        h.Layout();
+        h.ClickOn(KeyboardShortcutsDialog.SearchInputId);
+        h.Type("Refresh");
+        h.Layout();
+        Assert.Equal("Refresh", Assert.IsType<TextInputView>(h.Get(KeyboardShortcutsDialog.SearchInputId)).Text);
+        Assert.Contains(h.Render().Texts, text => text.Inputs.Text == "Refresh");
+        Assert.DoesNotContain(h.Render().Texts, text => text.Inputs.Text == _loc.Strings.Value.ShortcutsCommandToggleRepoBar);
+
+        h.ClickOn(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh));
+        h.PressKey(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift);
+        h.Layout();
+        Assert.Equal([new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift)],
+            _keys.GesturesFor(KeyCommand.Refresh));
+        Assert.False(_closed);
+
+        h.ClickOn(SettingsDialog.GeneralTabId);
+        Assert.Equal(SettingsPage.General, _dialog.State.Page.Value);
+        h.ClickOn(SettingsDialog.KeyboardTabId);
+        h.Layout();
+        Assert.Equal("Refresh", Assert.IsType<TextInputView>(h.Get(KeyboardShortcutsDialog.SearchInputId)).Text);
+        h.ClickOn(KeyboardShortcutsDialog.ResetId(KeyCommand.Refresh));
+        Assert.True(_keys.IsDefault(KeyCommand.Refresh));
+    }
+
+    [Fact]
+    public void LeavingTheKeyboardTabCancelsRecording()
+    {
+        using var h = Mount();
+        h.ClickOn(SettingsDialog.KeyboardTabId);
+        h.Layout();
+        h.ClickOn(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh));
+        h.ClickOn(SettingsDialog.AgentTabId);
+        h.Layout();
+        h.PressKey(KeyboardKey.F6);
+        Assert.True(_keys.IsDefault(KeyCommand.Refresh));
+        h.ClickOn(SettingsDialog.KeyboardTabId);
+        Assert.DoesNotContain(h.Render().Texts, text => text.Inputs.Text.Contains("Press the new shortcut"));
+        Assert.False(_closed);
+    }
+
+    [Fact]
+    public void EscapeCancelsShortcutRecordingBeforeClosingSettings()
+    {
+        using var h = Mount();
+        h.ClickOn(SettingsDialog.KeyboardTabId);
+        h.Layout();
+        h.ClickOn(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh));
+        h.PressKey(KeyboardKey.Escape);
+        Assert.False(_closed);
+        Assert.True(_keys.IsDefault(KeyCommand.Refresh));
+        h.Layout();
+        h.MoveTo(400, 350);
+        h.PressKey(KeyboardKey.Escape);
+        Assert.True(_closed);
+    }
+
+    [Fact]
+    public void KeyboardSearchAndResetStayVisibleWhileTheListScrolls()
+    {
+        _keys.Rebind(KeyCommand.Refresh, new KeyGesture(KeyboardKey.F6));
+        using var h = Mount(640, 480);
+        h.ClickOn(SettingsDialog.KeyboardTabId);
+        h.Layout();
+        h.Layout();
+        var search = h.Get(KeyboardShortcutsDialog.SearchInputId).Position;
+        var reset = h.Get(KeyboardShortcutsDialog.ResetAllId).Position;
+        var firstRow = h.Get(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh)).Position;
+
+        h.MoveTo(350, 200);
+        h.Scroll(0, -5);
+        h.Layout();
+
+        Assert.Equal(search, h.Get(KeyboardShortcutsDialog.SearchInputId).Position);
+        Assert.Equal(reset, h.Get(KeyboardShortcutsDialog.ResetAllId).Position);
+        Assert.NotEqual(firstRow, h.Get(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh)).Position);
+        Assert.True(search.Top <= 480 && reset.Bottom >= 0);
+        h.ClickOn(KeyboardShortcutsDialog.ResetAllId);
+        Assert.Empty(_keys.Overrides);
+    }
+
     [Theory]
     [InlineData(800, 700)]
     [InlineData(640, 480)]
@@ -234,7 +324,7 @@ public sealed class SettingsDialogTests : IDisposable
     private static void AssertCategoryLabelsFit(GuiTestHarness h)
     {
         var drawn = new RecordingCanvas(new CanvasTextMeasurer(h.Context.Canvas));
-        foreach (var id in new[] { SettingsDialog.GeneralTabId, SettingsDialog.AgentTabId,
+        foreach (var id in new[] { SettingsDialog.GeneralTabId, SettingsDialog.KeyboardTabId, SettingsDialog.AgentTabId,
                      SettingsDialog.ConnectionsTabId })
         {
             var label = Assert.Single(h.Get(id).SelfAndDescendants().OfType<TextView>());
@@ -257,7 +347,7 @@ public sealed class SettingsDialogTests : IDisposable
     {
         using var h = Mount();
         h.ClickOn(SettingsDialog.ConnectionsTabId);
-        foreach (var id in new[] { SettingsDialog.GeneralTabId, SettingsDialog.AgentTabId,
+        foreach (var id in new[] { SettingsDialog.GeneralTabId, SettingsDialog.KeyboardTabId, SettingsDialog.AgentTabId,
                      SettingsDialog.ConnectionsTabId })
         {
             h.Canvas.Reset();
