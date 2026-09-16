@@ -58,3 +58,31 @@ shared chat editor too, and should be implemented there once for both surfaces.
 The dialog adds no credential persistence or network boundary. Its local editor
 shares the existing store intentionally; regression tests cover key isolation,
 chat draft independence, category navigation, masking, dismissal, and layout.
+
+## GPU border regression
+
+At fractional display scales, a rectangle edge can land on a physical pixel center.
+The rectangle shaders formerly treated that edge as outside the fill even when its
+border width was zero, then borrowed the bottom border's color. This produced an
+L-shaped selection underline depending on the tab's position. Both OpenGL and Metal
+now test only sides with a positive border width in the straight-edge fill calculation.
+
+Interpolating local coordinates also made an inner border edge vary slightly along
+one pixel row, so the underline could be thinner at one end. Both shaders now
+reconstruct canvas coordinates from fragment pixel centers and flat rectangle data.
+The host supplies logical and rounded framebuffer sizes; Metal converts its top-down
+fragment coordinates to the canvas's bottom-up convention. Metal's uniform buffer
+retains the projection at byte 0 and appends the four size values at byte 64, leaving
+the other shaders' projection layout intact.
+
+The software rasterizer does not execute these shaders. The opt-in GPU checks use
+OpenGL 4.1 on Windows/Linux and an offscreen Metal texture on macOS. They render all
+four settings tabs at every supported UI scale, both hovered and unhovered, and
+read back pixels to check that the underline has uniform width and no vertical edges.
+The Metal path compiles the shipping shaders and exercises the actual uniform layout;
+it must be run on a Mac to verify native Metal compilation and rendering.
+
+```powershell
+$env:DIFFDINO_GPU_TESTS = '1'
+dotnet test GitBench.Tests/GitBench.Tests.csproj --filter 'FullyQualifiedName~CategoryUnderlinesAreUniformOnGpu'
+```

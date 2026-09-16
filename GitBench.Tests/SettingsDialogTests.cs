@@ -360,6 +360,64 @@ public sealed class SettingsDialogTests : IDisposable
         }
     }
 
+    [GpuTheory]
+    [InlineData(0.8f)]
+    [InlineData(0.9f)]
+    [InlineData(1f)]
+    [InlineData(1.1f)]
+    [InlineData(1.25f)]
+    [InlineData(1.5f)]
+    [InlineData(1.75f)]
+    [InlineData(2f)]
+    public void CategoryUnderlinesAreUniformOnGpu(float scale)
+    {
+        // Exercise the production shaders and real font metrics on both platforms.
+        using var fonts = new FreeTypeFontBackend();
+        var font = fonts.LoadFontFromMemory(EmbeddedAssets.LoadBytes(typeof(Context).Assembly, "Inter-Regular.ttf"),
+            (int)MathF.Round(16 * scale));
+        using var gpu = GpuTestSurface.Create(640, 480, scale, fonts, font);
+        using var h = GuiTestHarness.Create(ctx => new Center { Child = _dialog }.BuildView(ctx),
+            width: 640, height: 480, configure: ctx => { Configure(ctx); ctx.Canvas = gpu.Canvas; });
+        foreach (var id in new[] { SettingsDialog.GeneralTabId, SettingsDialog.KeyboardTabId,
+                     SettingsDialog.AgentTabId, SettingsDialog.ConnectionsTabId })
+        {
+            h.ClickOn(id);
+            h.Layout();
+            foreach (var hovered in new[] { true, false })
+            {
+                var center = h.Get(id).Position.Center;
+                h.MoveTo(hovered ? center.X : 0, hovered ? center.Y : 0);
+                var pixels = gpu.Render(h.Root);
+                var width = gpu.Width;
+                var height = gpu.Height;
+                var tab = h.Get(id).Position;
+                var underlinePixels = 0;
+                var underlineRows = new Dictionary<int, (int Left, int Right)>();
+                var stray = new List<string>();
+                for (var y = (int)(tab.Bottom * scale); y < (int)MathF.Ceiling(tab.Top * scale); y++)
+                    for (var x = (int)(tab.Left * scale); x < (int)MathF.Ceiling(tab.Right * scale); x++)
+                    {
+                        var i = ((height - 1 - y) * width + x) * 4;
+                        // Accent is blue-purple; text and hover surfaces are neutral.
+                        if (pixels[i + 2] <= 150 || pixels[i + 2] <= pixels[i] + 30)
+                            continue;
+                        if (y < MathF.Ceiling((MathF.Ceiling(tab.Bottom) + 2) * scale))
+                        {
+                            underlinePixels++;
+                            underlineRows[y] = underlineRows.TryGetValue(y, out var row)
+                                ? (Math.Min(row.Left, x), Math.Max(row.Right, x)) : (x, x);
+                        }
+                        else
+                            stray.Add($"{x},{y}");
+                    }
+                Assert.True(underlinePixels > 0, $"{id} at {scale} (hovered: {hovered}): missing selected underline");
+                Assert.True(stray.Count == 0, $"{id} at {scale} (hovered: {hovered}): stray purple pixels: {string.Join(";", stray)}");
+                Assert.True(underlineRows.Values.Distinct().Count() == 1,
+                    $"{id} at {scale} (hovered: {hovered}): uneven underline rows: {string.Join(";", underlineRows)}");
+            }
+        }
+    }
+
     public void Dispose()
     {
         _chat.Dispose();
