@@ -5,6 +5,7 @@ using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Features.Settings;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -15,16 +16,17 @@ using Xunit;
 namespace GitBench.Tests;
 
 /// Keeping several providers configured: what the card and the header switcher offer, what each
-/// provider remembers, and — the one that matters — whose slot a key can reach.
+/// role and provider remembers, and — the one that matters — whose slot a key can reach.
 public sealed class AssistantProviderSwitchTests : IDisposable
 {
     private readonly LocalizationService _loc = new(new State<Locale>(Locale.En));
     private readonly FakeAssistantSessionStore _store = new();
+    private readonly MessageBus _bus = new();
     private readonly AssistantViewModel _vm;
 
     public AssistantProviderSwitchTests()
     {
-        _vm = new AssistantViewModel(_store, _loc, new MessageBus());
+        _vm = new AssistantViewModel(_store, _loc, _bus);
     }
 
     // The live bug: the card was pre-filled with the key of whichever provider had last resolved,
@@ -34,19 +36,18 @@ public sealed class AssistantProviderSwitchTests : IDisposable
     public void SwitchingTheCardsProviderNeverSavesTheOtherProvidersKey()
     {
         _store.SetSavedKey(AssistantProviders.OpenAi, "sk-proj-openai");
-        _store.Save(AssistantSettings.For(AssistantProviders.OpenAi.Id), apiKey: null);
+        _store.Save(AssistantSettings.For(AssistantProviders.OpenAi.Id), AssistantKeyEdit.None);
         _store.Writes.Clear();
 
-        _vm.OpenSettings.Execute();
+        _vm.ResetSettings.Execute();
         Assert.Equal("sk-proj-openai", _vm.KeyDraft.Value);
 
-        _vm.SetProviderDraft(AssistantProviders.Anthropic.Id);
+        _vm.SetKeyProviderDraft(AssistantProviders.Anthropic.Id);
         _vm.SaveSettings.Execute();
 
-        var write = Assert.Single(_store.Writes);
-        Assert.Equal(AssistantProviders.Anthropic.Id, write.ProviderId);
-        // Null is "leave whatever is stored alone". Anything else here would be OpenAI's key.
-        Assert.Null(write.ApiKey);
+        // Keep is "leave whatever is stored alone". Anything else here would be OpenAI's key.
+        Assert.Empty(_store.Writes);
+        Assert.IsType<AssistantKeyEdit.Keep>(_store.SavedKey);
         Assert.Null(_store.KeyStateFor(AssistantProviders.Anthropic).SavedKey);
         Assert.Equal("sk-proj-openai", _store.KeyStateFor(AssistantProviders.OpenAi).SavedKey);
     }
@@ -58,50 +59,55 @@ public sealed class AssistantProviderSwitchTests : IDisposable
     {
         _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant-existing");
 
-        _vm.OpenSettings.Execute();
-        _vm.SetProviderDraft(AssistantProviders.OpenAi.Id);
+        _vm.ResetSettings.Execute();
+        _vm.SetKeyProviderDraft(AssistantProviders.OpenAi.Id);
         _vm.KeyDraft.Value = "sk-proj-typed";
         _vm.SaveSettings.Execute();
 
-        var write = Assert.Single(_store.Writes);
-        Assert.Equal(AssistantProviders.OpenAi.Id, write.ProviderId);
-        Assert.Equal("sk-proj-typed", write.ApiKey);
+        var write = Assert.IsType<AssistantKeyEdit.Store>(Assert.Single(_store.Writes));
+        Assert.Equal(AssistantProviders.OpenAi.Id, write.Provider.Id);
+        Assert.Equal("sk-proj-typed", write.Key);
         Assert.Equal("sk-ant-existing", _store.KeyStateFor(AssistantProviders.Anthropic).SavedKey);
     }
 
+    // A model belongs to the role it was typed for, and the card reopens on what each role has.
     [Fact]
-    public void AProvidersModelSurvivesASwitchAwayAndBack()
+    public void EachRolesModelSurvivesReopeningTheCard()
     {
-        _vm.OpenSettings.Execute();
-        _vm.ModelDraft.Value = "claude-sonnet-5";
+        _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant");
+        _store.SetSavedKey(AssistantProviders.OpenAi, "sk-proj-openai");
+        _vm.ResetSettings.Execute();
+        _vm.RoleDraft(AssistantRole.General).Model.Value = "claude-sonnet-5";
         _vm.SaveSettings.Execute();
 
-        _vm.SetProviderDraft(AssistantProviders.OpenAi.Id);
-        Assert.Equal(string.Empty, _vm.ModelDraft.Value);
-        _vm.ModelDraft.Value = "gpt-5.6-terra";
+        _vm.ResetSettings.Execute();
+        Assert.Equal("claude-sonnet-5", _vm.RoleDraft(AssistantRole.General).Model.Value);
+        _vm.RoleDraft(AssistantRole.Review).SetProvider(AssistantProviders.OpenAi.Id);
+        _vm.RoleDraft(AssistantRole.Review).Model.Value = "gpt-5.6-terra";
         _vm.SaveSettings.Execute();
-
-        _vm.SetProviderDraft(AssistantProviders.Anthropic.Id);
-        Assert.Equal("claude-sonnet-5", _vm.ModelDraft.Value);
 
         var settings = _store.Settings.Value;
-        Assert.Equal("claude-sonnet-5", settings.ChoiceFor(AssistantProviders.Anthropic.Id).Model);
-        Assert.Equal("gpt-5.6-terra", settings.ChoiceFor(AssistantProviders.OpenAi.Id).Model);
+        Assert.Equal("claude-sonnet-5", settings.ModelFor(AssistantRole.General).Model);
+        Assert.Equal(AssistantProviders.Anthropic.Id, settings.ModelFor(AssistantRole.General).Provider.Id);
+        Assert.Equal("gpt-5.6-terra", settings.ModelFor(AssistantRole.Review).Model);
+        Assert.Equal(AssistantProviders.OpenAi.Id, settings.ModelFor(AssistantRole.Review).Provider.Id);
+        Assert.Null(settings.ModelFor(AssistantRole.Walkthrough).Model);
     }
 
-    // The endpoint is the same kind of thing: it belongs to the provider it was typed for.
+    // The endpoint belongs to the provider it was typed for, whichever roles run on it.
     [Fact]
     public void AProvidersEndpointIsRememberedWithIt()
     {
-        _vm.SetProviderDraft(AssistantProviders.Ollama.Id);
+        _vm.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
         _vm.BaseUrlDraft.Value = "http://localhost:9999/v1";
         _vm.SaveSettings.Execute();
 
-        _vm.SetProviderDraft(AssistantProviders.LmStudio.Id);
+        _vm.SetKeyProviderDraft(AssistantProviders.LmStudio.Id);
         Assert.Equal(string.Empty, _vm.BaseUrlDraft.Value);
 
-        _vm.SetProviderDraft(AssistantProviders.Ollama.Id);
+        _vm.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
         Assert.Equal("http://localhost:9999/v1", _vm.BaseUrlDraft.Value);
+        Assert.Equal("http://localhost:9999/v1", _store.Settings.Value.BaseUrlFor(AssistantProviders.Ollama));
     }
 
     [Fact]
@@ -124,8 +130,10 @@ public sealed class AssistantProviderSwitchTests : IDisposable
         Assert.Equal("Set up another provider…", items[^1].Label);
     }
 
+    // The header is the chat's: the switch moves the chat and leaves the review and the walkthrough
+    // where they were.
     [Fact]
-    public void SwitchingFromTheHeaderRepointsTheAssistantWithoutTouchingAnyKey()
+    public void SwitchingFromTheHeaderRepointsTheChatWithoutTouchingAnyKeyOrOtherRole()
     {
         _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant");
         _store.SetSavedKey(AssistantProviders.OpenAi, "sk-proj-openai");
@@ -133,47 +141,45 @@ public sealed class AssistantProviderSwitchTests : IDisposable
 
         _vm.BuildProviderSwitcher().First(i => i.Label == "OpenAI").OnSelected();
 
-        var write = Assert.Single(_store.Writes);
-        Assert.Equal(AssistantProviders.OpenAi.Id, write.ProviderId);
-        Assert.Null(write.ApiKey);
+        Assert.Empty(_store.Writes);
+        Assert.IsType<AssistantKeyEdit.Keep>(_store.SavedKey);
+        Assert.Equal(AssistantProviders.OpenAi.Id, _store.Saved!.ModelFor(AssistantRole.General).Provider.Id);
+        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Saved.ModelFor(AssistantRole.Review).Provider.Id);
+        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Saved.ModelFor(AssistantRole.Walkthrough).Provider.Id);
+        Assert.Equal("OpenAI", _vm.ActiveProviderName.Value);
         Assert.Equal("sk-ant", _store.KeyStateFor(AssistantProviders.Anthropic).SavedKey);
         Assert.Equal("sk-proj-openai", _store.KeyStateFor(AssistantProviders.OpenAi).SavedKey);
     }
 
     // Nothing offers it, but nothing may quietly accept it either: a provider with no key becomes a
-    // trip through the card rather than a connection that cannot sign a request.
+    // trip through the settings rather than a connection that cannot sign a request.
     [Fact]
-    public void PickingAProviderWithNoKeyOpensSetupInsteadOfPointingAtIt()
+    public void PickingAProviderWithNoKeyOpensSettingsInsteadOfPointingAtIt()
     {
         _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant");
         _store.Writes.Clear();
+        var opened = new List<OpenSettingsWindowMessage>();
+        _bus.Subscribe<OpenSettingsWindowMessage>(opened.Add);
 
         _vm.SwitchProvider(AssistantProviders.Groq.Id);
 
         Assert.Empty(_store.Writes);
-        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Settings.Value.ProviderId);
-        Assert.True(_vm.ShowSettings.Value);
-        Assert.Equal(AssistantProviders.Groq.Id, _vm.ProviderDraft.Value);
-        Assert.Equal(string.Empty, _vm.KeyDraft.Value);
+        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Settings.Value.ModelFor(AssistantRole.General).Provider.Id);
+        Assert.Equal(SettingsPage.Agent, Assert.Single(opened).Page);
     }
 
-    // The tiers resolve through the provider, so a quick action after a swap must run on the new
-    // provider's quick model rather than the one the last provider was given.
+    // A model name means nothing to another provider, so moving the chat from the header puts it on
+    // the new provider's own model — and the other roles keep the model they were given.
     [Fact]
-    public void AQuickActionAfterASwapRunsOnTheNewProvidersQuickModel()
+    public void MovingTheChatFromTheHeaderRunsItOnTheNewProvidersOwnModel()
     {
         var settings = AssistantSettings
             .For(AssistantProviders.Anthropic.Id, "claude-sonnet-5")
-            .Select(AssistantProviders.OpenAi.Id);
+            .WithModel(AssistantRole.General, AssistantProviders.OpenAi.Id, null);
 
-        var connection = settings.Connect("sk-proj-openai");
-
-        Assert.Equal(AssistantProviders.OpenAi.QuickModel, connection.ModelFor(ModelTier.Quick));
-        Assert.Equal(AssistantProviders.OpenAi.ChatModel, connection.ModelFor(ModelTier.Chat));
-
-        // And going back restores what that provider was given.
-        var back = settings.Select(AssistantProviders.Anthropic.Id);
-        Assert.Equal("claude-sonnet-5", back.Connect("sk-ant").ModelFor(ModelTier.Quick));
+        Assert.Equal(AssistantProviders.OpenAi.DefaultModel, settings.EffectiveModelFor(AssistantRole.General));
+        Assert.Equal("claude-sonnet-5", settings.EffectiveModelFor(AssistantRole.Review));
+        Assert.Equal("claude-sonnet-5", settings.EffectiveModelFor(AssistantRole.Walkthrough));
     }
 
     public void Dispose()
@@ -208,7 +214,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
         _secrets.Set(AssistantProviders.OpenAi.SecretName, "sk-proj-openai");
         var vm = Start(AssistantSettings.For(AssistantProviders.Anthropic.Id));
 
-        vm.OpenSettings.Execute();
+        vm.ResetSettings.Execute();
 
         Assert.Equal(string.Empty, vm.KeyDraft.Value);
 
@@ -227,10 +233,10 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
         _secrets.Set(AssistantProviders.OpenAi.SecretName, "sk-proj-openai");
         var vm = Start(AssistantSettings.For(AssistantProviders.OpenAi.Id));
 
-        vm.OpenSettings.Execute();
+        vm.ResetSettings.Execute();
         Assert.Equal("sk-proj-openai", vm.KeyDraft.Value);
 
-        vm.SetProviderDraft(AssistantProviders.Anthropic.Id);
+        vm.SetKeyProviderDraft(AssistantProviders.Anthropic.Id);
         SaveAndSettle(vm);
 
         Assert.Empty(_secrets.WritesTo(AssistantProviders.Anthropic.SecretName));
@@ -246,7 +252,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
         _secrets.Set(AssistantProviders.OpenAi.SecretName, "sk-proj-openai");
         var vm = Start(AssistantSettings.For(AssistantProviders.Anthropic.Id));
 
-        vm.OpenSettings.Execute();
+        vm.ResetSettings.Execute();
         vm.KeyDraft.Value = string.Empty;
         SaveAndSettle(vm);
 
@@ -262,7 +268,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
         _secrets.Set(AssistantProviders.OpenAi.SecretName, "sk-proj-openai");
         var vm = Start(AssistantSettings.For(AssistantProviders.Ollama.Id));
 
-        vm.OpenSettings.Execute();
+        vm.ResetSettings.Execute();
         Assert.Equal(string.Empty, vm.KeyDraft.Value);
 
         vm.BaseUrlDraft.Value = "https://gw.internal/v1";
@@ -275,8 +281,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
         // The only write OpenAI's slot ever saw is the one this test seeded it with.
         Assert.Single(_secrets.WritesTo(AssistantProviders.OpenAi.SecretName));
         // And it is what signs the next turn.
-        Assert.Equal("gateway-token", _store!.Settings.Value.Connect(
-            _store.Keys.Value.For(AssistantProviders.Ollama).ApiKey).ApiKey);
+        Assert.Equal("gateway-token", _store!.Settings.Value.Connect(AssistantRole.General, _store.Keys.Value).ApiKey);
     }
 
     private AssistantViewModel Start(AssistantSettings settings)
@@ -297,7 +302,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
             new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
-            _ => new FakeAssistantBackend());
+            (_, _) => new FakeAssistantBackend());
         _store.Start();
         _vm = new AssistantViewModel(_store, _loc, _bus);
 
@@ -438,7 +443,7 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
     private readonly Dictionary<string, string?> _environment = new(StringComparer.Ordinal);
 
     private AssistantSessionStore? _store;
-    private Func<AssistantConnection>? _connection;
+    private readonly Dictionary<AssistantRole, Func<AssistantConnection>> _connections = new();
 
     public AssistantProviderSwitchTimingTests()
     {
@@ -463,15 +468,19 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
         var store = Start(AssistantSettings.For(AssistantProviders.Anthropic.Id));
         var keyring = store.Keys.Value;
 
-        store.Save(store.Settings.Value.Select(AssistantProviders.OpenAi.Id), apiKey: null);
+        store.Save(store.Settings.Value.WithModel(AssistantRole.General, AssistantProviders.OpenAi.Id, null), AssistantKeyEdit.None);
 
         // The keyring is still the one from before the switch, which is this test saying that no
         // answer from the secret store has landed yet — and the connection has moved regardless.
         Assert.Same(keyring, store.Keys.Value);
-        var connection = _connection!();
+        var connection = Chat();
         Assert.Equal(AssistantProviders.OpenAi.Id, connection.Provider.Id);
         Assert.Equal("sk-proj-openai", connection.ApiKey);
-        Assert.True(store.IsConfigured.Value);
+        Assert.True(store.IsConfigured(AssistantRole.General).Value);
+
+        // The other roles were not asked to move, and did not.
+        Assert.Equal(AssistantProviders.Anthropic.Id, _connections[AssistantRole.Review]().Provider.Id);
+        Assert.Equal("sk-ant", _connections[AssistantRole.Review]().ApiKey);
     }
 
     // And when the secret store does answer, it confirms rather than changes: the provider left
@@ -484,38 +493,41 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
         var store = Start(AssistantSettings.For(AssistantProviders.Anthropic.Id));
         var keyring = store.Keys.Value;
 
-        store.Save(store.Settings.Value.Select(AssistantProviders.OpenAi.Id), apiKey: null);
-        Assert.NotEqual("sk-ant", _connection!().ApiKey);
+        store.Save(store.Settings.Value.WithModel(AssistantRole.General, AssistantProviders.OpenAi.Id, null), AssistantKeyEdit.None);
+        Assert.NotEqual("sk-ant", Chat().ApiKey);
 
         Pump.WaitFor(_dispatcher, () => !ReferenceEquals(store.Keys.Value, keyring), "the resolve to land");
-        Assert.Equal(AssistantProviders.OpenAi.Id, _connection().Provider.Id);
-        Assert.Equal("sk-proj-openai", _connection().ApiKey);
-        Assert.True(store.IsConfigured.Value);
+        Assert.Equal(AssistantProviders.OpenAi.Id, Chat().Provider.Id);
+        Assert.Equal("sk-proj-openai", Chat().ApiKey);
+        Assert.True(store.IsConfigured(AssistantRole.General).Value);
     }
 
-    // A provider the app has no key for yet is not a connection, so the assistant closes for the
+    // A provider the app has no key for yet is not a connection, so the role on it closes for the
     // duration rather than letting anything through to the provider being left behind. The preset
-    // asks for that gate itself: it has no composer to grey out, and it carries a diff.
+    // asks for that gate itself: it has no composer to grey out, and it carries a diff. The roles
+    // that did not move stay open.
     [Fact]
-    public void SwitchingToAProviderWhoseKeyIsNotKnownYetClosesTheAssistantUntilItLands()
+    public void SwitchingToAProviderWhoseKeyIsNotKnownYetClosesThatRoleUntilItLands()
     {
         var store = Start(AssistantSettings.For(AssistantProviders.Ollama.Id), withRepo: true);
         var session = store.Active.Value!;
-        Assert.True(store.IsConfigured.Value);
+        Assert.True(store.IsConfigured(AssistantRole.General).Value);
 
         // Put there behind the app's back, so the switch below is to a provider whose key only the
         // secret store knows about.
         _secrets.Set(AssistantProviders.Anthropic.SecretName, "sk-ant");
-        store.Save(store.Settings.Value.Select(AssistantProviders.Anthropic.Id), apiKey: null);
+        store.Save(store.Settings.Value.WithModel(AssistantRole.General, AssistantProviders.Anthropic.Id, null), AssistantKeyEdit.None);
 
-        Assert.False(store.IsConfigured.Value);
+        Assert.False(store.IsConfigured(AssistantRole.General).Value);
+        Assert.True(store.IsConfigured(AssistantRole.Review).Value);
+        Assert.True(store.IsConfigured(AssistantRole.Walkthrough).Value);
 
         store.RunPreset(AgentCatalog.ExplainSelectionAgent, "explain this diff");
         Assert.Empty(session.Rows);
         Assert.Empty(_backend.Requests);
 
-        Pump.WaitFor(_dispatcher, () => store.IsConfigured.Value, "the key to resolve");
-        Assert.Equal("sk-ant", _connection!().ApiKey);
+        Pump.WaitFor(_dispatcher, () => store.IsConfigured(AssistantRole.General).Value, "the key to resolve");
+        Assert.Equal("sk-ant", Chat().ApiKey);
     }
 
     // Race B: the resolve counter orders the requests, not the reads and writes they make. A second
@@ -527,10 +539,10 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
         var store = Start(AssistantSettings.For(AssistantProviders.Anthropic.Id));
 
         using var writing = _secrets.HoldWrites();
-        store.Save(store.Settings.Value, "sk-ant-typed");
+        store.Save(store.Settings.Value, new AssistantKeyEdit.Store(AssistantProviders.Anthropic, "sk-ant-typed"));
         writing.WaitUntilEntered();
 
-        store.Save(store.Settings.Value.Select(AssistantProviders.Ollama.Id), apiKey: null);
+        store.Save(store.Settings.Value.WithModel(AssistantRole.General, AssistantProviders.Ollama.Id, null), AssistantKeyEdit.None);
         // Long enough for a second pass to have read the store, had it been free to.
         Thread.Sleep(50);
         writing.Release();
@@ -567,9 +579,9 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
             new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
-            connection =>
+            (role, connection) =>
             {
-                _connection = connection;
+                _connections[role] = connection;
                 return _backend;
             });
         _store.Start();
@@ -584,6 +596,8 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
             "the first pass over the secret store");
         return _store;
     }
+
+    private AssistantConnection Chat() => _connections[AssistantRole.General]();
 
     public void Dispose()
     {
@@ -753,7 +767,7 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
             new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
-            _ => backend);
+            (_, _) => backend);
         store.Start();
         Pump.WaitFor(_dispatcher, () => store.Active.Value is not null, "the repository's session");
 
@@ -761,7 +775,13 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
         Ask(session, "which branch am I on?");
         Assert.Contains(ToolUses(backend.Requests[1]), use => use.Id == "toolu_01ABCDEF");
 
-        store.Save(settings.Value.Select(AssistantProviders.LmStudio.Id), apiKey: null);
+        // Moving another role is not the chat's business: its thread carries on as it was.
+        store.Save(settings.Value.WithModel(AssistantRole.Review, AssistantProviders.LmStudio.Id, null), AssistantKeyEdit.None);
+        Ask(session, "still there?");
+        Assert.Contains(ToolUses(backend.Requests[^1]), use => use.Id == "toolu_01ABCDEF");
+        Assert.DoesNotContain(session.Rows, r => r.Kind == AssistantRowKind.Notice);
+
+        store.Save(settings.Value.WithModel(AssistantRole.General, AssistantProviders.LmStudio.Id, null), AssistantKeyEdit.None);
         Ask(session, "and now?");
 
         Assert.Empty(ToolUses(backend.Requests[^1]));
@@ -771,7 +791,7 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
 
     private AssistantSession Session(FakeAssistantBackend backend)
     {
-        var agent = new AgentDefinition("test", "You are a test agent.", ["alpha"], ModelTier.Chat);
+        var agent = new AgentDefinition("test", "You are a test agent.", ["alpha"], AssistantRole.General);
         var loop = new AssistantAgentLoop(
             backend, agent, AssistantToolset.Create([new StubTool("alpha")], ["alpha"]));
         var repo = new Repo(Guid.NewGuid(), Path.Combine(Path.GetTempPath(), "repo"), "repo");
@@ -794,62 +814,88 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
     public void Dispose() => _loc.Dispose();
 }
 
-/// The overrides are kept per provider now; a file written before they were must not lose the one
-/// it has.
+/// The models are kept per role now, and the endpoints per provider; a file written before either
+/// was must not lose what it has.
 public sealed class AssistantProviderPreferencesTests : IDisposable
 {
     private readonly TempDir _dir = new("gitbench-assistant-prefs-");
 
+    // The oldest shape: one selected provider, and a flat model and endpoint for it.
     [Fact]
-    public void TheFlatFieldsMigrateOntoTheProviderThatWasSelected()
+    public void TheFlatFieldsMigrateOntoEveryRole()
     {
         var path = Path.Combine(_dir.Path, "prefs.json");
         File.WriteAllText(path, """
         {
           "assistantProviderId": "openai",
           "assistantModel": "gpt-5.6-terra",
-          "assistantBaseUrl": null
+          "assistantBaseUrl": "https://proxy.internal/v1"
         }
         """);
 
         var loaded = PreferencesStore.Load(path);
 
-        var choice = Assert.Single(loaded.AssistantProviderPreferences);
-        Assert.Equal("openai", choice.ProviderId);
-        Assert.Equal("gpt-5.6-terra", choice.Model);
+        Assert.Equal(AssistantRoles.All.Count, loaded.AssistantModels.Count);
+        Assert.All(loaded.AssistantModels, m => Assert.Equal(("openai", "gpt-5.6-terra"), (m.ProviderId, m.Model)));
+        var endpoint = Assert.Single(loaded.AssistantEndpoints);
+        Assert.Equal(("openai", "https://proxy.internal/v1"), (endpoint.ProviderId, endpoint.BaseUrl));
 
-        var settings = AssistantSettings.From(
-            loaded.AssistantProviderId,
-            loaded.AssistantProviderPreferences.Select(c => (c.ProviderId, c.Model, c.BaseUrl)));
-        Assert.Equal("gpt-5.6-terra", settings.Model);
+        var settings = Settings(loaded);
+        foreach (var role in AssistantRoles.All)
+            Assert.Equal("gpt-5.6-terra", settings.EffectiveModelFor(role));
+        Assert.Equal("https://proxy.internal/v1", settings.BaseUrlFor(AssistantProviders.OpenAi));
+    }
+
+    // The shape before roles: one selected provider, and what every provider was last given.
+    [Fact]
+    public void ThePerProviderChoicesMigrateOntoEveryRoleAndTheEndpoints()
+    {
+        var path = Path.Combine(_dir.Path, "prefs.json");
+        File.WriteAllText(path, """
+        {
+          "assistantProviderId": "openai",
+          "assistantProviderChoices": [
+            { "id": "anthropic", "model": "claude-sonnet-5", "baseUrl": null },
+            { "id": "openai", "model": "gpt-5.6-terra", "baseUrl": null },
+            { "id": "ollama", "model": null, "baseUrl": "http://box:11434/v1" }
+          ]
+        }
+        """);
+
+        var settings = Settings(PreferencesStore.Load(path));
+
+        foreach (var role in AssistantRoles.All)
+            Assert.Equal(("openai", "gpt-5.6-terra"), Pair(settings.ModelFor(role)));
+        Assert.Equal("http://box:11434/v1", settings.BaseUrlFor(AssistantProviders.Ollama));
+        Assert.Single(settings.BaseUrls);
     }
 
     [Fact]
-    public void EveryProvidersChoiceSurvivesASaveAndLoad()
+    public void EveryRolesChoiceAndEveryEndpointSurvivesASaveAndLoad()
     {
         var path = Path.Combine(_dir.Path, "prefs.json");
         var service = new PreferencesService(Preferences.Default, path);
         service.Update(p => p with
         {
-            AssistantProviderId = "openai",
-            AssistantProviderPreferences =
+            AssistantModels =
             [
-                new AssistantProviderPreference("anthropic", "claude-sonnet-5", null),
-                new AssistantProviderPreference("openai", "gpt-5.6-terra", null),
+                new AssistantModelPreference("general", "anthropic", "claude-sonnet-5"),
+                new AssistantModelPreference("review", "openai", "gpt-5.6-terra"),
+                new AssistantModelPreference("walkthrough", "ollama", null),
             ],
+            AssistantEndpoints = [new AssistantEndpointPreference("ollama", "http://box:11434/v1")],
         });
         service.Dispose();
 
         var loaded = PreferencesStore.Load(path);
 
-        Assert.Equal("openai", loaded.AssistantProviderId);
-        Assert.Equal(2, loaded.AssistantProviderPreferences.Count);
-
-        var settings = AssistantSettings.From(
-            loaded.AssistantProviderId,
-            loaded.AssistantProviderPreferences.Select(c => (c.ProviderId, c.Model, c.BaseUrl)));
-        Assert.Equal("gpt-5.6-terra", settings.Model);
-        Assert.Equal("claude-sonnet-5", settings.ChoiceFor("anthropic").Model);
+        Assert.Equal(3, loaded.AssistantModels.Count);
+        Assert.Equal(AssistantProviders.Anthropic.QuickModel, Settings(loaded).EffectiveModelFor(AssistantRole.CommitMessage));
+        var settings = Settings(loaded);
+        Assert.Equal(("anthropic", "claude-sonnet-5"), Pair(settings.ModelFor(AssistantRole.General)));
+        Assert.Equal(("openai", "gpt-5.6-terra"), Pair(settings.ModelFor(AssistantRole.Review)));
+        Assert.Equal(("ollama", (string?)null), Pair(settings.ModelFor(AssistantRole.Walkthrough)));
+        Assert.Equal("http://box:11434/v1", settings.BaseUrlFor(AssistantProviders.Ollama));
     }
 
     // An id this build has never heard of stands for itself or for nothing — never for the provider
@@ -858,12 +904,19 @@ public sealed class AssistantProviderPreferencesTests : IDisposable
     public void AnUnknownProviderIdIsDroppedRatherThanAppliedToTheDefaultProvider()
     {
         var settings = AssistantSettings.From(
-            "anthropic",
-            [("provider-from-next-year", "some-model", null)]);
+            [("general", "provider-from-next-year", "some-model"), ("role-from-next-year", "anthropic", "some-model")],
+            []);
 
-        Assert.Null(settings.Model);
-        Assert.Null(settings.ChoiceFor("anthropic").Model);
+        Assert.Equal(AssistantModelChoice.Default, settings.ModelFor(AssistantRole.General));
+        Assert.Null(settings.ModelFor(AssistantRole.General).Model);
     }
+
+    private static AssistantSettings Settings(Preferences loaded) =>
+        AssistantSettings.From(
+            loaded.AssistantModels.Select(m => (m.Role, m.ProviderId, m.Model)),
+            loaded.AssistantEndpoints.Select(e => (e.ProviderId, (string?)e.BaseUrl)));
+
+    private static (string, string?) Pair(AssistantModelChoice choice) => (choice.Provider.Id, choice.Model);
 
     public void Dispose() => _dir.Dispose();
 }

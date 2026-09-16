@@ -2,10 +2,9 @@ using System.Text.Json;
 
 namespace GitBench.Features.Assistant.Backend;
 
-/// One request to the model: which tier answers it, the cached system prompt, and the
-/// conversation so far.
+/// One request to the model: the cached system prompt, and the conversation so far. Which model
+/// answers is the connection's to say, not the turn's.
 internal sealed record AssistantTurn(
-    ModelTier Tier,
     string SystemPrompt,
     IReadOnlyList<AssistantMessage> Messages)
 {

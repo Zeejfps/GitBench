@@ -93,13 +93,14 @@ public sealed class SettingsDialogTests : IDisposable
     }
 
     [Fact]
-    public void SaveUsesTheSelectedProvidersOwnModelEndpointAndMaskedKey()
+    public void SaveWritesTheEditedProvidersEndpointAndMaskedKeyAndEachRolesModel()
     {
         using var h = Mount();
         h.ClickOn(SettingsDialog.AgentTabId);
         var editor = _dialog.State.Agent;
-        editor.SetProviderDraft(AssistantProviders.Ollama.Id);
-        editor.ModelDraft.Value = "local-custom-model";
+        var chat = editor.RoleDraft(AssistantRole.General);
+        editor.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
+        chat.Model.Value = "local-custom-model";
         editor.BaseUrlDraft.Value = "http://localhost:11434/v1";
         editor.KeyDraft.Value = "private-gateway-token";
         h.Layout();
@@ -110,19 +111,22 @@ public sealed class SettingsDialogTests : IDisposable
         Assert.Empty(_store.Writes);
 
         h.ClickOn(AssistantSettingsCard.SaveId);
-        Assert.Equal((AssistantProviders.Ollama.Id, "private-gateway-token"), Assert.Single(_store.Writes));
-        Assert.Equal("local-custom-model", _store.Settings.Value.Model);
-        Assert.Equal("http://localhost:11434/v1", _store.Settings.Value.BaseUrl);
+        var write = Assert.IsType<AssistantKeyEdit.Store>(Assert.Single(_store.Writes));
+        Assert.Equal((AssistantProviders.Ollama.Id, "private-gateway-token"), (write.Provider.Id, write.Key));
+        var saved = _store.Settings.Value;
+        Assert.Equal(("ollama", "local-custom-model"), Pair(saved.ModelFor(AssistantRole.General)));
+        // The other roles followed the first provider set up, on its own model.
+        Assert.Equal(("ollama", (string?)null), Pair(saved.ModelFor(AssistantRole.Review)));
+        Assert.Equal(("ollama", (string?)null), Pair(saved.ModelFor(AssistantRole.Walkthrough)));
+        Assert.Equal("http://localhost:11434/v1", saved.BaseUrlFor(AssistantProviders.Ollama));
         Assert.False(_closed);
         Assert.False(_chat.IsOpen.Value);
-        Assert.Contains(h.Render().Texts, t => t.Inputs.Text.Contains("Selected: Ollama · local-custom-model"));
 
-        editor.SetProviderDraft(AssistantProviders.Groq.Id);
-        editor.ModelDraft.Value = "another-model";
+        editor.SetKeyProviderDraft(AssistantProviders.Groq.Id);
         editor.KeyDraft.Value = "another-key";
         h.ClickOn(AssistantSettingsCard.SaveId);
-        editor.SetProviderDraft(AssistantProviders.Ollama.Id);
-        Assert.Equal("local-custom-model", editor.ModelDraft.Value);
+        editor.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
+        Assert.Equal("local-custom-model", chat.Model.Value);
         Assert.Equal("private-gateway-token", editor.KeyDraft.Value);
     }
 
@@ -130,23 +134,51 @@ public sealed class SettingsDialogTests : IDisposable
     public void ChangingTabsKeepsEdits_AndResetDoesNotTouchChatDrafts()
     {
         _store.SetSavedKey(AssistantProviders.Anthropic, "saved-key");
-        _chat.OpenSettings.Execute();
-        _chat.ModelDraft.Value = "unfinished-chat-edit";
+        _chat.ResetSettings.Execute();
+        _chat.RoleDraft(AssistantRole.General).Model.Value = "unfinished-chat-edit";
         using var h = Mount();
         h.ClickOn(SettingsDialog.AgentTabId);
-        _dialog.State.Agent.ModelDraft.Value = "unfinished-dialog-edit";
+        var dialogChat = _dialog.State.Agent.RoleDraft(AssistantRole.General);
+        dialogChat.Model.Value = "unfinished-dialog-edit";
 
         h.ClickOn(SettingsDialog.GeneralTabId);
         h.ClickOn(SettingsDialog.AgentTabId);
-        Assert.Equal("unfinished-dialog-edit", _dialog.State.Agent.ModelDraft.Value);
+        Assert.Equal("unfinished-dialog-edit", dialogChat.Model.Value);
 
         h.ClickOn(AssistantSettingsCard.CancelId);
-        Assert.Equal(string.Empty, _dialog.State.Agent.ModelDraft.Value);
+        Assert.Equal(string.Empty, dialogChat.Model.Value);
         Assert.Equal("saved-key", _dialog.State.Agent.KeyDraft.Value);
-        Assert.Equal("unfinished-chat-edit", _chat.ModelDraft.Value);
-        Assert.True(_chat.IsOpen.Value);
+        Assert.Equal("unfinished-chat-edit", _chat.RoleDraft(AssistantRole.General).Model.Value);
         Assert.Empty(_store.Writes);
     }
+
+    // The key section's fields follow the provider picked for it: a hosted one is signed and lives
+    // at a fixed address, a local one is the user's to point at — and takes a key too, because a
+    // gateway in front of it may ask for one. Every role gets its own line either way.
+    [Fact]
+    public void TheKeySectionOffersTheFieldsTheChosenProviderTakes_AndEveryRoleALine()
+    {
+        using var h = Mount();
+        h.ClickOn(SettingsDialog.AgentTabId);
+        h.Layout();
+
+        Assert.NotNull(h.Root.FindById(AssistantSettingsCard.KeyInputId));
+        Assert.Null(h.Root.FindById(AssistantSettingsCard.BaseUrlInputId));
+        foreach (var role in AssistantRoles.All)
+        {
+            Assert.NotNull(h.Root.FindById(AssistantSettingsCard.RoleProviderId(role)));
+            Assert.NotNull(h.Root.FindById(AssistantSettingsCard.RoleModelInputId(role)));
+        }
+
+        _dialog.State.Agent.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
+        h.Layout();
+
+        Assert.NotNull(h.Root.FindById(AssistantSettingsCard.BaseUrlInputId));
+        Assert.NotNull(h.Root.FindById(AssistantSettingsCard.KeyInputId));
+        Assert.True(_dialog.State.Agent.IsApiKeyOptional.Value);
+    }
+
+    private static (string, string?) Pair(AssistantModelChoice choice) => (choice.Provider.Id, choice.Model);
 
     [Fact]
     public void EscapeDiscardsEdits_EnterDoesNotDismissOrSave()
@@ -256,16 +288,33 @@ public sealed class SettingsDialogTests : IDisposable
     {
         using var h = Mount(width, height);
         h.ClickOn(SettingsDialog.AgentTabId);
-        _dialog.State.Agent.SetProviderDraft(AssistantProviders.Ollama.Id);
+        _dialog.State.Agent.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
         h.Layout();
-        foreach (var id in new[] { SettingsDialog.AgentTabId, AssistantSettingsCard.ProviderId,
-                     AssistantSettingsCard.ModelInputId, AssistantSettingsCard.BaseUrlInputId,
-                     AssistantSettingsCard.KeyInputId, AssistantSettingsCard.SaveId })
+        var ids = new List<string>
+        {
+            SettingsDialog.AgentTabId, AssistantSettingsCard.ProviderId, AssistantSettingsCard.BaseUrlInputId,
+            AssistantSettingsCard.KeyInputId, AssistantSettingsCard.SaveId,
+        };
+        foreach (var role in AssistantRoles.All)
+        {
+            ids.Add(AssistantSettingsCard.RoleProviderId(role));
+            ids.Add(AssistantSettingsCard.RoleModelInputId(role));
+        }
+        // The page scrolls, so a control below the fold is reached by wheeling over the page; what
+        // must hold without scrolling is that nothing runs off the sides.
+        var provider = h.Get(AssistantSettingsCard.ProviderId).Position.Center;
+        foreach (var id in ids)
         {
             var rect = h.Get(id).Position;
             Assert.True(rect.Width > 0 && rect.Height > 0, id);
-            Assert.True(rect.Left >= 0 && rect.Right <= width && rect.Bottom >= 0 && rect.Top <= height,
-                $"{id}: {rect} exceeds {width}x{height}");
+            Assert.True(rect.Left >= 0 && rect.Right <= width, $"{id}: {rect} exceeds {width} wide");
+            if (rect.Bottom >= 0 && rect.Top <= height) continue;
+
+            h.MoveTo(provider.X, provider.Y);
+            for (var i = 0; i < 20; i++) h.Scroll(0f, -1f);
+            h.Layout();
+            rect = h.Get(id).Position;
+            Assert.True(rect.Bottom >= 0 && rect.Top <= height, $"{id}: {rect} is not reachable in {height} tall");
         }
     }
 
@@ -287,7 +336,7 @@ public sealed class SettingsDialogTests : IDisposable
             ctx => new Center { Child = _dialog }.BuildView(ctx), fonts, font,
             width: 640, height: 480, configure: Configure);
         h.ClickOn(SettingsDialog.AgentTabId);
-        _dialog.State.Agent.SetProviderDraft(AssistantProviders.Ollama.Id);
+        _dialog.State.Agent.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
         h.Layout();
 
         var reset = h.Get(AssistantSettingsCard.CancelId).Position;

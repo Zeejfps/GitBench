@@ -39,22 +39,21 @@ public sealed class AssistantOpenAiWireTests
         IReadOnlyList<AssistantMessage> messages,
         params IAssistantTool[] tools) =>
         OpenAiRequestWriter.Write(
-            new AssistantTurn(ModelTier.Chat, "system prompt", messages), tools, connection);
+            new AssistantTurn("system prompt", messages), tools, connection);
 
     private static JsonDocument Parse(byte[] body) => JsonDocument.Parse(Encoding.UTF8.GetString(body));
 
     private static JsonDocument Body(
         AssistantConnection connection,
-        ModelTier tier,
         IReadOnlyList<AssistantMessage> messages,
         params IAssistantTool[] tools) =>
         JsonDocument.Parse(Encoding.UTF8.GetString(
-            OpenAiRequestWriter.Write(new AssistantTurn(tier, "system prompt", messages), tools, connection)));
+            OpenAiRequestWriter.Write(new AssistantTurn("system prompt", messages), tools, connection)));
 
     [Fact]
     public void ToolResults_SplitIntoOneToolMessagePerResult()
     {
-        using var wire = Body(OpenAi, ModelTier.Chat, AToolExchange);
+        using var wire = Body(OpenAi, AToolExchange);
         var messages = wire.RootElement.GetProperty("messages");
 
         // system, user, assistant, then one message per result.
@@ -73,7 +72,7 @@ public sealed class AssistantOpenAiWireTests
     [Fact]
     public void TheSameConversation_StaysOneMessageForAnthropicAndSeveralForOpenAi()
     {
-        var turn = new AssistantTurn(ModelTier.Chat, "system prompt", AToolExchange);
+        var turn = new AssistantTurn("system prompt", AToolExchange);
 
         using var anthropic = JsonDocument.Parse(Encoding.UTF8.GetString(
             AnthropicRequestWriter.Write(turn, Array.Empty<IAssistantTool>(), AssistantConnection.Default)));
@@ -84,7 +83,7 @@ public sealed class AssistantOpenAiWireTests
         Assert.Single(anthropicResults);
         Assert.Equal(2, anthropicResults[0].GetProperty("content").GetArrayLength());
 
-        using var openAi = Body(OpenAi, ModelTier.Chat, AToolExchange);
+        using var openAi = Body(OpenAi, AToolExchange);
         Assert.Equal(2, openAi.RootElement.GetProperty("messages").EnumerateArray()
             .Count(m => m.GetProperty("role").GetString() == "tool"));
 
@@ -94,7 +93,7 @@ public sealed class AssistantOpenAiWireTests
     [Fact]
     public void AssistantToolCalls_CarryArgumentsAsAJsonEncodedString()
     {
-        using var wire = Body(OpenAi, ModelTier.Chat, AToolExchange);
+        using var wire = Body(OpenAi, AToolExchange);
         var assistant = wire.RootElement.GetProperty("messages")[2];
 
         Assert.Equal("Looking.", assistant.GetProperty("content").GetString());
@@ -114,7 +113,6 @@ public sealed class AssistantOpenAiWireTests
     {
         using var wire = Body(
             OpenAi,
-            ModelTier.Chat,
             new AssistantMessage[] { new AssistantMessage.User("hi") },
             new StubTool("zeta"),
             new StubTool("alpha"));
@@ -132,14 +130,13 @@ public sealed class AssistantOpenAiWireTests
         Assert.Equal(JsonValueKind.Object, tools[0].GetProperty("function").GetProperty("parameters").ValueKind);
     }
 
-    // There is no mid-conversation system entry here, so live repo state rides in the user turn on
-    // every tier, not just the quick one.
+    // There is no mid-conversation system entry here, so live repo state rides in the user turn
+    // whatever model answers.
     [Fact]
-    public void RepoContext_IsAUserTurnOnEveryTier()
+    public void RepoContext_IsAUserTurn()
     {
         using var wire = Body(
             Ollama,
-            ModelTier.Chat,
             new AssistantMessage[]
             {
                 new AssistantMessage.User("hi"),
@@ -157,13 +154,13 @@ public sealed class AssistantOpenAiWireTests
     {
         var messages = new AssistantMessage[] { new AssistantMessage.User("hi") };
 
-        using var openAi = Body(OpenAi, ModelTier.Chat, messages);
+        using var openAi = Body(OpenAi, messages);
         Assert.False(openAi.RootElement.TryGetProperty("max_tokens", out _));
         Assert.Equal(
             AssistantProviders.OpenAi.MaxOutputTokens,
             openAi.RootElement.GetProperty("max_completion_tokens").GetInt32());
 
-        using var ollama = Body(Ollama, ModelTier.Chat, messages);
+        using var ollama = Body(Ollama, messages);
         Assert.Equal(AssistantProviders.Ollama.MaxOutputTokens, ollama.RootElement.GetProperty("max_tokens").GetInt32());
         Assert.False(ollama.RootElement.TryGetProperty("max_completion_tokens", out _));
     }
@@ -187,20 +184,18 @@ public sealed class AssistantOpenAiWireTests
         // A model that declares no opt-out carries none, tools or not.
         var local = Bytes(Ollama, messages, new StubTool("get_status"));
         Assert.DoesNotContain("reasoning_effort", Encoding.UTF8.GetString(local), StringComparison.Ordinal);
-        Assert.Null(Ollama.Capabilities(ModelTier.Chat).ToolReasoningEffort);
+        Assert.Null(Ollama.Capabilities.ToolReasoningEffort);
     }
 
     [Fact]
-    public void ModelOverride_AppliesToBothTiers()
+    public void ModelOverride_IsTheModelSent()
     {
         var connection = AssistantConnection.For(AssistantProviders.Ollama, model: "qwen2.5-coder");
         var messages = new AssistantMessage[] { new AssistantMessage.User("hi") };
 
-        using var chat = Body(connection, ModelTier.Chat, messages);
-        using var quick = Body(connection, ModelTier.Quick, messages);
+        using var chat = Body(connection, messages);
 
         Assert.Equal("qwen2.5-coder", chat.RootElement.GetProperty("model").GetString());
-        Assert.Equal("qwen2.5-coder", quick.RootElement.GetProperty("model").GetString());
     }
 
     // ---- the read side ----
@@ -443,7 +438,7 @@ public sealed class AssistantOpenAiWireTests
         var tool = new StubTool("alpha");
         var loop = new AssistantAgentLoop(
             backend,
-            new AgentDefinition("test", "You are a test agent.", new[] { "alpha" }, ModelTier.Chat),
+            new AgentDefinition("test", "You are a test agent.", new[] { "alpha" }, AssistantRole.General),
             AssistantToolset.Create(new IAssistantTool[] { tool }, new[] { "alpha" }));
 
         var conversation = new List<AssistantMessage> { new AssistantMessage.User("go") };
@@ -491,7 +486,7 @@ public sealed class AssistantOpenAiWireTests
         using var http = new HttpClient(handler);
         var backend = new HttpAssistantBackend(http, () => connection);
         var turn = new AssistantTurn(
-            ModelTier.Chat, "system prompt", new AssistantMessage[] { new AssistantMessage.User("go") });
+            "system prompt", new AssistantMessage[] { new AssistantMessage.User("go") });
 
         await foreach (var _ in backend.SendAsync(turn, Array.Empty<IAssistantTool>(), CancellationToken.None))
         {

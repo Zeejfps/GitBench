@@ -6,7 +6,7 @@ namespace GitBench.Features.Assistant.Backend;
 /// <remarks>
 /// These belong to the model rather than the provider because a provider serves several and the
 /// model is the user's to choose: Opus 5 takes a mid-conversation system entry and a fallback
-/// policy, Sonnet 5 rejects both with a 400, and the tier a turn runs on says nothing about which
+/// policy, Sonnet 5 rejects both with a 400, and the role a turn runs for says nothing about which
 /// of them was picked.
 /// </remarks>
 internal sealed record AssistantModel

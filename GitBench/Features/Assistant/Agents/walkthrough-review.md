@@ -1,6 +1,6 @@
 ---
 name: walkthrough-review
-tier: chat
+role: walkthrough
 tools: find_files, get_commit_details, get_file_at_base, get_review_diff, get_review_stack, read_file, review_clear, review_focus, review_open, review_spotlight, review_state, walkthrough_end, walkthrough_step
 ---
 

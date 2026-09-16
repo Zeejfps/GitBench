@@ -1,6 +1,6 @@
 ---
 name: review-branch
-tier: chat
+role: review
 tools: find_files, get_commit_details, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
 ---
 

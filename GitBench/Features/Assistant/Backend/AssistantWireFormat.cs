@@ -31,7 +31,7 @@ internal sealed record AssistantWireFormat(
         if (connection.ApiKey is { } key)
             headers.TryAddWithoutValidation("x-api-key", key);
         headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
-        if (connection.Capabilities(turn.Tier).ServerSideFallbacks)
+        if (connection.Capabilities.ServerSideFallbacks)
             headers.TryAddWithoutValidation("anthropic-beta", "server-side-fallback-2026-07-01");
     }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
@@ -15,10 +16,10 @@ using ZGF.Observable;
 namespace GitBench.Features.Assistant;
 
 /// <summary>
-/// Builds the backend the sessions talk to. <paramref name="connection"/> is read per request, so a
-/// provider, model or key changed after startup takes effect without rebuilding anything.
+/// Builds the backend one role's agents talk to. <paramref name="connection"/> is read per request,
+/// so a provider, model or key changed after startup takes effect without rebuilding anything.
 /// </summary>
-internal delegate IAssistantBackend AssistantBackendFactory(Func<AssistantConnection> connection);
+internal delegate IAssistantBackend AssistantBackendFactory(AssistantRole role, Func<AssistantConnection> connection);
 
 /// <summary>
 /// The one place assistant conversations live: one per repository, in memory, for the app session.
@@ -33,23 +34,22 @@ internal interface IAssistantSessionStore
     /// active.</summary>
     IReadable<CommitMessageQuickAction?> CommitMessage { get; }
 
-    /// <summary>Which provider the assistant talks to, and the model and endpoint chosen for it.</summary>
+    /// <summary>The model each role runs on, and the endpoint chosen for each provider.</summary>
     IReadable<AssistantSettings> Settings { get; }
 
-    /// <summary>Whether the assistant can reach a model at all: a key resolved, or a provider that
-    /// needs none.</summary>
-    IReadable<bool> IsConfigured { get; }
+    /// <summary>Whether a role can reach its model: a key resolved for its provider, or a provider
+    /// that needs none.</summary>
+    IReadable<bool> IsConfigured(AssistantRole role);
 
     /// <summary>What every provider has for a key, so a card or a switcher can say which are ready
     /// and hold the right one — always asked for by provider, never for "the" key.</summary>
     IReadable<AssistantKeyring> Keys { get; }
 
-    /// <summary>Points the assistant at a provider and settles its key: null leaves whatever is
-    /// stored alone, empty forgets it, and anything else is saved. The connection points at the new
-    /// provider before this returns, so nothing sent afterwards can reach the old one; the secret
-    /// store is read and written off the UI thread, and <see cref="IsConfigured"/> stays down until
-    /// a key that was not already known has landed.</summary>
-    void Save(AssistantSettings settings, string? apiKey);
+    /// <summary>Adopts new settings and settles one key edit. Every role's connection points at its
+    /// new model before this returns, so nothing sent afterwards can reach the old one; the secret
+    /// store is read and written off the UI thread, and a role whose key was not already known reads
+    /// as unconfigured until it has landed.</summary>
+    void Save(AssistantSettings settings, AssistantKeyEdit key);
 
     /// <summary>Runs a named one-shot agent over an already-composed prompt in the active repo's
     /// transcript. Does nothing when no repo is active, a turn is already running, or the assistant
@@ -85,7 +85,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     private readonly AgentDefinition _agent;
     private readonly AgentDefinition _commitMessageAgent;
     private readonly AgentDefinition _walkthroughAgent;
-    private readonly IAssistantBackend _backend;
+    private readonly IReadOnlyDictionary<AssistantRole, IAssistantBackend> _backends;
     private readonly AssistantWriteSurface _writes;
     private readonly IMessageBus _bus;
 
@@ -95,11 +95,11 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     private readonly State<AssistantSession?> _active = new(null);
     private readonly State<CommitMessageQuickAction?> _activeCommitMessage = new(null);
     private readonly State<AssistantSettings> _settings;
-    private readonly State<bool> _isConfigured = new(false);
+    private readonly IReadOnlyDictionary<AssistantRole, State<bool>> _isConfigured;
     private readonly State<AssistantKeyring> _keys = new(AssistantKeyring.Empty);
 
-    // Read by the backend from whatever thread a turn runs on; written only on the UI thread.
-    private AssistantConnection _connection;
+    // Read by the backends from whatever thread a turn runs on; written only on the UI thread.
+    private AssistantConnections _connections;
 
     // Counts the resolves asked for, so a slow one landing after a later one is dropped rather than
     // reinstating the provider and key it was asked about.
@@ -143,12 +143,21 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         _reviewWindows = reviewWindows;
         _bus = bus;
         _writes = new AssistantWriteSurface(dispatcher, bus, registry, commitEditor, operations, documents);
-        _connection = settings.Value.Connect(null);
+        _connections = AssistantConnections.Build(settings.Value, AssistantKeyring.Empty);
         _catalog = AgentCatalog.LoadEmbedded();
         _agent = _catalog.Get(AgentCatalog.GeneralAgent);
         _commitMessageAgent = _catalog.Get(AgentCatalog.CommitMessageAgent);
         _walkthroughAgent = _catalog.Get(AgentCatalog.WalkthroughReviewAgent);
-        _backend = backendFactory(() => Volatile.Read(ref _connection));
+
+        var backends = new Dictionary<AssistantRole, IAssistantBackend>();
+        var configured = new Dictionary<AssistantRole, State<bool>>();
+        foreach (var role in AssistantRoles.All)
+        {
+            backends[role] = backendFactory(role, () => Volatile.Read(ref _connections).For(role));
+            configured[role] = new State<bool>(false);
+        }
+        _backends = backends;
+        _isConfigured = configured;
     }
 
     public IReadable<AssistantSession?> Active => _active;
@@ -157,7 +166,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
 
     public IReadable<AssistantSettings> Settings => _settings;
 
-    public IReadable<bool> IsConfigured => _isConfigured;
+    public IReadable<bool> IsConfigured(AssistantRole role) => _isConfigured[role];
 
     public IReadable<AssistantKeyring> Keys => _keys;
 
@@ -167,63 +176,71 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         _started = true;
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
         _narrateSub = _bus.SubscribeScoped<NarrateWalkthroughMessage>(OnNarrate);
-        Resolve(_settings.Value, save: null);
+        Resolve(_settings.Value, AssistantKeyEdit.None);
     }
 
-    public void Save(AssistantSettings settings, string? apiKey)
+    public void Save(AssistantSettings settings, AssistantKeyEdit key)
     {
-        var key = apiKey?.Trim();
-        var previous = _settings.Value.ProviderId;
+        var previous = _settings.Value;
 
-        // The connection moves first, and without an await in front of it. Everything below announces
-        // the switch — the header names the new provider, the transcript says it was switched to —
-        // while the secret store is milliseconds away at best and a locked keyring is seconds. A
-        // request signed between the announcement and the answer has to be the new provider's.
-        PointAt(settings, key);
+        // The connections move first, and without an await in front of them. Everything below
+        // announces the switch — the header names the new provider, the transcript says it was
+        // switched to — while the secret store is milliseconds away at best and a locked keyring is
+        // seconds. A request signed between the announcement and the answer has to be the new
+        // provider's.
+        Publish(settings, key.ApplyTo(_keys.Value));
 
         _settings.Value = settings;
-        if (!string.Equals(previous, settings.ProviderId, StringComparison.Ordinal))
-            RestartConversations(settings.Provider);
+        RestartConversations(previous, settings);
         Resolve(settings, key);
     }
 
-    // What is already known about the chosen provider's key, with this save's edit applied: the
-    // answer the resolve will come back with, minus whatever only the secret store can add. A
-    // provider whose key is not known yet lowers IsConfigured for the duration, which is what closes
-    // the composer and the presets rather than letting them reach the provider being left behind.
-    private void PointAt(AssistantSettings settings, string? key)
+    // Every role's connection from one settings and one keyring, and whether each can send. Built
+    // here and nowhere else, so the key that signs a request is by construction the key of the
+    // provider it is sent to. Called with what is already known plus this save's edit, which is the
+    // answer the resolve will come back with minus whatever only the secret store can add: a role
+    // whose key is not known yet reads as unconfigured for the duration, which is what closes the
+    // composer and the presets rather than letting them reach the provider being left behind.
+    private void Publish(AssistantSettings settings, AssistantKeyring keys)
     {
-        var state = _keys.Value.For(settings.Provider);
-        var edited = key switch
-        {
-            { Length: > 0 } => state with { SavedKey = key },
-            { Length: 0 } => state with { SavedKey = null },
-            _ => state,
-        };
-        Volatile.Write(ref _connection, settings.Connect(edited.ApiKey));
-        _isConfigured.Value = edited.IsUsable;
+        var connections = AssistantConnections.Build(settings, keys);
+        Volatile.Write(ref _connections, connections);
+        foreach (var role in AssistantRoles.All)
+            _isConfigured[role].Value = connections.For(role).IsUsable;
     }
 
     // A tool-call id belongs to the provider that issued it — Anthropic's validator takes the id
     // literally and strict OpenAI-compatible endpoints refuse anything not in their own shape — and
     // the whole conversation is replayed on every turn. So the exchange the model is sent starts
-    // again at the switch. The transcript is untouched: what was said is still what was said.
-    private void RestartConversations(AssistantProvider provider)
+    // again when its role moves provider. The transcript is untouched: what was said is still what
+    // was said. The review is a one-shot with no exchange to carry, so it has nothing to restart.
+    private void RestartConversations(AssistantSettings previous, AssistantSettings next)
     {
-        var notice = _loc.Strings.Value.AssistantProviderSwitched(provider.DisplayName);
-        foreach (var session in _sessions.Values)
-            session.RestartForProviderChange(notice);
-        foreach (var narration in _narrations.Values)
-            narration.RestartForProviderChange();
+        if (ProviderMoved(previous, next, AssistantRole.General, out var chat))
+        {
+            var notice = _loc.Strings.Value.AssistantProviderSwitched(chat.DisplayName);
+            foreach (var session in _sessions.Values)
+                session.RestartForProviderChange(notice);
+        }
+
+        if (ProviderMoved(previous, next, AssistantRole.Walkthrough, out _))
+            foreach (var narration in _narrations.Values)
+                narration.RestartForProviderChange();
+    }
+
+    private static bool ProviderMoved(
+        AssistantSettings previous, AssistantSettings next, AssistantRole role, out AssistantProvider provider)
+    {
+        provider = next.ModelFor(role).Provider;
+        return !string.Equals(previous.ModelFor(role).Provider.Id, provider.Id, StringComparison.Ordinal);
     }
 
     // Reads (and optionally rewrites) the secret store on a worker, then posts the result back. What
     // ends up in effect is re-read rather than assumed: the environment fallback can outrank a save.
-    private void Resolve(AssistantSettings settings, string? save)
+    private void Resolve(AssistantSettings settings, AssistantKeyEdit edit)
     {
         var credentials = _credentials;
         var dispatcher = _dispatcher;
-        var provider = settings.Provider;
         var resolve = ++_resolves;
         _resolving = _resolving.ContinueWith(
             _ =>
@@ -231,8 +248,19 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
                 var keys = AssistantKeyring.Empty;
                 try
                 {
-                    if (save is { Length: > 0 }) credentials.Save(provider, save);
-                    else if (save is not null) credentials.Clear(provider);
+                    switch (edit)
+                    {
+                        case AssistantKeyEdit.Store store:
+                            credentials.Save(store.Provider, store.Key);
+                            break;
+                        case AssistantKeyEdit.Forget forget:
+                            credentials.Clear(forget.Provider);
+                            break;
+                        case AssistantKeyEdit.Keep:
+                            break;
+                        default:
+                            throw new UnreachableException();
+                    }
                     keys = credentials.Keyring();
                 }
                 catch (Exception ex)
@@ -242,8 +270,8 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
 
                 // A secret store that refused the write still leaves the key in effect for this
                 // session, and the card holds it: it is the app's own for as long as it is running.
-                if (save is { Length: > 0 } && keys.For(provider).SavedKey is null)
-                    keys = keys.With(provider, keys.For(provider) with { SavedKey = save });
+                if (edit is AssistantKeyEdit.Store stored && keys.For(stored.Provider).SavedKey is null)
+                    keys = edit.ApplyTo(keys);
 
                 dispatcher.Post(() => Adopt(resolve, settings, keys));
             },
@@ -252,17 +280,12 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
             TaskScheduler.Default);
     }
 
-    // Confirms what Save already pointed the assistant at, now that the secret store has answered:
-    // the connection is built here and in PointAt and nowhere else, from one settings and one
-    // keyring, so the key that signs a request is by construction the key of the provider it is
-    // sent to. A resolve overtaken by a later one is dropped rather than reinstating what it asked
-    // about.
+    // Confirms what Save already pointed the assistant at, now that the secret store has answered.
+    // A resolve overtaken by a later one is dropped rather than reinstating what it asked about.
     private void Adopt(int resolve, AssistantSettings settings, AssistantKeyring keys)
     {
         if (_disposed || resolve != _resolves) return;
-        var connection = settings.Connect(keys.For(settings.Provider).ApiKey);
-        Volatile.Write(ref _connection, connection);
-        _isConfigured.Value = connection.IsUsable;
+        Publish(settings, keys);
         _keys.Value = keys;
     }
 
@@ -272,17 +295,21 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     {
         if (_disposed) return;
 
-        // A preset carries a diff and the checkout's path to whichever provider is in effect, and it
-        // has no composer to grey out, so it asks for the same gate the composer is given.
-        if (!_isConfigured.Value) return;
+        var agent = _catalog.Get(agentName);
+
+        // A preset carries a diff and the checkout's path to whichever provider its role is on, and
+        // it has no composer to grey out, so it asks for the same gate the composer is given.
+        if (!_isConfigured[agent.Role].Value) return;
 
         if (_registry.Active.Value is not { } repo) return;
         if (_active.Value is not { } session) return;
 
-        var agent = _catalog.Get(agentName);
         var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, agent);
-        session.RunPreset(prompt, new AssistantAgentLoop(_backend, agent, toolset, ToolCallingIsUnproven));
+        session.RunPreset(prompt, Loop(agent, toolset));
     }
+
+    private AssistantAgentLoop Loop(AgentDefinition agent, AssistantToolset toolset) =>
+        new(_backends[agent.Role], agent, toolset, () => ToolCallingIsUnproven(agent.Role));
 
     // A review window's cue for the assistant as narrator. Runs in the window repository's own
     // conversation with the full toolset, since the presentation tools need the window registry.
@@ -293,7 +320,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_disposed) return;
         if (_registry.Repos.FirstOrDefault(r => r.Id == m.RepoId) is not { } repo) return;
 
-        if (!_isConfigured.Value)
+        if (!_isConfigured[_walkthroughAgent.Role].Value)
         {
             _reviewWindows.LatestFor(repo.Id)?.Walkthrough.MarkDisconnected();
             return;
@@ -313,8 +340,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
             {
                 var toolset = AssistantToolset.ForRepo(
                     _git, repo, _extractor, _walkthroughAgent, _reviewProgress, _reviewWindows, _writes);
-                return new AssistantThread(
-                    new AssistantAgentLoop(_backend, _walkthroughAgent, toolset, ToolCallingIsUnproven), observer);
+                return new AssistantThread(Loop(_walkthroughAgent, toolset), observer);
             },
             _reviewWindows,
             _dispatcher);
@@ -336,8 +362,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
 
         // The toolset is bound to this one checkout, so the assistant cannot reach the others.
         var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, _agent, _reviewProgress, _reviewWindows, _writes);
-        var session = new AssistantSession(
-            repo, _git, new AssistantAgentLoop(_backend, _agent, toolset, ToolCallingIsUnproven), _loc, _dispatcher);
+        var session = new AssistantSession(repo, _git, Loop(_agent, toolset), _loc, _dispatcher);
         _sessions[repo.Id] = session;
         return session;
     }
@@ -354,7 +379,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         var action = new CommitMessageQuickAction(
             repo,
             _git,
-            new AssistantAgentLoop(_backend, _commitMessageAgent, toolset, ToolCallingIsUnproven),
+            Loop(_commitMessageAgent, toolset),
             _writes,
             _loc,
             _dispatcher);
@@ -364,7 +389,8 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
 
     // Whether a turn that never calls a tool is worth reporting: against a self-hosted endpoint it
     // may mean the loaded model cannot call tools at all, which otherwise fails silently.
-    private bool ToolCallingIsUnproven() => Volatile.Read(ref _connection).Provider.Hosting is AssistantHosting.SelfHosted;
+    private bool ToolCallingIsUnproven(AssistantRole role) =>
+        Volatile.Read(ref _connections).For(role).Provider.Hosting is AssistantHosting.SelfHosted;
 
     public void Dispose()
     {
@@ -380,7 +406,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         _commitMessages.Clear();
         _active.Dispose();
         _activeCommitMessage.Dispose();
-        _isConfigured.Dispose();
+        foreach (var configured in _isConfigured.Values) configured.Dispose();
         _keys.Dispose();
     }
 }

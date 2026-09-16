@@ -16,9 +16,9 @@ namespace GitBench.Features.Assistant;
 /// back into the commit box.
 /// </summary>
 /// <remarks>
-/// The chat's own pipeline runs this — same <see cref="AssistantAgentLoop"/>, same backend, same
-/// toolset — with only the agent swapped, so the model tier and the tools it may reach come from the
-/// agent file rather than from a second code path here.
+/// The chat's own pipeline runs this — same <see cref="AssistantAgentLoop"/>, same toolset — with
+/// only the agent swapped, so the role whose model it runs on and the tools it may reach come from
+/// the agent file rather than from a second code path here.
 ///
 /// The message arrives as a <c>set_commit_message</c> call, not as the turn's reply: a subject and a
 /// body are two fields, and reading them back out of prose put whatever the model wrote first — a
@@ -146,7 +146,7 @@ internal sealed class CommitMessageQuickAction : IDisposable
     // prefix, and templating a user setting into it would re-bill the whole prefix whenever the
     // language changed. Read per turn, so a switch takes effect on the next generation.
     //
-    // The Quick tier does not accept mid-conversation system entries, so the request writer renders
+    // Its default model does not accept mid-conversation system entries, so the request writer renders
     // this block as a user turn instead. That branch is the reason this is passed to the loop rather
     // than folded into the instruction above.
     // A stopped run reports nothing — the person stopped it.

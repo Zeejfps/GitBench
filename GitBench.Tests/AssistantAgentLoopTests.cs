@@ -9,7 +9,7 @@ namespace GitBench.Tests;
 public sealed class AssistantAgentLoopTests
 {
     private static AgentDefinition Agent(params string[] tools) =>
-        new("test", "You are a test agent.", tools, ModelTier.Chat);
+        new("test", "You are a test agent.", tools, AssistantRole.General);
 
     private static AssistantAgentLoop Loop(FakeAssistantBackend backend, params IAssistantTool[] tools)
     {

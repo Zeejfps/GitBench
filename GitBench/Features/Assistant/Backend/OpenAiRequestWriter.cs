@@ -19,12 +19,12 @@ internal static class OpenAiRequestWriter
 {
     public static byte[] Write(AssistantTurn turn, IReadOnlyList<IAssistantTool> tools, AssistantConnection connection)
     {
-        var model = connection.Capabilities(turn.Tier);
+        var model = connection.Capabilities;
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer, ToolJson.WriterOptions))
         {
             writer.WriteStartObject();
-            writer.WriteString("model", connection.ModelFor(turn.Tier));
+            writer.WriteString("model", connection.Model);
             writer.WriteNumber(
                 model.UsesMaxCompletionTokens ? "max_completion_tokens" : "max_tokens",
                 connection.MaxTokensFor(turn));
@@ -89,7 +89,7 @@ internal static class OpenAiRequestWriter
                     WriteTextMessage(writer, "user", user.Text);
                     break;
                 // There is no mid-conversation system entry here, so live repo state rides in the
-                // user turn — the same fallback the quick tier already takes.
+                // user turn — the same fallback the Anthropic writer takes for models that refuse one.
                 case AssistantMessage.RepoContext context:
                     WriteTextMessage(writer, "user", context.Text);
                     break;

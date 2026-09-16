@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
+using GitBench.Features.Settings;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui.Desktop.Input;
@@ -44,13 +45,14 @@ public sealed class AssistantOverlayViewTests
         Assert.Null(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
     }
 
-    // The connection card takes the composer's place, and which fields it offers follows the
-    // provider: a hosted one is signed and lives at a fixed address, a local one is the user's to
-    // point at — and takes a key too, because a gateway in front of it may ask for one.
+    // Once the chat can send, the panel keeps its composer: the gear opens the settings window on
+    // the assistant's page rather than swapping the composer for the card.
     [Fact]
-    public void TheSettingsGearOffersTheFieldsTheChosenProviderTakes()
+    public void TheSettingsGearOpensTheSettingsWindowOnTheAssistantPage()
     {
         using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
+        var opened = new List<OpenSettingsWindowMessage>();
+        fixture.Bus.Subscribe<OpenSettingsWindowMessage>(opened.Add);
 
         fixture.PressPrimary(KeyboardKey.K);
         Assert.NotNull(fixture.Harness.Root.FindById(AssistantComposer.InputId));
@@ -58,23 +60,9 @@ public sealed class AssistantOverlayViewTests
         fixture.Harness.ClickOn(AssistantPanel.SettingsId);
         fixture.Harness.Layout();
 
-        Assert.Null(fixture.Harness.Root.FindById(AssistantComposer.InputId));
-        Assert.NotNull(fixture.Harness.Root.FindById(AssistantSettingsCard.ProviderId));
-        Assert.NotNull(fixture.Harness.Root.FindById(AssistantSettingsCard.ModelInputId));
-        Assert.NotNull(fixture.Harness.Root.FindById(AssistantSettingsCard.KeyInputId));
-        Assert.Null(fixture.Harness.Root.FindById(AssistantSettingsCard.BaseUrlInputId));
-
-        fixture.Vm.SetProviderDraft(AssistantProviders.Ollama.Id);
-        fixture.Harness.Layout();
-
-        Assert.NotNull(fixture.Harness.Root.FindById(AssistantSettingsCard.BaseUrlInputId));
-        // The endpoint is not the only box a token could be smuggled into.
-        Assert.NotNull(fixture.Harness.Root.FindById(AssistantSettingsCard.KeyInputId));
-        Assert.True(fixture.Vm.IsApiKeyOptional.Value);
-
-        fixture.Harness.ClickOn(AssistantSettingsCard.CancelId);
-        fixture.Harness.Layout();
+        Assert.Equal(SettingsPage.Agent, Assert.Single(opened).Page);
         Assert.NotNull(fixture.Harness.Root.FindById(AssistantComposer.InputId));
+        Assert.Null(fixture.Harness.Root.FindById(AssistantSettingsCard.ProviderId));
     }
 
     [Fact]

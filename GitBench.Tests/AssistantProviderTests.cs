@@ -18,12 +18,12 @@ public sealed class AssistantProviderTests
     }
 
     [Fact]
-    public void EveryProviderDeclaresAWireFormatAndModelsForBothTiers()
+    public void EveryProviderDeclaresAWireFormatAndADefaultModel()
     {
         foreach (var provider in AssistantProviders.All)
         {
-            Assert.NotEmpty(provider.ModelFor(ModelTier.Chat));
-            Assert.NotEmpty(provider.ModelFor(ModelTier.Quick));
+            Assert.NotEmpty(provider.DefaultModel);
+            Assert.NotEmpty(provider.QuickModel);
             Assert.StartsWith("http", provider.BaseUrl);
             Assert.True(provider.MaxOutputTokens > 0);
         }
@@ -40,11 +40,11 @@ public sealed class AssistantProviderTests
         }
     }
 
-    // The bug this replaced: capabilities hung off the provider and the tier, so a user who picked
-    // Sonnet 5 as their chat model still got `fallbacks` and a mid-conversation system entry — both
-    // of which that model rejects outright.
+    // The bug this replaced: capabilities hung off the provider, so a user who picked Sonnet 5 as
+    // their chat model still got `fallbacks` and a mid-conversation system entry — both of which
+    // that model rejects outright.
     [Fact]
-    public void CapabilitiesFollowTheModelRatherThanTheTierItAnswers()
+    public void CapabilitiesFollowTheModelRatherThanTheProvider()
     {
         var anthropic = AssistantProviders.Anthropic;
 
@@ -60,10 +60,10 @@ public sealed class AssistantProviderTests
             Assert.False(anthropic.Capabilities(id).ServerSideFallbacks);
         }
 
-        // Choosing one for the chat tier is what used to send the parameters it rejects.
-        var sonnet = AssistantSettings.For(anthropic.Id, "claude-sonnet-5").Connect("sk-ant");
-        Assert.False(sonnet.Capabilities(ModelTier.Chat).ServerSideFallbacks);
-        Assert.False(sonnet.Capabilities(ModelTier.Chat).MidConversationSystem);
+        // Choosing one for the chat is what used to send the parameters it rejects.
+        var sonnet = AssistantConnection.For(anthropic, "claude-sonnet-5", apiKey: "sk-ant");
+        Assert.False(sonnet.Capabilities.ServerSideFallbacks);
+        Assert.False(sonnet.Capabilities.MidConversationSystem);
     }
 
     // A model this build has never seen states nothing optional: every capability is an opt-in the
@@ -86,14 +86,14 @@ public sealed class AssistantProviderTests
         Assert.True(AssistantProviders.Anthropic.Capabilities("Claude-Opus-5").ServerSideFallbacks);
     }
 
-    // The presets are the tier table widened rather than a second list, so the models the tiers run
-    // on cannot fall out of the list the picker offers.
+    // The presets are the model table widened rather than a second list, so the defaults cannot fall
+    // out of the list the picker offers.
     [Fact]
-    public void ThePresetsAlwaysContainTheModelsTheTiersRunOn()
+    public void ThePresetsAlwaysContainTheDefaultModels()
     {
         foreach (var provider in AssistantProviders.All.Where(p => p.Hosting is AssistantHosting.Hosted))
         {
-            Assert.Contains(provider.ChatModel, provider.ModelPresets);
+            Assert.Contains(provider.DefaultModel, provider.ModelPresets);
             Assert.Contains(provider.QuickModel, provider.ModelPresets);
             Assert.Distinct(provider.ModelPresets);
         }
@@ -118,8 +118,9 @@ public sealed class AssistantProviderTests
 
         var connection = AssistantSettings
             .For(AssistantProviders.Ollama.Id, baseUrl: "https://gw.internal/v1")
-            .Connect(credentials.ApiKeyFor(AssistantProviders.Ollama));
+            .Connect(AssistantRole.General, credentials.Keyring());
         Assert.Equal("gateway-token", connection.ApiKey);
+        Assert.Equal("https://gw.internal/v1", connection.BaseUrl);
         Assert.True(connection.IsUsable);
 
         // And taking it away leaves the provider exactly as usable as it was before.
@@ -190,10 +191,10 @@ public sealed class AssistantProviderTests
     public void SettingsCarryTheOverridesAndTheEndpointIsBuiltFromThem()
     {
         var settings = AssistantSettings.For("ollama", "  qwen  ", "  http://box:11434/v1/  ");
-        var connection = settings.Connect(null);
+        var connection = settings.Connect(AssistantRole.Review, AssistantKeyring.Empty);
 
-        Assert.Equal(AssistantProviders.Ollama, settings.Provider);
-        Assert.Equal("qwen", connection.ChatModel);
+        Assert.Equal(AssistantProviders.Ollama, settings.ModelFor(AssistantRole.Review).Provider);
+        Assert.Equal("qwen", connection.Model);
         Assert.Equal("http://box:11434/v1/chat/completions", connection.Endpoint("/chat/completions"));
         Assert.Equal(
             "https://api.anthropic.com/v1/messages",
@@ -201,10 +202,78 @@ public sealed class AssistantProviderTests
 
         // Blank overrides read as "the provider's own", not as an empty model name.
         var bare = AssistantSettings.For("openai", "   ", "");
-        Assert.Null(bare.Model);
-        Assert.Null(bare.BaseUrl);
-        Assert.Equal(AssistantProviders.OpenAi.ChatModel, bare.Connect(null).ChatModel);
+        Assert.Null(bare.ModelFor(AssistantRole.General).Model);
+        Assert.Null(bare.BaseUrlFor(AssistantProviders.OpenAi));
+        Assert.Empty(bare.BaseUrls);
+        Assert.Equal(AssistantProviders.OpenAi.DefaultModel, bare.Connect(AssistantRole.General, AssistantKeyring.Empty).Model);
     }
+
+    // Each role's connection is its own: provider, endpoint, model and the key that signs it all
+    // follow the role, so three roles on three providers are three keys on the wire.
+    [Fact]
+    public void EachRoleConnectsThroughItsOwnProviderWithThatProvidersKey()
+    {
+        var credentials = new AssistantCredentials(new MemorySecretStore());
+        credentials.Save(AssistantProviders.Anthropic, "sk-ant");
+        credentials.Save(AssistantProviders.OpenAi, "sk-openai");
+
+        var settings = AssistantSettings.Default
+            .WithModel(AssistantRole.General, AssistantProviders.Anthropic.Id, "claude-sonnet-5")
+            .WithModel(AssistantRole.Review, AssistantProviders.OpenAi.Id, null)
+            .WithModel(AssistantRole.Walkthrough, AssistantProviders.Ollama.Id, "qwen3:8b")
+            .WithBaseUrl(AssistantProviders.Ollama.Id, "http://box:11434/v1");
+        var keys = credentials.Keyring();
+
+        var chat = settings.Connect(AssistantRole.General, keys);
+        Assert.Equal(("anthropic", "claude-sonnet-5", "sk-ant"), (chat.Provider.Id, chat.Model, chat.ApiKey));
+
+        var review = settings.Connect(AssistantRole.Review, keys);
+        Assert.Equal(("openai", "gpt-5.6-sol", "sk-openai"), (review.Provider.Id, review.Model, review.ApiKey));
+
+        var walkthrough = settings.Connect(AssistantRole.Walkthrough, keys);
+        Assert.Equal(("ollama", "qwen3:8b", (string?)null), (walkthrough.Provider.Id, walkthrough.Model, walkthrough.ApiKey));
+        Assert.Equal("http://box:11434/v1", walkthrough.BaseUrl);
+        Assert.True(walkthrough.IsUsable);
+
+        // The commit message defaults to the cheaper model of whichever provider it is on.
+        var commit = settings.Connect(AssistantRole.CommitMessage, keys);
+        Assert.Equal(("anthropic", "claude-haiku-4-5-20251001", "sk-ant"), (commit.Provider.Id, commit.Model, commit.ApiKey));
+
+        // A role on a provider with no key is the one that cannot send, and only that one.
+        var groq = settings.WithModel(AssistantRole.Review, AssistantProviders.Groq.Id, null);
+        Assert.False(groq.Connect(AssistantRole.Review, keys).IsUsable);
+        Assert.True(groq.Connect(AssistantRole.General, keys).IsUsable);
+    }
+
+    // What was persisted is what comes back, and what this build does not know is dropped rather
+    // than remapped onto the default provider.
+    [Fact]
+    public void SettingsRebuildFromWhatWasPersistedAndDropWhatTheBuildDoesNotKnow()
+    {
+        var settings = AssistantSettings.From(
+            models:
+            [
+                ("general", "openai", "gpt-5.6-terra"),
+                ("review", "provider-from-the-future", "whatever"),
+                ("role-from-the-future", "anthropic", null),
+                ("walkthrough", "Together", null),
+            ],
+            baseUrls: [("ollama", "http://box:11434/v1"), ("provider-from-the-future", "http://x")]);
+
+        Assert.Equal(("openai", "gpt-5.6-terra"), Pair(settings.ModelFor(AssistantRole.General)));
+        Assert.Equal(AssistantModelChoice.Default, settings.ModelFor(AssistantRole.Review));
+        Assert.Equal(("together", (string?)null), Pair(settings.ModelFor(AssistantRole.Walkthrough)));
+        Assert.Equal("http://box:11434/v1", settings.BaseUrlFor(AssistantProviders.Ollama));
+        Assert.Single(settings.BaseUrls);
+
+        // And the pair goes round: what Models and BaseUrls hand out rebuilds the same settings.
+        var again = AssistantSettings.From(
+            settings.Models.Select(m => (AssistantRoles.Id(m.Role), m.Choice.Provider.Id, m.Choice.Model)),
+            settings.BaseUrls.Select(b => (b.Key, (string?)b.Value)));
+        Assert.Equal(settings, again);
+    }
+
+    private static (string, string?) Pair(AssistantModelChoice choice) => (choice.Provider.Id, choice.Model);
 
     private sealed class MemorySecretStore : ISecretStore
     {

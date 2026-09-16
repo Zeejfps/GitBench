@@ -8,7 +8,7 @@ namespace GitBench.Features.Assistant.Agents;
 /// </summary>
 /// <remarks>
 /// Each agent is one embedded markdown file: a <c>---</c> fenced header carrying <c>name</c>,
-/// <c>tier</c> and a comma-separated <c>tools</c> list, then the system prompt as the body. Adding
+/// <c>role</c> and a comma-separated <c>tools</c> list, then the system prompt as the body. Adding
 /// an agent is adding a file — the catalog enumerates every embedded <c>.md</c> resource.
 /// </remarks>
 internal sealed class AgentCatalog
@@ -82,7 +82,7 @@ internal sealed class AgentCatalog
         var body = bodyStart < 0 ? string.Empty : normalized[(bodyStart + 1)..].Trim();
 
         string? name = null;
-        var tier = ModelTier.Chat;
+        AssistantRole? role = null;
         var tools = Array.Empty<string>();
         foreach (var line in header.Split('\n'))
         {
@@ -97,8 +97,9 @@ internal sealed class AgentCatalog
                 case "name":
                     name = value;
                     break;
-                case "tier":
-                    tier = value.Equals("quick", StringComparison.OrdinalIgnoreCase) ? ModelTier.Quick : ModelTier.Chat;
+                case "role":
+                    role = AssistantRoles.Parse(value)
+                        ?? throw new InvalidOperationException($"Agent prompt '{resource}' names an unknown role '{value}'.");
                     break;
                 case "tools":
                     tools = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -108,9 +109,11 @@ internal sealed class AgentCatalog
 
         if (string.IsNullOrWhiteSpace(name))
             throw new InvalidOperationException($"Agent prompt '{resource}' has no name.");
+        if (role is null)
+            throw new InvalidOperationException($"Agent prompt '{resource}' declares no role.");
         if (body.Length == 0)
             throw new InvalidOperationException($"Agent prompt '{resource}' has an empty system prompt.");
 
-        return new AgentDefinition(name, body, tools, tier);
+        return new AgentDefinition(name, body, tools, role.Value);
     }
 }

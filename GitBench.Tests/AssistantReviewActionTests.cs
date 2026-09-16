@@ -29,7 +29,7 @@ public sealed class AssistantReviewActionTests
     {
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.ReviewBranchAgent);
 
-        Assert.Equal(ModelTier.Chat, agent.Tier);
+        Assert.Equal(AssistantRole.Review, agent.Role);
         Assert.NotEmpty(agent.SystemPrompt);
         Assert.DoesNotContain("---", agent.SystemPrompt);
         Assert.Equal(ReviewTools, agent.AllowedTools.OrderBy(t => t, StringComparer.Ordinal));

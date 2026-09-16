@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
+using GitBench.Features.Assistant.Backend;
 using GitBench.Localization;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -25,7 +26,7 @@ internal sealed record WalkthroughStartButton : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<ReviewWindowViewModel>();
-        var configured = ctx.Get<IAssistantSessionStore>()?.IsConfigured ?? new State<bool>(false);
+        var configured = ctx.Get<IAssistantSessionStore>()?.IsConfigured(AssistantRole.Walkthrough) ?? new State<bool>(false);
 
         return new Show
         {

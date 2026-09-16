@@ -71,6 +71,7 @@ internal sealed record SettingsWindowHost : Widget
                         {
                             OnClose = () => opened?.Close(),
                             HostedInWindow = true,
+                            InitialPage = message.Page,
                         }.WithController<DialogKbmController>()
                         .WithController((c, _) => new WindowDragController(c.Require<IWindow>(), c.Require<InputSystem>())
                         {

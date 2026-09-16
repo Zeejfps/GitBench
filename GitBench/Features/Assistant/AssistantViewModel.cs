@@ -3,6 +3,7 @@ using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
+using GitBench.Features.Settings;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
@@ -14,7 +15,7 @@ namespace GitBench.Features.Assistant;
 /// Drives the assistant surfaces — the launcher, the overlay, the panel inside it, and the commit
 /// bar's quick actions — by projecting the active repository's session from
 /// <see cref="IAssistantSessionStore"/> and holding what belongs to the view rather than the
-/// conversation: whether the overlay is up, the message being typed, and the connection being edited.
+/// conversation: whether the overlay is up, the message being typed, and the settings being edited.
 /// </summary>
 internal sealed class AssistantViewModel : IDisposable
 {
@@ -27,11 +28,10 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly IMessageBus _bus;
     private readonly State<bool> _open = new(false);
     private readonly State<string> _draft = new(string.Empty);
-    private readonly State<bool> _settingsOpen = new(false);
-    private readonly State<string> _providerDraft;
-    private readonly State<string> _modelDraft;
+    private readonly State<string> _keyProviderDraft;
     private readonly State<string> _baseUrlDraft;
     private readonly State<string> _keyDraft = new(string.Empty);
+    private readonly IReadOnlyDictionary<AssistantRole, AssistantRoleDraft> _roles;
     private readonly Derived<bool> _available;
     private readonly Derived<bool> _busy;
     private readonly Derived<bool> _thinking;
@@ -42,16 +42,18 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly Derived<bool> _generatingMessage;
     private readonly Derived<bool> _canGenerateMessage;
     private readonly Derived<bool> _canReviewBranch;
-    private readonly Derived<bool> _showSettings;
     private readonly Derived<bool> _keyOptional;
     private readonly Derived<bool> _wantsBaseUrl;
-    private readonly Derived<bool> _hasModelPresets;
-    private readonly Derived<string> _providerName;
+    private readonly Derived<string> _keyProviderName;
     private readonly Derived<string> _activeProviderName;
-    private readonly Derived<string> _modelHint;
     private readonly Derived<string> _baseUrlHint;
     private readonly Derived<string> _keyHint;
     private readonly IDisposable _availableSub;
+
+    // The endpoints edited for providers the picker has moved away from, applied on save alongside
+    // the one in the field. An endpoint belongs to its provider, so leaving a provider does not
+    // discard what was typed for it the way leaving discards an unsaved key.
+    private AssistantSettings _settingsDraft;
 
     // Which provider the key field's contents are for, and whether they are that provider's stored
     // key rather than something typed. Only the stored case makes emptying the box a deletion — an
@@ -66,40 +68,47 @@ internal sealed class AssistantViewModel : IDisposable
         _loc = loc;
         _bus = bus;
         var settings = store.Settings.Value;
-        _providerDraft = new State<string>(settings.ProviderId);
-        _modelDraft = new State<string>(settings.Model ?? string.Empty);
-        _baseUrlDraft = new State<string>(settings.BaseUrl ?? string.Empty);
-        _keyFieldProviderId = settings.ProviderId;
+        var chat = store.IsConfigured(AssistantRole.General);
+        _settingsDraft = settings;
+        var keyProvider = settings.ModelFor(AssistantRole.General).Provider;
+        _keyProviderDraft = new State<string>(keyProvider.Id);
+        _baseUrlDraft = new State<string>(settings.BaseUrlFor(keyProvider) ?? string.Empty);
+        _keyFieldProviderId = keyProvider.Id;
+        var roles = new Dictionary<AssistantRole, AssistantRoleDraft>();
+        foreach (var role in AssistantRoles.All)
+        {
+            var draft = new AssistantRoleDraft(role, store, loc);
+            draft.Seed(settings.ModelFor(role));
+            roles[role] = draft;
+        }
+        _roles = roles;
         _available = new Derived<bool>(() => store.Active.Value is not null);
         _busy = new Derived<bool>(() => store.Active.Value?.IsBusy.Value ?? false);
         _thinking = new Derived<bool>(() => store.Active.Value?.IsThinking.Value ?? false);
-        _needsSetup = new Derived<bool>(() => !store.IsConfigured.Value);
+        _needsSetup = new Derived<bool>(() => !chat.Value);
         _canClear = new Derived<bool>(() => (store.Active.Value?.Rows.Count ?? 0) > 0);
         _isEmpty = new Derived<bool>(() => !_canClear.Value);
         _canSend = new Derived<bool>(() =>
             store.Active.Value is not null
             && !store.Active.Value.IsBusy.Value
-            && store.IsConfigured.Value
+            && chat.Value
             && !string.IsNullOrWhiteSpace(_draft.Value));
         _generatingMessage = new Derived<bool>(() => store.CommitMessage.Value?.IsBusy.Value ?? false);
         _canGenerateMessage = new Derived<bool>(() =>
             store.CommitMessage.Value is not null
             && !store.CommitMessage.Value.IsBusy.Value
-            && store.IsConfigured.Value);
+            && store.IsConfigured(AssistantRole.CommitMessage).Value);
         _canReviewBranch = new Derived<bool>(() =>
             store.Active.Value is not null
             && !store.Active.Value.IsBusy.Value
-            && store.IsConfigured.Value);
+            && store.IsConfigured(AssistantRole.Review).Value);
 
-        // Onboarding and settings are the same card: one is the other with nothing configured yet.
-        _showSettings = new Derived<bool>(() => _settingsOpen.Value || !store.IsConfigured.Value);
-        _keyOptional = new Derived<bool>(() => !DraftProvider.RequiresApiKey);
-        _wantsBaseUrl = new Derived<bool>(() => DraftProvider.Hosting is AssistantHosting.SelfHosted);
-        _hasModelPresets = new Derived<bool>(() => DraftProvider.ModelPresets.Count > 0);
-        _providerName = new Derived<string>(() => DraftProvider.DisplayName);
-        _activeProviderName = new Derived<string>(() => store.Settings.Value.Provider.DisplayName);
-        _modelHint = new Derived<string>(() => DraftProvider.ChatModel);
-        _baseUrlHint = new Derived<string>(() => DraftProvider.BaseUrl);
+        _keyOptional = new Derived<bool>(() => !KeyProvider.RequiresApiKey);
+        _wantsBaseUrl = new Derived<bool>(() => KeyProvider.Hosting is AssistantHosting.SelfHosted);
+        _keyProviderName = new Derived<string>(() => KeyProvider.DisplayName);
+        _activeProviderName = new Derived<string>(() =>
+            store.Settings.Value.ModelFor(AssistantRole.General).Provider.DisplayName);
+        _baseUrlHint = new Derived<string>(() => KeyProvider.BaseUrl);
         _keyHint = new Derived<string>(KeyHintText);
 
         Toggle = new Command(ToggleOpen, _available);
@@ -110,10 +119,8 @@ internal sealed class AssistantViewModel : IDisposable
         ClearConversation = new Command(ClearActiveConversation, _canClear);
         GenerateCommitMessage = new Command(() => store.CommitMessage.Value?.Run(), _canGenerateMessage);
         ReviewBranch = new Command(RunBranchReview, _canReviewBranch);
-        OpenSettings = new Command(ShowSettingsCard);
+        OpenSettings = new Command(OpenSettingsWindow);
         ResetSettings = new Command(SeedDrafts);
-        // Dismissing the card is only offered once there is a working connection behind it.
-        CloseSettings = new Command(() => _settingsOpen.Value = false, store.IsConfigured);
         SaveSettings = new Command(ApplySettings);
 
         // The toolset cannot be built without a repo, so losing the active one closes the overlay
@@ -167,8 +174,8 @@ internal sealed class AssistantViewModel : IDisposable
 
     public IReadable<bool> IsThinking => _thinking;
 
-    /// <summary>True until a connection resolves — a key for a provider that needs one, or simply a
-    /// provider that does not. The panel shows the connection card instead of the input.</summary>
+    /// <summary>True until the chat's connection resolves — a key for a provider that needs one, or
+    /// simply a provider that does not. The panel shows the settings card instead of the input.</summary>
     public IReadable<bool> NeedsSetup => _needsSetup;
 
     /// <summary>True while the transcript has nothing in it, for the panel's resting hint.</summary>
@@ -179,37 +186,33 @@ internal sealed class AssistantViewModel : IDisposable
     /// <summary>True while a commit message is being written, for the commit bar's spinner.</summary>
     public IReadable<bool> IsGeneratingMessage => _generatingMessage;
 
-    /// <summary>True while the panel shows the connection card instead of the composer — either
-    /// because nothing is configured yet, or because the user opened it.</summary>
-    public IReadable<bool> ShowSettings => _showSettings;
+    /// <summary>True while the panel shows the settings card instead of the composer, which is
+    /// while nothing is configured yet: once the chat can send, the card lives in the settings
+    /// window and the panel keeps its composer.</summary>
+    public IReadable<bool> ShowSettings => _needsSetup;
 
-    /// <summary>The connection being edited. Applied on save, so picking a provider does not repoint
-    /// a conversation mid-thought. The three text fields are writable because that is what a two-way
-    /// bound field binds to.</summary>
-    public IReadable<string> ProviderDraft => _providerDraft;
-    public State<string> ModelDraft => _modelDraft;
+    /// <summary>The provider whose key and endpoint are in the card's fields. Applied on save, so
+    /// nothing typed repoints a conversation mid-thought. The two text fields are writable because
+    /// that is what a two-way bound field binds to.</summary>
+    public IReadable<string> KeyProviderDraft => _keyProviderDraft;
     public State<string> BaseUrlDraft => _baseUrlDraft;
     public State<string> KeyDraft => _keyDraft;
 
-    /// <summary>Whether a key for the draft provider is worth offering but not needed, so the field
-    /// says so rather than asking for something the user usually does not have.</summary>
+    /// <summary>Each role's line of the card: the provider and model it will run on once saved.</summary>
+    public AssistantRoleDraft RoleDraft(AssistantRole role) => _roles[role];
+
+    /// <summary>Whether a key for the provider being edited is worth offering but not needed, so the
+    /// field says so rather than asking for something the user usually does not have.</summary>
     public IReadable<bool> IsApiKeyOptional => _keyOptional;
 
-    /// <summary>Whether the draft provider's endpoint is the user's to set.</summary>
+    /// <summary>Whether the endpoint of the provider being edited is the user's to set.</summary>
     public IReadable<bool> WantsBaseUrl => _wantsBaseUrl;
 
-    /// <summary>Whether the draft provider publishes models worth offering. False for the endpoints
-    /// that serve whatever the user loaded, where the field is free text and nothing else.</summary>
-    public IReadable<bool> HasModelPresets => _hasModelPresets;
+    public IReadable<string> KeyProviderName => _keyProviderName;
 
-    public IReadable<string> ProviderName => _providerName;
-
-    /// <summary>The provider the assistant is actually pointed at, for the panel header's switcher —
+    /// <summary>The provider the chat is actually pointed at, for the panel header's switcher —
     /// which reports the connection in use rather than the one being edited.</summary>
     public IReadable<string> ActiveProviderName => _activeProviderName;
-
-    /// <summary>The draft provider's own model, shown as the placeholder for "leave it alone".</summary>
-    public IReadable<string> ModelHint => _modelHint;
 
     public IReadable<string> BaseUrlHint => _baseUrlHint;
 
@@ -234,10 +237,10 @@ internal sealed class AssistantViewModel : IDisposable
     /// assistant can answer at all and this repository's conversation is not already mid-turn.</summary>
     public ICommand ReviewBranch { get; }
 
+    /// <summary>Opens the settings window on the assistant's page.</summary>
     public ICommand OpenSettings { get; }
     /// <summary>Reloads saved connection values without opening or closing chat.</summary>
     public ICommand ResetSettings { get; }
-    public ICommand CloseSettings { get; }
     public ICommand SaveSettings { get; }
 
     /// <summary>The commit bar's assistant menu, built per open so a generation already running
@@ -265,49 +268,52 @@ internal sealed class AssistantViewModel : IDisposable
         ];
     }
 
-    /// <summary>The provider list, marked with the one being edited and saying what each already has
-    /// for a key — the card asks for one, so which providers are already answered for belongs in the
-    /// same list.</summary>
+    /// <summary>The provider list for the key picker, marked with the one being edited and saying
+    /// what each already has for a key — the card asks for one, so which providers are already
+    /// answered for belongs in the same list.</summary>
     public IReadOnlyList<RepoBarContextMenu.Item> BuildProviderMenu()
     {
-        var current = _providerDraft.Value;
+        var current = _keyProviderDraft.Value;
         var keys = _store.Keys.Value;
+        var s = _loc.Strings.Value;
         return AssistantProviders.All
             .Select(provider => new RepoBarContextMenu.Item(
                 provider.DisplayName,
-                () => SetProviderDraft(provider.Id),
+                () => SetKeyProviderDraft(provider.Id),
                 Checked: string.Equals(provider.Id, current, StringComparison.Ordinal),
-                Shortcut: KeyStateLabel(keys.For(provider))))
+                Shortcut: AssistantKeyLabels.For(keys.For(provider), s)))
             .ToArray();
     }
 
     /// <summary>
-    /// The panel header's switcher: the providers that can actually answer, marked with the active
-    /// one, and a way to set up any that cannot. A provider with no key is left off rather than
-    /// offered as a selection that would fail on the next turn.
+    /// The panel header's switcher: the providers that can actually answer the chat, marked with the
+    /// one it is on, and a way to set up any that cannot. A provider with no key is left off rather
+    /// than offered as a selection that would fail on the next turn.
     /// </summary>
     public IReadOnlyList<RepoBarContextMenu.Item> BuildProviderSwitcher()
     {
         var keys = _store.Keys.Value;
-        var active = _store.Settings.Value.ProviderId;
+        var s = _loc.Strings.Value;
+        var active = _store.Settings.Value.ModelFor(AssistantRole.General).Provider.Id;
         var items = AssistantProviders.All
             .Where(provider => keys.For(provider).IsUsable)
             .Select(provider => new RepoBarContextMenu.Item(
                 provider.DisplayName,
                 () => SwitchProvider(provider.Id),
                 Checked: string.Equals(provider.Id, active, StringComparison.Ordinal),
-                Shortcut: KeyStateLabel(keys.For(provider))))
+                Shortcut: AssistantKeyLabels.For(keys.For(provider), s)))
             .ToList();
 
         if (items.Count > 0) items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
-            _loc.Strings.Value.AssistantProviderConfigure, ShowSettingsCard, LucideIcons.Settings));
+            s.AssistantProviderConfigure, OpenSettingsWindow, LucideIcons.Settings));
         return items;
     }
 
-    /// <summary>Points the assistant at a provider that is already set up, without a trip through the
-    /// card. Nothing here types a key, so nothing here saves one; a provider that is not set up
-    /// opens the card on itself instead of becoming a connection that cannot sign a request.</summary>
+    /// <summary>Points the chat at a provider that is already set up, on that provider's default
+    /// model, without a trip through the settings. Nothing here types a key, so nothing here saves
+    /// one; a provider that is not set up opens the settings instead of becoming a connection that
+    /// cannot sign a request. The other roles stay where they are.</summary>
     public void SwitchProvider(string providerId)
     {
         var provider = AssistantProviders.Resolve(providerId);
@@ -315,61 +321,45 @@ internal sealed class AssistantViewModel : IDisposable
 
         if (!_store.Keys.Value.For(provider).IsUsable)
         {
-            ShowSettingsCard();
-            SetProviderDraft(provider.Id);
+            OpenSettingsWindow();
             return;
         }
 
-        if (string.Equals(provider.Id, settings.ProviderId, StringComparison.Ordinal)) return;
+        if (string.Equals(provider.Id, settings.ModelFor(AssistantRole.General).Provider.Id, StringComparison.Ordinal))
+            return;
 
-        _store.Save(settings.Select(provider.Id), apiKey: null);
+        _store.Save(settings.WithModel(AssistantRole.General, provider.Id, null), AssistantKeyEdit.None);
         SeedDrafts();
-    }
-
-    // The trailing slot the menu draws muted. A provider row carries no gesture, and what it has for
-    // a key is what belongs there — masking leaves the card no other way to say it.
-    private string? KeyStateLabel(AssistantKeyState state)
-    {
-        var s = _loc.Strings.Value;
-        return state.Source switch
-        {
-            AssistantKeySource.Saved => s.AssistantProviderKeySaved,
-            AssistantKeySource.Environment => s.AssistantProviderKeyEnvironment,
-            AssistantKeySource.NotRequired => null,
-            _ => s.AssistantProviderKeyMissing,
-        };
-    }
-
-    /// <summary>The draft provider's models, marked with the one in the field. A default rather than
-    /// a whitelist: picking fills the field in, and a model typed instead is kept as typed.</summary>
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildModelMenu()
-    {
-        var current = _modelDraft.Value.Trim();
-        return DraftProvider.ModelPresets
-            .Select(model => new RepoBarContextMenu.Item(
-                model,
-                () => _modelDraft.Value = model,
-                Checked: string.Equals(model, current, StringComparison.Ordinal)))
-            .ToArray();
     }
 
     public void SetDraft(string text) => _draft.Value = text;
 
-    /// <summary>Picks a provider to configure, restoring the model, endpoint and key it was last
-    /// given. None of the three travels from the provider being left behind.</summary>
-    public void SetProviderDraft(string providerId)
+    /// <summary>Picks a provider to give a key and endpoint, restoring what it was last given.
+    /// Neither travels from the provider being left behind: its endpoint is kept aside for the save,
+    /// and a key typed for it but not saved is dropped. Roles pointed at a provider that cannot
+    /// answer follow the pick, so setting up a first provider sets up every role with it.</summary>
+    public void SetKeyProviderDraft(string providerId)
     {
         var provider = AssistantProviders.Resolve(providerId);
-        if (provider.Id == _providerDraft.Value) return;
+        if (provider.Id == _keyProviderDraft.Value) return;
 
-        var choice = _store.Settings.Value.ChoiceFor(provider.Id);
-        _providerDraft.Value = provider.Id;
-        _modelDraft.Value = choice.Model ?? string.Empty;
-        _baseUrlDraft.Value = choice.BaseUrl ?? string.Empty;
+        _settingsDraft = _settingsDraft.WithBaseUrl(KeyProvider.Id, _baseUrlDraft.Value);
+        _keyProviderDraft.Value = provider.Id;
+        _baseUrlDraft.Value = _settingsDraft.BaseUrlFor(provider) ?? string.Empty;
         FillKeyField(provider);
+        FollowKeyProvider(_store.Keys.Value, provider);
     }
 
-    private AssistantProvider DraftProvider => AssistantProviders.Resolve(_providerDraft.Value);
+    // A role on a provider with no key would never answer, so it is pointed at the one being set up
+    // instead. A role already on a provider that answers is left alone.
+    private void FollowKeyProvider(AssistantKeyring keys, AssistantProvider target)
+    {
+        foreach (var draft in _roles.Values)
+            if (!keys.For(draft.Provider).IsUsable)
+                draft.SetProvider(target.Id);
+    }
+
+    private AssistantProvider KeyProvider => AssistantProviders.Resolve(_keyProviderDraft.Value);
 
     // This provider's stored key is shown rather than described — masked, and the framework refuses
     // the clipboard over a masked field, so it reads as bullets and leaves no other way out. Asked
@@ -388,7 +378,7 @@ internal sealed class AssistantViewModel : IDisposable
     private string KeyHintText()
     {
         var s = _loc.Strings.Value;
-        var provider = DraftProvider;
+        var provider = KeyProvider;
         return _store.Keys.Value.For(provider).Source switch
         {
             // A saved key is in the field, so there is nothing left for a line of prose to add.
@@ -402,47 +392,58 @@ internal sealed class AssistantViewModel : IDisposable
         };
     }
 
-    private void ShowSettingsCard()
-    {
-        SeedDrafts();
-        _settingsOpen.Value = true;
-        _open.Value = true;
-    }
+    private void OpenSettingsWindow() => _bus.Broadcast(new OpenSettingsWindowMessage(SettingsPage.Agent));
 
-    // Starts the card from the connection in use, rather than from whatever an abandoned edit left
-    // in the fields.
+    // Starts the card from the settings in use, rather than from whatever an abandoned edit left in
+    // the fields. The key picker opens on the chat's provider, the one most likely to be asked for.
     private void SeedDrafts()
     {
         var settings = _store.Settings.Value;
-        _providerDraft.Value = settings.ProviderId;
-        _modelDraft.Value = settings.Model ?? string.Empty;
-        _baseUrlDraft.Value = settings.BaseUrl ?? string.Empty;
-        FillKeyField(settings.Provider);
+        var provider = settings.ModelFor(AssistantRole.General).Provider;
+        _settingsDraft = settings;
+        _keyProviderDraft.Value = provider.Id;
+        _baseUrlDraft.Value = settings.BaseUrlFor(provider) ?? string.Empty;
+        foreach (var draft in _roles.Values)
+            draft.Seed(settings.ModelFor(draft.Role));
+        FillKeyField(provider);
     }
 
     private void ApplySettings()
     {
-        var providerId = _providerDraft.Value;
-        var key = KeyEdit(providerId);
-        _store.Save(
-            _store.Settings.Value.With(providerId, _modelDraft.Value, _baseUrlDraft.Value),
-            key);
-        _keyFieldProviderId = providerId;
-        _keyHoldsTheStoredOne = key is { Length: > 0 };
-        _settingsOpen.Value = false;
+        var provider = KeyProvider;
+        var key = KeyEdit(provider);
+
+        // A key just saved makes its provider answer, so roles left on one that cannot are pointed
+        // at it before they are read: the first key given sets up every role, not one line of three.
+        var keys = key.ApplyTo(_store.Keys.Value);
+        if (keys.For(provider).IsUsable) FollowKeyProvider(keys, provider);
+
+        var settings = _settingsDraft.WithBaseUrl(provider.Id, _baseUrlDraft.Value);
+        foreach (var draft in _roles.Values)
+            settings = settings.WithModel(draft.Role, draft.Choice);
+
+        _store.Save(settings, key);
+        _settingsDraft = settings;
+        _keyFieldProviderId = provider.Id;
+        _keyHoldsTheStoredOne = key is AssistantKeyEdit.Store;
     }
 
-    // Null leaves the stored key alone, empty forgets it. Emptying the box only means a deletion
-    // where the box was holding this provider's stored key to begin with — and whatever the box
-    // holds, it is not saved under a provider it was not filled for. That is the one rule: a key is
-    // written for the provider it was typed or read for, and for no other.
-    private string? KeyEdit(string providerId)
+    // Emptying the box only means a deletion where the box was holding this provider's stored key
+    // to begin with — and whatever the box holds, it is not saved under a provider it was not filled
+    // for. That is the one rule: a key is written for the provider it was typed or read for, and for
+    // no other. The stored key read back untouched is not an edit either, so saving the other
+    // fields does not rewrite the secret store.
+    private AssistantKeyEdit KeyEdit(AssistantProvider provider)
     {
-        if (!string.Equals(_keyFieldProviderId, providerId, StringComparison.Ordinal)) return null;
+        if (!string.Equals(_keyFieldProviderId, provider.Id, StringComparison.Ordinal)) return AssistantKeyEdit.None;
 
         var typed = _keyDraft.Value;
-        if (!string.IsNullOrWhiteSpace(typed)) return typed;
-        return _keyHoldsTheStoredOne ? string.Empty : null;
+        if (string.IsNullOrWhiteSpace(typed))
+            return _keyHoldsTheStoredOne ? new AssistantKeyEdit.Forget(provider) : AssistantKeyEdit.None;
+
+        var stored = _store.Keys.Value.For(provider).SavedKey;
+        if (_keyHoldsTheStoredOne && string.Equals(typed, stored, StringComparison.Ordinal)) return AssistantKeyEdit.None;
+        return new AssistantKeyEdit.Store(provider, typed);
     }
 
     private void ToggleOpen() => _open.Value = !_open.Value;
@@ -476,18 +477,14 @@ internal sealed class AssistantViewModel : IDisposable
         _availableSub.Dispose();
         _keyHint.Dispose();
         _baseUrlHint.Dispose();
-        _modelHint.Dispose();
-        _providerName.Dispose();
-        _hasModelPresets.Dispose();
+        _keyProviderName.Dispose();
         _activeProviderName.Dispose();
         _wantsBaseUrl.Dispose();
         _keyOptional.Dispose();
-        _showSettings.Dispose();
+        foreach (var draft in _roles.Values) draft.Dispose();
         _keyDraft.Dispose();
         _baseUrlDraft.Dispose();
-        _modelDraft.Dispose();
-        _providerDraft.Dispose();
-        _settingsOpen.Dispose();
+        _keyProviderDraft.Dispose();
         _canReviewBranch.Dispose();
         _canGenerateMessage.Dispose();
         _generatingMessage.Dispose();

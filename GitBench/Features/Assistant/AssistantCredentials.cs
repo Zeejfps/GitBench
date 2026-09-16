@@ -68,6 +68,47 @@ internal sealed class AssistantKeyring
 }
 
 /// <summary>
+/// What a save asks of the stored keys: nothing, or one provider's key written or forgotten. A key
+/// is only ever edited for the provider it was typed or read for, which is what carrying the
+/// provider inside the edit enforces.
+/// </summary>
+internal abstract record AssistantKeyEdit
+{
+    private AssistantKeyEdit() { }
+
+    public static AssistantKeyEdit None { get; } = new Keep();
+
+    public sealed record Keep : AssistantKeyEdit;
+
+    public sealed record Forget(AssistantProvider Provider) : AssistantKeyEdit;
+
+    public sealed record Store : AssistantKeyEdit
+    {
+        public Store(AssistantProvider provider, string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                throw new ArgumentException("A stored key cannot be blank.", nameof(key));
+            Provider = provider;
+            Key = key.Trim();
+        }
+
+        public AssistantProvider Provider { get; }
+
+        public string Key { get; }
+    }
+
+    /// <summary>The keyring as it will read once this edit has landed, minus whatever only the
+    /// secret store can add: the answer a resolve comes back with, available before it does.</summary>
+    public AssistantKeyring ApplyTo(AssistantKeyring keys) => this switch
+    {
+        Keep => keys,
+        Forget forget => keys.With(forget.Provider, keys.For(forget.Provider) with { SavedKey = null }),
+        Store store => keys.With(store.Provider, keys.For(store.Provider) with { SavedKey = store.Key }),
+        _ => throw new UnreachableException(),
+    };
+}
+
+/// <summary>
 /// Answers where a provider's API key comes from: the key saved for it in the OS secret store, else
 /// the provider's environment variable, else none. Only the secret store is written — an environment
 /// variable is a fallback the app reads and never owns, so clearing a saved key can still leave a key

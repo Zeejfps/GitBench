@@ -20,8 +20,8 @@ public sealed class AssistantRequestTests
         AssistantConnection? connection = null) =>
         Encoding.UTF8.GetString(AnthropicRequestWriter.Write(turn, tools, connection ?? Anthropic));
 
-    private static AssistantTurn Turn(ModelTier tier, params AssistantMessage[] messages) =>
-        new(tier, "system prompt", messages);
+    private static AssistantTurn Turn(params AssistantMessage[] messages) =>
+        new("system prompt", messages);
 
     [Fact]
     public void Toolset_SortsByNameAndFiltersToTheAgentsAllowedList()
@@ -38,7 +38,7 @@ public sealed class AssistantRequestTests
     [Fact]
     public void ToolListSerialization_IsByteStableAcrossInputOrderings()
     {
-        var turn = Turn(ModelTier.Chat, new AssistantMessage.User("hi"));
+        var turn = Turn(new AssistantMessage.User("hi"));
 
         var forward = AssistantToolset.Create(
             new IAssistantTool[] { new StubTool("alpha"), new StubTool("mid"), new StubTool("zeta") }, ThreeTools);
@@ -58,7 +58,7 @@ public sealed class AssistantRequestTests
     [Fact]
     public void Request_CachesTheLastSystemBlockAndSendsNoSamplingParameters()
     {
-        var body = Body(Turn(ModelTier.Chat, new AssistantMessage.User("hi")), Array.Empty<IAssistantTool>());
+        var body = Body(Turn(new AssistantMessage.User("hi")), Array.Empty<IAssistantTool>());
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
 
@@ -84,26 +84,28 @@ public sealed class AssistantRequestTests
             new AssistantMessage.RepoContext("branch: main"),
         };
 
-        using var chat = JsonDocument.Parse(Body(Turn(ModelTier.Chat, messages), Array.Empty<IAssistantTool>()));
+        using var chat = JsonDocument.Parse(Body(Turn(messages), Array.Empty<IAssistantTool>()));
         var chatContext = chat.RootElement.GetProperty("messages")[1];
         Assert.Equal("system", chatContext.GetProperty("role").GetString());
         Assert.Equal("branch: main", chatContext.GetProperty("content").GetString());
 
-        using var quick = JsonDocument.Parse(Body(Turn(ModelTier.Quick, messages), Array.Empty<IAssistantTool>()));
+        var haiku = AssistantConnection.For(AssistantProviders.Anthropic, model: "claude-haiku-4-5-20251001");
+        using var quick = JsonDocument.Parse(Body(Turn(messages), Array.Empty<IAssistantTool>(), haiku));
         var quickContext = quick.RootElement.GetProperty("messages")[1];
         Assert.Equal("user", quickContext.GetProperty("role").GetString());
         Assert.Equal("claude-haiku-4-5-20251001", quick.RootElement.GetProperty("model").GetString());
         Assert.False(quick.RootElement.TryGetProperty("fallbacks", out _));
     }
 
-    // A chosen model answers the chat tier too, and Sonnet 5 rejects both of the parameters the
-    // frontier models take. Sending them because the *tier* was Chat is what 400'd the turn.
+    // A chosen model answers the chat too, and Sonnet 5 rejects both of the parameters the
+    // frontier models take. Sending them because the *role* was the chat is what 400'd the turn.
     [Fact]
     public void AChatModelThatTakesNeitherOptionalParameter_IsSentNeither()
     {
+        var keys = AssistantKeyring.Empty.With(AssistantProviders.Anthropic, new AssistantKeyState("sk-ant", null, true));
         var sonnet = AssistantSettings
             .For(AssistantProviders.Anthropic.Id, "claude-sonnet-5")
-            .Connect("sk-ant");
+            .Connect(AssistantRole.General, keys);
 
         var messages = new AssistantMessage[]
         {
@@ -112,7 +114,7 @@ public sealed class AssistantRequestTests
         };
 
         using var body = JsonDocument.Parse(
-            Body(Turn(ModelTier.Chat, messages), Array.Empty<IAssistantTool>(), sonnet));
+            Body(Turn(messages), Array.Empty<IAssistantTool>(), sonnet));
 
         Assert.Equal("claude-sonnet-5", body.RootElement.GetProperty("model").GetString());
         Assert.False(body.RootElement.TryGetProperty("fallbacks", out _));
@@ -141,7 +143,7 @@ public sealed class AssistantRequestTests
             }),
         };
 
-        using var document = JsonDocument.Parse(Body(Turn(ModelTier.Chat, messages), Array.Empty<IAssistantTool>()));
+        using var document = JsonDocument.Parse(Body(Turn(messages), Array.Empty<IAssistantTool>()));
         var wire = document.RootElement.GetProperty("messages");
 
         Assert.Equal(3, wire.GetArrayLength());
@@ -159,7 +161,7 @@ public sealed class AssistantRequestTests
         var catalog = AgentCatalog.LoadEmbedded();
         var agent = catalog.Get(AgentCatalog.GeneralAgent);
 
-        Assert.Equal(ModelTier.Chat, agent.Tier);
+        Assert.Equal(AssistantRole.General, agent.Role);
         Assert.NotEmpty(agent.SystemPrompt);
         Assert.DoesNotContain("---", agent.SystemPrompt);
         Assert.Equal(

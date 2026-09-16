@@ -1,6 +1,6 @@
 ---
 name: fix-selection
-tier: chat
+role: general
 tools: find_files, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
 ---
 

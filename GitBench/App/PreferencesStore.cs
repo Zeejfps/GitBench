@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GitBench.Features.Assistant.Backend;
 using GitBench.Features.LocalChanges;
 using GitBench.Infrastructure;
 using GitBench.Input;
@@ -49,16 +50,19 @@ public static class PreferencesStore
         public bool? HideRemoteOnlyBranches { get; set; } = false;
         public bool? EnableUntrackedCache { get; set; } = false;
 
-        // Stored as free text rather than an enum: an unknown provider id resolves back to the
-        // default instead of discarding every other preference with it.
+        // Read, never written: what a file from before roles had their own models carries — the
+        // one selected provider, the flat model and endpoint an even older file kept for it, and
+        // the per-provider list that replaced the flat pair. ReadAssistantModels and
+        // ReadAssistantEndpoints fold them into the per-role and per-provider lists.
         public string? AssistantProviderId { get; set; }
-
-        // Read, never written: the flat pair a pre-list file carries, which ReadAssistantChoices
-        // folds into the per-provider list.
         public string? AssistantModel { get; set; }
         public string? AssistantBaseUrl { get; set; }
-
         public List<AssistantProviderShape>? AssistantProviderChoices { get; set; }
+
+        // Role and provider ids as free text: an entry this version does not know drops that one
+        // entry, not the whole file.
+        public List<AssistantModelShape>? AssistantModels { get; set; }
+        public List<AssistantEndpointShape>? AssistantEndpoints { get; set; }
 
         public float? AssistantPanelWidth { get; set; } = 380f;
         public float? AssistantPanelHeight { get; set; } = 460f;
@@ -81,6 +85,19 @@ public static class PreferencesStore
     {
         public string? Id { get; set; }
         public string? Model { get; set; }
+        public string? BaseUrl { get; set; }
+    }
+
+    internal sealed class AssistantModelShape
+    {
+        public string? Role { get; set; }
+        public string? Provider { get; set; }
+        public string? Model { get; set; }
+    }
+
+    internal sealed class AssistantEndpointShape
+    {
+        public string? Id { get; set; }
         public string? BaseUrl { get; set; }
     }
 
@@ -128,8 +145,8 @@ public static class PreferencesStore
                 WorkingChangesLayout = file.WorkingChangesLayout ?? defaults.WorkingChangesLayout,
                 HideRemoteOnlyBranches = file.HideRemoteOnlyBranches ?? defaults.HideRemoteOnlyBranches,
                 EnableUntrackedCache = file.EnableUntrackedCache ?? defaults.EnableUntrackedCache,
-                AssistantProviderId = file.AssistantProviderId,
-                AssistantProviderPreferences = ReadAssistantChoices(file),
+                AssistantModels = ReadAssistantModels(file),
+                AssistantEndpoints = ReadAssistantEndpoints(file),
                 AssistantPanelWidth = file.AssistantPanelWidth is > 0 ? file.AssistantPanelWidth.Value : defaults.AssistantPanelWidth,
                 AssistantPanelHeight = file.AssistantPanelHeight is > 0 ? file.AssistantPanelHeight.Value : defaults.AssistantPanelHeight,
                 AssistantPanelX = file.AssistantPanelX,
@@ -175,9 +192,11 @@ public static class PreferencesStore
             WorkingChangesLayout = preferences.WorkingChangesLayout,
             HideRemoteOnlyBranches = preferences.HideRemoteOnlyBranches,
             EnableUntrackedCache = preferences.EnableUntrackedCache,
-            AssistantProviderId = preferences.AssistantProviderId,
-            AssistantProviderChoices = preferences.AssistantProviderPreferences
-                .Select(c => new AssistantProviderShape { Id = c.ProviderId, Model = c.Model, BaseUrl = c.BaseUrl })
+            AssistantModels = preferences.AssistantModels
+                .Select(m => new AssistantModelShape { Role = m.Role, Provider = m.ProviderId, Model = m.Model })
+                .ToList(),
+            AssistantEndpoints = preferences.AssistantEndpoints
+                .Select(e => new AssistantEndpointShape { Id = e.ProviderId, BaseUrl = e.BaseUrl })
                 .ToList(),
             AssistantPanelWidth = preferences.AssistantPanelWidth,
             AssistantPanelHeight = preferences.AssistantPanelHeight,
@@ -218,26 +237,51 @@ public static class PreferencesStore
         return bindings;
     }
 
-    // Before this list existed the model and endpoint were kept flat, for whichever provider was
-    // selected. A file written then still carries them, so they are read as that provider's entry
-    // rather than dropped: a model configured before the app remembered them per provider is still
-    // the model that provider was configured with.
-    private static IReadOnlyList<AssistantProviderPreference> ReadAssistantChoices(FileShape file)
+    // A file from before roles had their own models carries one selected provider, and either a
+    // flat model for it or a per-provider list it appears in. Every role is read as running on that
+    // provider and model, so the model the assistant was configured with is still the model each
+    // of its jobs runs on.
+    private static IReadOnlyList<AssistantModelPreference> ReadAssistantModels(FileShape file)
     {
-        var choices = new List<AssistantProviderPreference>();
-        foreach (var entry in file.AssistantProviderChoices ?? [])
-            if (entry.Id is { Length: > 0 } id)
-                choices.Add(new AssistantProviderPreference(id, entry.Model, entry.BaseUrl));
+        if (file.AssistantModels is { } entries)
+            return entries
+                .Where(e => e.Role is { Length: > 0 } && e.Provider is { Length: > 0 })
+                .Select(e => new AssistantModelPreference(e.Role!, e.Provider!, e.Model))
+                .ToArray();
 
-        var selected = file.AssistantProviderId;
-        if (selected is not { Length: > 0 }) return choices;
-        if (file.AssistantModel is null && file.AssistantBaseUrl is null) return choices;
-        if (choices.Any(c => string.Equals(c.ProviderId, selected, StringComparison.OrdinalIgnoreCase)))
-            return choices;
-
-        choices.Add(new AssistantProviderPreference(selected, file.AssistantModel, file.AssistantBaseUrl));
-        return choices;
+        if (file.AssistantProviderId is not { Length: > 0 } selected) return [];
+        var model = file.AssistantModel
+            ?? LegacyChoiceFor(file, selected)?.Model;
+        return AssistantRoles.All
+            .Select(role => new AssistantModelPreference(AssistantRoles.Id(role), selected, model))
+            .ToArray();
     }
+
+    // Endpoints were kept beside the model per provider, and before that flat for the selected
+    // provider; either is read as that provider's endpoint.
+    private static IReadOnlyList<AssistantEndpointPreference> ReadAssistantEndpoints(FileShape file)
+    {
+        if (file.AssistantEndpoints is { } entries)
+            return entries
+                .Where(e => e.Id is { Length: > 0 } && e.BaseUrl is { Length: > 0 })
+                .Select(e => new AssistantEndpointPreference(e.Id!, e.BaseUrl!))
+                .ToArray();
+
+        var endpoints = new List<AssistantEndpointPreference>();
+        foreach (var entry in file.AssistantProviderChoices ?? [])
+            if (entry.Id is { Length: > 0 } id && entry.BaseUrl is { Length: > 0 } baseUrl)
+                endpoints.Add(new AssistantEndpointPreference(id, baseUrl));
+
+        if (file.AssistantProviderId is { Length: > 0 } selected
+            && file.AssistantBaseUrl is { Length: > 0 } flat
+            && LegacyChoiceFor(file, selected) is null)
+            endpoints.Add(new AssistantEndpointPreference(selected, flat));
+        return endpoints;
+    }
+
+    private static AssistantProviderShape? LegacyChoiceFor(FileShape file, string providerId) =>
+        (file.AssistantProviderChoices ?? [])
+            .FirstOrDefault(c => string.Equals(c.Id, providerId, StringComparison.OrdinalIgnoreCase));
 
     private static Locale? ParseLocale(string? value) =>
         Enum.TryParse<Locale>(value, ignoreCase: true, out var locale) && Enum.IsDefined(locale)

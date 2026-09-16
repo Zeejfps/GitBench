@@ -72,7 +72,7 @@ internal sealed class AssistantAgentLoop
         {
             ct.ThrowIfCancellationRequested();
 
-            var turn = new AssistantTurn(_agent.Tier, _agent.SystemPrompt, conversation.ToArray());
+            var turn = new AssistantTurn(_agent.SystemPrompt, conversation.ToArray());
             var text = new StringBuilder();
             var toolUses = new List<AssistantContent.ToolUse>();
             var stop = StopReason.EndTurn;

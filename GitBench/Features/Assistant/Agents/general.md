@@ -1,6 +1,6 @@
 ---
 name: general
-tier: chat
+role: general
 tools: commit, create_tag, push_tag, fetch, pull, find_files, get_branches, get_commit_details, get_commit_history, get_conflict, get_conflicts, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, mark_viewed, read_file, resolve_conflict, set_commit_message, stage_files, unstage_files
 ---
 

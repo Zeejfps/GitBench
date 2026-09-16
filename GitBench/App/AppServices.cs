@@ -271,13 +271,15 @@ internal static class AppServices
         context.Bind(
             preferences,
             p => AssistantSettings.From(
-                p.AssistantProviderId,
-                p.AssistantProviderPreferences.Select(c => (c.ProviderId, c.Model, c.BaseUrl))),
+                p.AssistantModels.Select(m => (m.Role, m.ProviderId, m.Model)),
+                p.AssistantEndpoints.Select(e => (e.ProviderId, (string?)e.BaseUrl))),
             (p, s) => p with
             {
-                AssistantProviderId = s.ProviderId,
-                AssistantProviderPreferences = s.Choices
-                    .Select(c => new AssistantProviderPreference(c.Key, c.Value.Model, c.Value.BaseUrl))
+                AssistantModels = s.Models
+                    .Select(m => new AssistantModelPreference(AssistantRoles.Id(m.Role), m.Choice.Provider.Id, m.Choice.Model))
+                    .ToArray(),
+                AssistantEndpoints = s.BaseUrls
+                    .Select(e => new AssistantEndpointPreference(e.Key, e.Value))
                     .ToArray(),
             });
         context.AddSingleton(ctx => new AssistantCredentials(ctx.Require<ISecretStore>()));
@@ -295,7 +297,7 @@ internal static class AppServices
             ctx.Require<ReviewWindowsViewModel>(),
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IDocumentStore>(),
-            connection => new HttpAssistantBackend(AssistantHttp, connection)));
+            (_, connection) => new HttpAssistantBackend(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
         context.AddSingleton<AppIconImage>();
         context.AddSingleton<AssistantMarkImage>();

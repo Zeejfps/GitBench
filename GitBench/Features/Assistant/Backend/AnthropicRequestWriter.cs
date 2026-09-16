@@ -16,12 +16,12 @@ internal static class AnthropicRequestWriter
 {
     public static byte[] Write(AssistantTurn turn, IReadOnlyList<IAssistantTool> tools, AssistantConnection connection)
     {
-        var model = connection.Capabilities(turn.Tier);
+        var model = connection.Capabilities;
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer, ToolJson.WriterOptions))
         {
             writer.WriteStartObject();
-            writer.WriteString("model", connection.ModelFor(turn.Tier));
+            writer.WriteString("model", connection.Model);
             writer.WriteNumber("max_tokens", connection.MaxTokensFor(turn));
             writer.WriteBoolean("stream", true);
             if (model.ServerSideFallbacks)

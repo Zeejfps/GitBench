@@ -4,7 +4,7 @@ namespace GitBench.Features.Assistant.Backend;
 
 /// <summary>
 /// One model provider the assistant can be pointed at: where it lives, how it is hosted, which
-/// model answers each tier, and what its wire format supports.
+/// model it answers with unless told otherwise, and what its wire format supports.
 /// </summary>
 internal sealed record AssistantProvider
 {
@@ -20,11 +20,21 @@ internal sealed record AssistantProvider
 
     public required AssistantHosting Hosting { get; init; }
 
-    /// <summary>The tier defaults name entries in the hosted model list rather than standing beside
-    /// it, so the models the tiers run on cannot drift out of the list the picker offers.</summary>
-    public required string ChatModel { get; init; }
+    /// <summary>The model a role runs on when none is chosen for it. Names an entry in the hosted
+    /// model list rather than standing beside it, so it cannot drift out of the list the picker
+    /// offers.</summary>
+    public required string DefaultModel { get; init; }
 
+    /// <summary>The cheaper model the commit message runs on when none is chosen for it — the one
+    /// job small and frequent enough not to want the frontier model. Same rule about the list.</summary>
     public required string QuickModel { get; init; }
+
+    public string DefaultModelFor(AssistantRole role) => role switch
+    {
+        AssistantRole.General or AssistantRole.Review or AssistantRole.Walkthrough => DefaultModel,
+        AssistantRole.CommitMessage => QuickModel,
+        _ => throw new ArgumentOutOfRangeException(nameof(role), role, null),
+    };
 
     public int MaxOutputTokens { get; init; } = 8192;
 
@@ -55,8 +65,6 @@ internal sealed record AssistantProvider
         AssistantHosting.SelfHosted => AssistantModel.Unlisted,
         _ => throw new UnreachableException(),
     };
-
-    public string ModelFor(ModelTier tier) => tier == ModelTier.Quick ? QuickModel : ChatModel;
 }
 
 /// <summary>
@@ -73,7 +81,7 @@ internal static class AssistantProviders
         DisplayName = "Anthropic",
         BaseUrl = "https://api.anthropic.com/v1",
         Wire = AssistantWireFormat.Anthropic,
-        ChatModel = "claude-opus-5",
+        DefaultModel = "claude-opus-5",
         QuickModel = "claude-haiku-4-5-20251001",
         // Mid-conversation system entries and a server-side fallback policy are the frontier models'
         // alone. Sonnet 5 and Haiku 4.5 reject both by name, so they say so here rather than
@@ -94,7 +102,7 @@ internal static class AssistantProviders
         DisplayName = "OpenAI",
         BaseUrl = "https://api.openai.com/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        ChatModel = "gpt-5.6-sol",
+        DefaultModel = "gpt-5.6-sol",
         QuickModel = "gpt-5.6-luna",
         Hosting = new AssistantHosting.Hosted("OPENAI_API_KEY",
         [
@@ -111,7 +119,7 @@ internal static class AssistantProviders
         DisplayName = "OpenRouter",
         BaseUrl = "https://openrouter.ai/api/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        ChatModel = "openai/gpt-5.6-sol",
+        DefaultModel = "openai/gpt-5.6-sol",
         QuickModel = "openai/gpt-5.6-luna",
         // The gateway normalizes the request shape across the models it fronts, so none of them
         // needs the per-model parameters their first-party endpoints do.
@@ -133,7 +141,7 @@ internal static class AssistantProviders
         DisplayName = "Groq",
         BaseUrl = "https://api.groq.com/openai/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        ChatModel = "openai/gpt-oss-120b",
+        DefaultModel = "openai/gpt-oss-120b",
         QuickModel = "openai/gpt-oss-20b",
         Hosting = new AssistantHosting.Hosted("GROQ_API_KEY",
         [
@@ -150,7 +158,7 @@ internal static class AssistantProviders
         DisplayName = "Together",
         BaseUrl = "https://api.together.xyz/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
-        ChatModel = "deepseek-ai/DeepSeek-V4-Pro",
+        DefaultModel = "deepseek-ai/DeepSeek-V4-Pro",
         QuickModel = "openai/gpt-oss-20b",
         Hosting = new AssistantHosting.Hosted("TOGETHER_API_KEY",
         [
@@ -170,7 +178,7 @@ internal static class AssistantProviders
         BaseUrl = "http://localhost:11434/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
         Hosting = new AssistantHosting.SelfHosted(),
-        ChatModel = "gpt-oss:20b",
+        DefaultModel = "gpt-oss:20b",
         QuickModel = "gpt-oss:20b",
         MaxOutputTokens = 4096,
     };
@@ -182,7 +190,7 @@ internal static class AssistantProviders
         BaseUrl = "http://localhost:1234/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
         Hosting = new AssistantHosting.SelfHosted(),
-        ChatModel = "local-model",
+        DefaultModel = "local-model",
         QuickModel = "local-model",
         MaxOutputTokens = 4096,
     };
@@ -194,7 +202,7 @@ internal static class AssistantProviders
         BaseUrl = "http://localhost:8000/v1",
         Wire = AssistantWireFormat.OpenAiCompatible,
         Hosting = new AssistantHosting.SelfHosted(),
-        ChatModel = "local-model",
+        DefaultModel = "local-model",
         QuickModel = "local-model",
         MaxOutputTokens = 4096,
     };

@@ -74,14 +74,18 @@ public sealed class AssistantCommitMessageTests : IDisposable
     }
 
     // Adding an agent is adding a file, so the assertion that matters is that the shipped .md is
-    // picked up with the tier and the tool list it declares — not that some C# registration exists.
+    // picked up with the role and the tool list it declares — not that some C# registration exists.
     [Fact]
-    public void CommitMessageAgent_LoadsFromTheEmbeddedPromptOnTheQuickTier()
+    public void CommitMessageAgent_LoadsFromTheEmbeddedPromptInItsOwnRole()
     {
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.CommitMessageAgent);
 
-        Assert.Equal(ModelTier.Quick, agent.Tier);
-        Assert.False(AssistantConnection.Default.Capabilities(agent.Tier).MidConversationSystem);
+        Assert.Equal(AssistantRole.CommitMessage, agent.Role);
+        // Its default is the provider's cheaper model, which is the one that takes neither of the
+        // frontier models' optional parameters.
+        var connection = AssistantSettings.Default.Connect(AssistantRole.CommitMessage, AssistantKeyring.Empty);
+        Assert.Equal(AssistantProviders.Anthropic.QuickModel, connection.Model);
+        Assert.False(connection.Capabilities.MidConversationSystem);
         Assert.NotEmpty(agent.SystemPrompt);
         Assert.DoesNotContain("---", agent.SystemPrompt);
         Assert.Equal(
@@ -217,11 +221,12 @@ public sealed class AssistantCommitMessageTests : IDisposable
         Assert.Equal("And a description too.", _commitBox.Description.Value);
     }
 
-    // Quick is Haiku, which rejects mid-conversation {"role":"system"} entries, so the live repo
-    // block has to ride in a user turn. The branch lives in the request writer; this asserts the
-    // quick action actually goes down it rather than around it.
+    // The commit message defaults to Haiku, which rejects mid-conversation {"role":"system"}
+    // entries, so the live repo block has to ride in a user turn. The branch lives in the request
+    // writer; this asserts the quick action's own connection actually goes down it rather than
+    // around it.
     [Fact]
-    public void QuickTier_PutsTheRepoBlockInAUserTurnRatherThanAMidConversationSystemMessage()
+    public void CommitMessage_PutsTheRepoBlockInAUserTurnRatherThanAMidConversationSystemMessage()
     {
         var backend = Answering("Add a second line");
         var vm = Start(backend);
@@ -230,13 +235,13 @@ public sealed class AssistantCommitMessageTests : IDisposable
         Settle(vm);
 
         var turn = Assert.Single(backend.Requests);
-        Assert.Equal(ModelTier.Quick, turn.Tier);
         var context = Assert.Single(turn.Messages.OfType<AssistantMessage.RepoContext>());
         Assert.Contains("Path: " + _root, context.Text, StringComparison.Ordinal);
 
+        var connection = AssistantSettings.Default.Connect(AssistantRole.CommitMessage, AssistantKeyring.Empty);
         using var wire = JsonDocument.Parse(
             Encoding.UTF8.GetString(AnthropicRequestWriter.Write(
-                turn, Array.Empty<IAssistantTool>(), AssistantConnection.Default)));
+                turn, Array.Empty<IAssistantTool>(), connection)));
         var messages = wire.RootElement.GetProperty("messages");
         foreach (var message in messages.EnumerateArray())
             Assert.NotEqual("system", message.GetProperty("role").GetString());
@@ -249,7 +254,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
     // Generated messages follow the UI language like every other agent, and the instruction rides in
     // the per-turn context block rather than the cached system prefix.
     [Fact]
-    public void QuickTier_AsksForTheUiReplyLanguage()
+    public void CommitMessage_AsksForTheUiReplyLanguage()
     {
         var backend = Answering("Add a second line");
         using var japanese = new LocalizationService(new State<Locale>(Locale.Ja));
@@ -398,12 +403,12 @@ public sealed class AssistantCommitMessageTests : IDisposable
             new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
-            _ => backend);
+            (_, _) => backend);
         _store.Start();
 
         _vm = new AssistantViewModel(_store, localization, _bus);
         // The key resolves on a worker; settle it before anything asks whether the action is offered.
-        Pump.WaitFor(_dispatcher, () => _store.IsConfigured.Value, "the API key to resolve");
+        Pump.WaitFor(_dispatcher, () => _store.IsConfigured(AssistantRole.CommitMessage).Value, "the API key to resolve");
         return _vm;
     }
 

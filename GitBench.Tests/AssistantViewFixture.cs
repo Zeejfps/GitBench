@@ -107,7 +107,7 @@ internal sealed class AssistantViewFixture : IDisposable
             new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
-            _ => backend);
+            (_, _) => backend);
         _store = store;
 
         AppKeybindController keybind = null!;
@@ -199,7 +199,7 @@ internal sealed class AssistantViewFixture : IDisposable
 
         store.Start();
         // The key resolves on a worker; settle it before anything asks whether setup is needed.
-        Pump.WaitFor(Dispatcher, () => store.IsConfigured.Value, "the API key to resolve");
+        Pump.WaitFor(Dispatcher, () => store.IsConfigured(AssistantRole.General).Value, "the API key to resolve");
 
         // Keys reach controllers on the pointer's path, so park the cursor over the tree first.
         Harness.MoveTo(450f, 350f);

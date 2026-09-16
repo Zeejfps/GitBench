@@ -45,13 +45,12 @@ public sealed record Preferences
     public bool HideRemoteOnlyBranches { get; init; }
     public bool EnableUntrackedCache { get; init; }
 
-    /// <summary>Which model provider the assistant talks to. Null until one is chosen, which reads
-    /// as the default provider.</summary>
-    public string? AssistantProviderId { get; init; }
+    /// <summary>The provider and model each assistant role runs on. A role with no entry reads as
+    /// the default provider's default model.</summary>
+    public IReadOnlyList<AssistantModelPreference> AssistantModels { get; init; } = [];
 
-    /// <summary>What each provider was last given, so selecting one restores the model and endpoint
-    /// used with it rather than starting from its defaults every time.</summary>
-    public IReadOnlyList<AssistantProviderPreference> AssistantProviderPreferences { get; init; } = [];
+    /// <summary>The endpoint each provider was given, for the ones that were.</summary>
+    public IReadOnlyList<AssistantEndpointPreference> AssistantEndpoints { get; init; } = [];
 
     /// <summary>The assistant panel's size, remembered the way a window's is — one placement for the
     /// app, not one per session or per repository.</summary>
@@ -93,7 +92,9 @@ public sealed record Preferences
     public static Preferences Default { get; } = new();
 }
 
-/// <summary>The model and endpoint remembered for one assistant provider. Null on either means the
-/// provider's own default. Held as plain strings so the preferences layer stays free of assistant
-/// types.</summary>
-public sealed record AssistantProviderPreference(string ProviderId, string? Model, string? BaseUrl);
+/// <summary>The provider and model one assistant role runs on. A null model means the provider's
+/// own default. Held as plain strings so the preferences layer stays free of assistant types.</summary>
+public sealed record AssistantModelPreference(string Role, string ProviderId, string? Model);
+
+/// <summary>The endpoint remembered for one assistant provider.</summary>
+public sealed record AssistantEndpointPreference(string ProviderId, string BaseUrl);

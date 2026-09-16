@@ -3,6 +3,7 @@ using GitBench.Platform;
 using System.Text;
 using GitBench.App;
 using GitBench.Features.Assistant;
+using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Repos;
 using GitBench.Features.Terminal;
 using GitBench.Input;
@@ -1893,12 +1894,14 @@ internal sealed class StubAssistantStore : IAssistantSessionStore
     public IReadable<AssistantSettings> Settings { get; } =
         new State<AssistantSettings>(AssistantSettings.Default);
 
-    public IReadable<bool> IsConfigured { get; } = new State<bool>(true);
+    public IReadable<bool> IsConfigured(AssistantRole role) => _configured;
+
+    private readonly State<bool> _configured = new(true);
 
     public IReadable<AssistantKeyring> Keys { get; } =
         new State<AssistantKeyring>(AssistantKeyring.Empty);
 
-    public void Save(AssistantSettings settings, string? apiKey)
+    public void Save(AssistantSettings settings, AssistantKeyEdit key)
     {
     }
 

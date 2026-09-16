@@ -26,13 +26,16 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public const string AgentTabId = "settings-tab-agent";
     public const string ConnectionsTabId = "settings-tab-connections";
 
-    internal const float DialogHeight = 600f;
+    internal const float DialogHeight = 660f;
 
     public required Action OnClose { get; init; }
     public bool HostedInWindow { get; init; }
 
+    /// <summary>The page the dialog opens on.</summary>
+    public SettingsPage InitialPage { get; init; } = SettingsPage.General;
+
     protected override SettingsDialogState CreateState(Context ctx) => new(
-        OnClose, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>(),
+        OnClose, InitialPage, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>(),
         ctx.Require<InputSystem>());
 
     protected override IWidget Build(Context ctx, SettingsDialogState state) => new Box
@@ -181,13 +184,6 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
                     Children =
                     [
                         new SettingsSectionHeader { Value = L.T(s => s.AssistantSettingsTitle) },
-                        new Text
-                        {
-                            Value = Prop.Bind<string?>(() => state.ActiveConnection.Value),
-                            Wrap = TextWrap.Wrap,
-                            FontSize = FontSize.Caption,
-                            Color = Theme.Color(s => s.Palette.TextMuted),
-                        },
                         new AssistantSettingsCard { Embedded = true },
                     ],
                 },
@@ -214,27 +210,22 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     };
 }
 
-internal enum SettingsPage { General, Keyboard, Agent, Connections }
-
 /// <summary>Owns the dialog's edit session; chat retains its own drafts and visibility.</summary>
 internal sealed class SettingsDialogState : IDialog, IDisposable
 {
     private readonly Action _close;
     private readonly InputSystem _input;
-    public State<SettingsPage> Page { get; } = new(SettingsPage.General);
+    public State<SettingsPage> Page { get; }
     public AssistantViewModel Agent { get; }
-    public Derived<string> ActiveConnection { get; }
 
-    public SettingsDialogState(Action close, IAssistantSessionStore store, ILocalizationService loc, IMessageBus bus,
-        InputSystem input)
+    public SettingsDialogState(Action close, SettingsPage page, IAssistantSessionStore store, ILocalizationService loc,
+        IMessageBus bus, InputSystem input)
     {
         _close = close;
         _input = input;
+        Page = new State<SettingsPage>(page);
         Agent = new AssistantViewModel(store, loc, bus);
         Agent.ResetSettings.Execute();
-        ActiveConnection = new Derived<string>(() => loc.Strings.Value.SettingsAgentActive(
-            store.Settings.Value.Provider.DisplayName,
-            store.Settings.Value.Model ?? store.Settings.Value.Provider.ChatModel));
     }
 
     public void SelectPage(SettingsPage page)
@@ -252,7 +243,6 @@ internal sealed class SettingsDialogState : IDialog, IDisposable
 
     public void Dispose()
     {
-        ActiveConnection.Dispose();
         Agent.Dispose();
         Page.Dispose();
     }

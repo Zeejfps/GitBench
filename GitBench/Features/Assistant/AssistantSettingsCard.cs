@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -12,18 +13,21 @@ using ZGF.Observable;
 namespace GitBench.Features.Assistant;
 
 /// <summary>
-/// Where the assistant is pointed: the provider, the model and endpoint chosen for it, and the key
-/// it is signed with. Takes the composer's place — as onboarding while nothing is configured, and on
-/// demand afterwards.
+/// Where the assistant is pointed: the key and endpoint each provider is given, and the provider
+/// and model each role runs on. Lives on the settings window's assistant page, and takes the
+/// composer's place as onboarding while nothing is configured.
 /// </summary>
 internal sealed record AssistantSettingsCard : Widget
 {
     public const string ProviderId = "assistant-provider";
-    public const string ModelInputId = "assistant-model-input";
     public const string BaseUrlInputId = "assistant-base-url-input";
     public const string KeyInputId = "assistant-key-input";
     public const string SaveId = "assistant-key-save";
     public const string CancelId = "assistant-settings-cancel";
+
+    public static string RoleProviderId(AssistantRole role) => $"assistant-{AssistantRoles.Id(role)}-provider";
+    public static string RoleModelInputId(AssistantRole role) => $"assistant-{AssistantRoles.Id(role)}-model-input";
+    public static string RoleModelPresetsId(AssistantRole role) => $"assistant-{AssistantRoles.Id(role)}-model-presets";
 
     /// <summary>Uses the surrounding settings page's heading and spacing, and resets edits in place.</summary>
     public bool Embedded { get; init; }
@@ -52,9 +56,7 @@ internal sealed record AssistantSettingsCard : Widget
                             [
                                 new Text
                                 {
-                                    Value = Prop.Bind<string?>(() => vm.NeedsSetup.Value
-                                        ? loc.Strings.Value.AssistantSetupTitle
-                                        : loc.Strings.Value.AssistantSettingsTitle),
+                                    Value = L.T(s => s.AssistantSetupTitle),
                                     Weight = FontWeight.Bold,
                                     FontSize = FontSize.Body,
                                     Color = Theme.Color(s => s.Palette.TextPrimary),
@@ -66,17 +68,10 @@ internal sealed record AssistantSettingsCard : Widget
                                     Wrap = TextWrap.Wrap,
                                     FontSize = FontSize.Caption,
                                     Color = Theme.Color(s => s.Palette.TextMuted),
-                                    Visible = Prop.Bind(() => !Embedded && vm.NeedsSetup.Value),
+                                    Visible = !Embedded,
                                 },
+                                new AssistantSettingsCaption { Value = L.T(s => s.AssistantSettingsKeys) },
                                 new AssistantProviderPicker(),
-                                new AssistantSettingsField
-                                {
-                                    FieldId = ModelInputId,
-                                    Label = L.T(s => s.AssistantSettingsModel),
-                                    Value = vm.ModelDraft,
-                                    Placeholder = Prop.Bind<string?>(() => vm.ModelHint.Value),
-                                    Trailing = new AssistantModelPresetPicker(),
-                                },
                                 new Show
                                 {
                                     When = vm.WantsBaseUrl,
@@ -113,6 +108,11 @@ internal sealed record AssistantSettingsCard : Widget
                                     // leave a gap where prose used to be.
                                     Visible = Prop.Bind(() => vm.KeyHint.Value.Length > 0),
                                 },
+                                new AssistantSettingsCaption { Value = L.T(s => s.AssistantSettingsModels) },
+                                new AssistantRoleLine { Role = AssistantRole.General },
+                                new AssistantRoleLine { Role = AssistantRole.CommitMessage },
+                                new AssistantRoleLine { Role = AssistantRole.Review },
+                                new AssistantRoleLine { Role = AssistantRole.Walkthrough },
                                 new Row
                                 {
                                     Gap = Spacing.Sm,
@@ -123,11 +123,11 @@ internal sealed record AssistantSettingsCard : Widget
                                         {
                                             Id = CancelId,
                                             Style = ButtonStyle.Outline(static s => s.Palette.TextMuted),
-                                            Command = Embedded ? vm.ResetSettings : vm.CloseSettings,
-                                            Visible = Prop.Bind(() => Embedded || !vm.NeedsSetup.Value),
+                                            Command = vm.ResetSettings,
+                                            Visible = Embedded,
                                             Children =
                                             [
-                                                new ButtonLabel { Value = L.T(s => Embedded ? s.SettingsAgentReset : s.AssistantSettingsCancel) },
+                                                new ButtonLabel { Value = L.T(s => s.SettingsAgentReset) },
                                             ],
                                         }.WithController<KbmController>(),
                                         new ButtonWidget
@@ -151,7 +151,8 @@ internal sealed record AssistantSettingsCard : Widget
     }
 }
 
-/// <summary>Which provider the assistant talks to, as a labelled select over the provider registry.</summary>
+/// <summary>Which provider the key and endpoint fields below are for, as a labelled select over the
+/// provider registry.</summary>
 internal sealed record AssistantProviderPicker : Widget
 {
     protected override IWidget Build(Context ctx)
@@ -167,35 +168,100 @@ internal sealed record AssistantProviderPicker : Widget
                 new AssistantSettingsLabel { Value = L.T(s => s.AssistantSettingsProvider) },
                 new Grow
                 {
-                    Child = new DropdownWidget
+                    Child = new AssistantProviderDropdown
                     {
                         Id = AssistantSettingsCard.ProviderId,
-                        Children =
-                        [
-                            new Grow
-                            {
-                                Child = new Text
-                                {
-                                    Value = Prop.Bind<string?>(() => vm.ProviderName.Value),
-                                    FontSize = FontSize.Caption,
-                                    VAlign = TextAlignment.Center,
-                                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                                },
-                            },
-                        ],
-                    }.WithMenuController(rect =>
-                        RepoBarContextMenu.Show(ctx, rect.BottomLeft, vm.BuildProviderMenu())),
+                        Value = vm.KeyProviderName,
+                        Menu = vm.BuildProviderMenu,
+                    },
                 },
             ],
         };
     }
 }
 
+/// <summary>A provider's name with a chevron, opening the list to pick another.</summary>
+internal sealed record AssistantProviderDropdown : Widget
+{
+    public required IReadable<string> Value { get; init; }
+
+    public required Func<IReadOnlyList<RepoBarContextMenu.Item>> Menu { get; init; }
+
+    protected override IWidget Build(Context ctx) => new DropdownWidget
+    {
+        Children =
+        [
+            new Grow
+            {
+                Child = new Text
+                {
+                    Value = Prop.Bind<string?>(() => Value.Value),
+                    FontSize = FontSize.Caption,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.Palette.TextPrimary),
+                },
+            },
+        ],
+    }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, Menu()));
+}
+
+/// <summary>One role's line: its name, the provider it runs on, and the model typed for it with the
+/// provider's own on offer.</summary>
+internal sealed record AssistantRoleLine : Widget
+{
+    private const float ProviderColumn = 104f;
+
+    public required AssistantRole Role { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        var vm = ctx.Require<AssistantViewModel>();
+        var draft = vm.RoleDraft(Role);
+
+        return new AssistantSettingsField
+        {
+            FieldId = AssistantSettingsCard.RoleModelInputId(Role),
+            Label = L.T(s => AssistantKeyLabels.RoleName(Role, s)),
+            Value = draft.Model,
+            Placeholder = Prop.Bind<string?>(() => draft.ModelHint.Value),
+            Leading = new AssistantProviderDropdown
+            {
+                Id = AssistantSettingsCard.RoleProviderId(Role),
+                Width = ProviderColumn,
+                Value = draft.ProviderName,
+                Menu = draft.BuildProviderMenu,
+            },
+            Trailing = new AssistantModelPresetPicker { Role = Role },
+        };
+    }
+}
+
+/// <summary>A section's heading inside the card, so the keys and the models read as two things.</summary>
+internal sealed record AssistantSettingsCaption : Widget
+{
+    public required Prop<string?> Value { get; init; }
+
+    protected override IWidget Build(Context ctx) => new Padding
+    {
+        Amount = new PaddingStyle { Top = Spacing.Sm },
+        Children =
+        [
+            new Text
+            {
+                Value = Value,
+                FontSize = FontSize.Caption,
+                Weight = FontWeight.Bold,
+                Color = Theme.Color(s => s.Palette.TextMuted),
+            },
+        ],
+    };
+}
+
 /// <summary>The caption column a connection line opens with. One width for every line, so the fields
 /// beside them share an edge.</summary>
 internal sealed record AssistantSettingsLabel : Widget
 {
-    internal const float Column = 72f;
+    internal const float Column = 96f;
 
     public required Prop<string?> Value { get; init; }
 
@@ -210,34 +276,34 @@ internal sealed record AssistantSettingsLabel : Widget
 }
 
 /// <summary>
-/// Offers the draft provider's own model ids for the model field. A default and not a whitelist:
+/// Offers a role's provider's own model ids for its model field. A default and not a whitelist:
 /// picking one fills the field in, and the field stays free text for anything unlisted.
 /// </summary>
 internal sealed record AssistantModelPresetPicker : Widget
 {
-    public const string PickerId = "assistant-model-presets";
+    public required AssistantRole Role { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = ctx.Require<AssistantViewModel>();
+        var draft = ctx.Require<AssistantViewModel>().RoleDraft(Role);
 
         return new Show
         {
-            When = vm.HasModelPresets,
+            When = draft.HasModelPresets,
             Then = () => new DropdownWidget
             {
-                Id = PickerId,
+                Id = AssistantSettingsCard.RoleModelPresetsId(Role),
                 Children = [],
             }
                 .WithTooltip(L.T(s => s.AssistantSettingsModelPresets))
                 .WithMenuController(rect =>
-                    RepoBarContextMenu.Show(ctx, rect.BottomLeft, vm.BuildModelMenu())),
+                    RepoBarContextMenu.Show(ctx, rect.BottomLeft, draft.BuildModelMenu())),
         };
     }
 }
 
-/// <summary>One labelled line of the connection: a caption, the field that carries it, and whatever
-/// control helps fill it in.</summary>
+/// <summary>One labelled line of the card: a caption, the field that carries it, and whatever
+/// controls sit beside it.</summary>
 internal sealed record AssistantSettingsField : Widget
 {
     public required string FieldId { get; init; }
@@ -247,6 +313,9 @@ internal sealed record AssistantSettingsField : Widget
 
     /// <summary>Draws the value as bullets — for the key, which is a secret on screen as much as at rest.</summary>
     public bool Masked { get; init; }
+
+    /// <summary>Shown between the caption and the field, for a choice the field depends on.</summary>
+    public IWidget? Leading { get; init; }
 
     /// <summary>Shown after the field, for a control that fills it in.</summary>
     public IWidget? Trailing { get; init; }
@@ -292,13 +361,16 @@ internal sealed record AssistantSettingsField : Widget
             },
         };
 
-        IWidget[] children = Trailing is { } trailing ? [label, field, trailing] : [label, field];
+        var children = new List<IWidget> { label };
+        if (Leading is { } leading) children.Add(leading);
+        children.Add(field);
+        if (Trailing is { } trailing) children.Add(trailing);
 
         return new Row
         {
             Gap = Spacing.Md,
             CrossAxis = CrossAxisAlignment.Center,
-            Children = children,
+            Children = [.. children],
         };
     }
 }

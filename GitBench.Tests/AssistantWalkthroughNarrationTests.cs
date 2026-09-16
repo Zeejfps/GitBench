@@ -222,7 +222,7 @@ public sealed class AssistantWalkthroughNarrationTests : IDisposable
         {
             var backend = Answering("Never.");
             var store = Start(backend, key: null);
-            Assert.False(store.IsConfigured.Value);
+            Assert.False(store.IsConfigured(AssistantRole.Walkthrough).Value);
             var window = _fixture.OpenWindow();
             window.Walkthrough.Show(AssistantNarrator, [Step("one")]);
 
@@ -255,11 +255,11 @@ public sealed class AssistantWalkthroughNarrationTests : IDisposable
             _fixture.Windows,
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
-            _ => backend);
+            (_, _) => backend);
         _store = store;
         store.Start();
         if (key is not null)
-            Pump.WaitFor(_fixture.Dispatcher, () => store.IsConfigured.Value, "the API key to resolve");
+            Pump.WaitFor(_fixture.Dispatcher, () => store.IsConfigured(AssistantRole.Walkthrough).Value, "the API key to resolve");
         else
             Pump.DrainFor(_fixture.Dispatcher, TimeSpan.FromMilliseconds(100));
         return store;

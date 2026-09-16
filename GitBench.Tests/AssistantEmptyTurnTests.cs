@@ -128,7 +128,7 @@ public sealed class AssistantEmptyTurnTests : IDisposable
 
     private AssistantSession Session(FakeAssistantBackend backend, bool toolCallingIsUnproven = false)
     {
-        var agent = new AgentDefinition("test", "You are a test agent.", ["alpha"], ModelTier.Chat);
+        var agent = new AgentDefinition("test", "You are a test agent.", ["alpha"], AssistantRole.General);
         var loop = new AssistantAgentLoop(
             backend,
             agent,

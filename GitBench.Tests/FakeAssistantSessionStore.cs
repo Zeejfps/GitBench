@@ -6,7 +6,7 @@ namespace GitBench.Tests;
 
 /// <summary>
 /// The session store as the view model sees it, with the secret store replaced by a per-provider
-/// map. Saves are recorded as the pair that matters — which provider, and what the save asked of its
+/// map. Saves are recorded as the key edit they carried — which provider, and what was asked of its
 /// key — so a test can assert not only what was written but whose slot it was written to.
 /// </summary>
 internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDisposable
@@ -14,36 +14,45 @@ internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDispo
     private readonly State<AssistantSession?> _active = new(null);
     private readonly State<CommitMessageQuickAction?> _commitMessage = new(null);
     private readonly State<AssistantSettings> _settings = new(AssistantSettings.Default);
-    private readonly State<bool> _configured = new(false);
+    private readonly Dictionary<AssistantRole, State<bool>> _configured =
+        AssistantRoles.All.ToDictionary(role => role, _ => new State<bool>(false));
     private readonly State<AssistantKeyring> _keys = new(AssistantKeyring.Empty);
     private readonly Dictionary<string, AssistantKeyState> _states = new(StringComparer.Ordinal);
 
     public IReadable<AssistantSession?> Active => _active;
     public IReadable<CommitMessageQuickAction?> CommitMessage => _commitMessage;
     public IReadable<AssistantSettings> Settings => _settings;
-    public IReadable<bool> IsConfigured => _configured;
+    public IReadable<bool> IsConfigured(AssistantRole role) => _configured[role];
     public IReadable<AssistantKeyring> Keys => _keys;
 
     public AssistantSettings? Saved { get; private set; }
 
-    /// <summary>What the last save asked of the key: null to leave it, empty to forget it.</summary>
-    public string? SavedApiKey { get; private set; }
+    /// <summary>What the last save asked of the keys.</summary>
+    public AssistantKeyEdit? SavedKey { get; private set; }
 
-    /// <summary>Every save, in order, as the provider it was for and the key edit it carried.</summary>
-    public List<(string ProviderId, string? ApiKey)> Writes { get; } = new();
+    /// <summary>Every key edit saved, in order, skipping the saves that asked nothing of the keys.</summary>
+    public List<AssistantKeyEdit> Writes { get; } = new();
 
-    public void Save(AssistantSettings settings, string? apiKey)
+    public void Save(AssistantSettings settings, AssistantKeyEdit key)
     {
         Saved = settings;
-        SavedApiKey = apiKey;
-        Writes.Add((settings.ProviderId, apiKey));
+        SavedKey = key;
+        if (key is not AssistantKeyEdit.Keep) Writes.Add(key);
         _settings.Value = settings;
 
-        // The real store writes the edit into the saved provider's own slot and nowhere else.
-        if (apiKey is not null)
-            SetSavedKey(settings.Provider, apiKey.Length == 0 ? null : apiKey);
-        else
-            Publish();
+        // The real store writes the edit into the named provider's own slot and nowhere else.
+        switch (key)
+        {
+            case AssistantKeyEdit.Store store:
+                SetSavedKey(store.Provider, store.Key);
+                break;
+            case AssistantKeyEdit.Forget forget:
+                SetSavedKey(forget.Provider, null);
+                break;
+            default:
+                Publish();
+                break;
+        }
     }
 
     /// <summary>The preset runs this store was asked for, so a test can tell "the view model
@@ -52,7 +61,11 @@ internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDispo
 
     public void RunPreset(string agentName, string prompt) => Presets.Add((agentName, prompt));
 
-    public void SetConfigured(bool configured) => _configured.Value = configured;
+    /// <summary>Forces every role's answer, until the next key change recomputes it.</summary>
+    public void SetConfigured(bool configured)
+    {
+        foreach (var state in _configured.Values) state.Value = configured;
+    }
 
     /// <summary>Gives a provider a key the app itself saved — the one the card may hold.</summary>
     public void SetSavedKey(AssistantProvider provider, string? key)
@@ -86,7 +99,8 @@ internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDispo
     private void Publish()
     {
         _keys.Value = new AssistantKeyring(new Dictionary<string, AssistantKeyState>(_states, StringComparer.Ordinal));
-        _configured.Value = _keys.Value.For(_settings.Value.Provider).IsUsable;
+        foreach (var (role, state) in _configured)
+            state.Value = _keys.Value.For(_settings.Value.ModelFor(role).Provider).IsUsable;
     }
 
     public void Dispose()
@@ -94,7 +108,7 @@ internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDispo
         _active.Dispose();
         _commitMessage.Dispose();
         _settings.Dispose();
-        _configured.Dispose();
+        foreach (var state in _configured.Values) state.Dispose();
         _keys.Dispose();
     }
 }

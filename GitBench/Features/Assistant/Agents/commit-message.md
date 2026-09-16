@@ -1,6 +1,6 @@
 ---
 name: commit-message
-tier: quick
+role: commit-message
 tools: get_diff, get_local_changes, set_commit_message
 ---
 
