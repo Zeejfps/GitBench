@@ -1,10 +1,10 @@
 using GitBench.Controls;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Repos;
+using GitBench.Features.Settings;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -196,7 +196,7 @@ internal sealed record AssistantProviderDropdown : Widget
                 Child = new Text
                 {
                     Value = Prop.Bind<string?>(() => Value.Value),
-                    FontSize = FontSize.Caption,
+                    FontSize = FontSize.Body,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.Palette.TextPrimary),
                 },
@@ -326,38 +326,12 @@ internal sealed record AssistantSettingsField : Widget
 
         var field = new Grow
         {
-            Child = new Box
+            Child = new SettingsTextField
             {
-                Background = Theme.Color(s => s.TextInput.Background),
-                BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
-                BorderSize = BorderSizeStyle.All(1),
-                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                Children =
-                [
-                    new Padding
-                    {
-                        Amount = new PaddingStyle
-                        {
-                            Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs,
-                        },
-                        Children =
-                        [
-                            new TextInput
-                            {
-                                Id = FieldId,
-                                Value = Value,
-                                Masked = Masked,
-                                Placeholder = Placeholder,
-                                Wrap = TextWrap.NoWrap,
-                                Background = Theme.Color(s => s.TextInput.Background),
-                                Color = Theme.Color(s => s.TextInput.Text),
-                                CaretColor = Theme.Color(s => s.TextInput.Caret),
-                                SelectionColor = Theme.Color(s => s.TextInput.Selection),
-                                PlaceholderColor = Theme.Color(s => s.TextInput.PlaceholderText),
-                            },
-                        ],
-                    },
-                ],
+                FieldId = FieldId,
+                Value = Value,
+                Masked = Masked,
+                Placeholder = Placeholder,
             },
         };
 

@@ -133,7 +133,7 @@ internal sealed record SchemeDropdown : Widget
     protected override IWidget Build(Context ctx) => new DropdownWidget
     {
         Width = 84,
-        Height = Sizes.ControlHeight,
+        Height = DialogFrame.FieldHeight,
         Gap = Spacing.Xs,
         Children =
         [

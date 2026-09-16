@@ -27,7 +27,7 @@ internal sealed record SettingsDropdown : Widget
                 Child = new Text
                 {
                     Value = Selected,
-                    FontSize = FontSize.Caption,
+                    FontSize = FontSize.Body,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.Palette.TextPrimary),
                 },

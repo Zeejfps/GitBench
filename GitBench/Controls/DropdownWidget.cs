@@ -9,8 +9,9 @@ namespace GitBench.Controls;
 /// <summary>
 /// The look of a bordered "select" control: caller-supplied row content followed by a chevron, in the
 /// outline chrome. It's just the look over a <see cref="ButtonState"/> — the owner bolts on the
-/// open-a-menu behavior with <c>dropdown.WithMenuController(rect =&gt; …)</c>. Size it with the inherited
-/// <c>Width</c>/<c>Height</c>; pass <see cref="Enabled"/> to gray it out when there's nothing to pick.
+/// open-a-menu behavior with <c>dropdown.WithMenuController(rect =&gt; …)</c>. Stands
+/// <see cref="Sizes.ControlHeight"/> tall unless given a <c>Height</c>, so it sits level with the text
+/// fields beside it; pass <see cref="Enabled"/> to gray it out when there's nothing to pick.
 /// </summary>
 internal sealed record DropdownWidget : Widget<ButtonState>
 {
@@ -47,6 +48,7 @@ internal sealed record DropdownWidget : Widget<ButtonState>
         {
             State = state,
             Radius = 3,
+            Height = Height.IsSet ? Height : Sizes.ControlHeight,
             Children =
             [
                 new Padding

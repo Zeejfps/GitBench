@@ -17,10 +17,6 @@ namespace GitBench.Widgets;
 /// </summary>
 internal sealed record LabeledInput : Widget
 {
-    // Tall enough that the input's content area (BoxHeight - border - padding) is at least the
-    // font's full line height; otherwise descenders (g, j, p, y) get scissored by the box clip.
-    private const float BoxHeight = 32f;
-
     public required string Label { get; init; }
     public required Prop<string> Value { get; init; }
     public string? Placeholder { get; init; }
@@ -83,7 +79,7 @@ internal sealed record LabeledInput : Widget
             {
                 Gap = Spacing.Md,
                 CrossAxis = CrossAxisAlignment.Stretch,
-                Height = BoxHeight,
+                Height = DialogFrame.FieldHeight,
                 Children = [.. boxRow],
             },
         ];

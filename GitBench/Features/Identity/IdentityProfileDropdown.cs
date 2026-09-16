@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -34,7 +35,7 @@ internal sealed record IdentityProfileDropdown : Widget
 
         return new DropdownWidget
         {
-            Height = 30,
+            Height = DialogFrame.FieldHeight,
             Gap = Spacing.Sm,
             Children =
             [

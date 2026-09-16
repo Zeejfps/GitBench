@@ -5,7 +5,6 @@ using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -87,44 +86,11 @@ internal sealed record AgentConnectionsPortField : Widget
     public required State<string> Value { get; init; }
     public required IReadable<bool> Invalid { get; init; }
 
-    protected override IWidget Build(Context ctx)
+    protected override IWidget Build(Context ctx) => new SettingsTextField
     {
-        var styles = ctx.Theme().Styles;
-        var invalid = Invalid;
-
-        return new Box
-        {
-            Width = FieldWidth,
-            Background = Theme.Color(s => s.TextInput.Background),
-            BorderColor = Prop.Bind(() => BorderColorStyle.All(invalid.Value
-                ? styles.Value.DialogFrame.ErrorText
-                : styles.Value.TextInput.Border)),
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Children =
-            [
-                new Padding
-                {
-                    Amount = new PaddingStyle
-                    {
-                        Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs,
-                    },
-                    Children =
-                    [
-                        new TextInput
-                        {
-                            Id = AgentConnectionsSettingsSection.PortInputId,
-                            Value = Value,
-                            Wrap = TextWrap.NoWrap,
-                            Background = Theme.Color(s => s.TextInput.Background),
-                            Color = Theme.Color(s => s.TextInput.Text),
-                            CaretColor = Theme.Color(s => s.TextInput.Caret),
-                            SelectionColor = Theme.Color(s => s.TextInput.Selection),
-                            PlaceholderColor = Theme.Color(s => s.TextInput.PlaceholderText),
-                        },
-                    ],
-                },
-            ],
-        };
-    }
+        FieldId = AgentConnectionsSettingsSection.PortInputId,
+        Width = FieldWidth,
+        Value = Value,
+        Invalid = Invalid,
+    };
 }

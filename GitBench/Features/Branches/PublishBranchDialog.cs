@@ -136,7 +136,7 @@ internal sealed record RemoteDropdown : Widget
         var s = ctx.Localization().Strings.Value;
         return new DropdownWidget
         {
-            Height = 30,
+            Height = DialogFrame.FieldHeight,
             Gap = Spacing.Sm,
             // Hover-enabled once there's at least one remote; the chevron and the menu only appear when
             // there's an actual choice (more than one).

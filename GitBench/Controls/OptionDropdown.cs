@@ -1,3 +1,4 @@
+using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -71,7 +72,7 @@ internal sealed record OptionDropdown<T> : Widget where T : struct, Enum
 
         return new DropdownWidget
         {
-            Height = 30,
+            Height = DialogFrame.FieldHeight,
             Gap = Spacing.Md,
             Children = content.ToArray(),
         }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));

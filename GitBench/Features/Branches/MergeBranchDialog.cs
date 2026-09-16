@@ -126,7 +126,7 @@ internal sealed record MergeBranchDialog : Widget
     {
         Gap = Spacing.Lg,
         CrossAxis = CrossAxisAlignment.Center,
-        Height = Sizes.ControlHeight,
+        Height = DialogFrame.FieldHeight,
         Children =
         [
             new Row

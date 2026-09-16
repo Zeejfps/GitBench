@@ -1,3 +1,4 @@
+using GitBench.Controls.Dialogs;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -18,7 +19,7 @@ public sealed record LabeledRow : Widget
     {
         Gap = Gap,
         CrossAxis = CrossAxisAlignment.Center,
-        Height = Sizes.ControlHeight,
+        Height = DialogFrame.FieldHeight,
         Children =
         [
             new Text

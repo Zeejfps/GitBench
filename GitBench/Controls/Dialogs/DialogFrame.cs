@@ -14,6 +14,11 @@ internal static class DialogFrame
     public const float DefaultBorderRadius = 10f;
     public const float DefaultButtonHeight = 32f;
 
+    /// <summary>Height of a dialog's text field and of any dropdown standing beside one. Tall enough
+    /// that the field's content area (minus border and padding) holds the default font's full line
+    /// height, or descenders (g, j, p, y) get scissored by the box clip.</summary>
+    public const float FieldHeight = 32f;
+
     // Shared corner radius for the interactive controls inside a dialog — buttons and text
     // fields — so the form reads as one family instead of each control picking its own number.
     public const float ControlBorderRadius = 4f;
