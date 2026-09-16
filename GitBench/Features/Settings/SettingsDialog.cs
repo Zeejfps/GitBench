@@ -43,6 +43,12 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
         BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
         Background = Theme.Color(s => s.DialogFrame.Background),
         BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.DialogFrame.Border)),
+        Shadow = Theme.Color(s => s.DialogFrame.Shadow).Select(c => new BoxShadowStyle
+        {
+            Color = c,
+            OffsetY = -8f,
+            Blur = 24f,
+        }),
         Children =
         [
             new Padding

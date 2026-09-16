@@ -17,6 +17,9 @@ namespace GitBench.Features.Settings;
 /// <summary>Owns the single settings window and its edit session for the lifetime of the app view.</summary>
 internal sealed record SettingsWindowHost : Widget
 {
+    // Leave transparent space for the dialog's blur beyond its rounded frame.
+    private const int ShadowPadding = 48;
+
     protected override View CreateView(Context ctx)
     {
         var view = new ContainerView { Width = 0, Height = 0 };
@@ -48,7 +51,8 @@ internal sealed record SettingsWindowHost : Widget
             }
 
             var size = context.Require<IWindowCoordinates>().ToScreenPoints(
-                new CanvasRect(0, 0, DialogFrame.WidthWide, SettingsDialog.DialogHeight));
+                new CanvasRect(0, 0, DialogFrame.WidthWide + ShadowPadding * 2,
+                    SettingsDialog.DialogHeight + ShadowPadding * 2));
             ISecondaryWindow? opened = null;
             opened = context.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
             {
@@ -57,16 +61,23 @@ internal sealed record SettingsWindowHost : Widget
                 Height = size.Height,
                 IsUndecorated = true,
                 CenterOnMainWindow = true,
-                BuildRoot = ctx => Direction.Wrap(new SettingsDialog
+                BuildRoot = ctx => Direction.Wrap(new Padding
                 {
-                    OnClose = () => opened?.Close(),
-                    HostedInWindow = true,
-                }.WithController<DialogKbmController>()
-                    .WithController((c, _) => new WindowDragController(c.Require<IWindow>(), c.Require<InputSystem>())
-                    {
-                        // Scroll viewports handle the wheel but their blank space can still move the window.
-                        IsBackgroundController = controller => controller is WheelScrollController,
-                    })).BuildView(ctx),
+                    Amount = PaddingStyle.All(ShadowPadding),
+                    Children =
+                    [
+                        new SettingsDialog
+                        {
+                            OnClose = () => opened?.Close(),
+                            HostedInWindow = true,
+                        }.WithController<DialogKbmController>()
+                        .WithController((c, _) => new WindowDragController(c.Require<IWindow>(), c.Require<InputSystem>())
+                        {
+                            // Scroll viewports handle the wheel but their blank space can still move the window.
+                            IsBackgroundController = controller => controller is WheelScrollController,
+                        }),
+                    ],
+                }).BuildView(ctx),
             });
             _window = opened;
             opened.Closed += () =>
