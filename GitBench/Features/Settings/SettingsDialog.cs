@@ -26,9 +26,10 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public const string AgentTabId = "settings-tab-agent";
     public const string ConnectionsTabId = "settings-tab-connections";
 
-    private const float DialogHeight = 600f;
+    internal const float DialogHeight = 600f;
 
     public required Action OnClose { get; init; }
+    public bool HostedInWindow { get; init; }
 
     protected override SettingsDialogState CreateState(Context ctx) => new(
         OnClose, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>(),
@@ -36,8 +37,8 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
 
     protected override IWidget Build(Context ctx, SettingsDialogState state) => new Box
     {
-        Width = DialogFrame.WidthWide,
-        Height = DialogHeight,
+        Width = HostedInWindow ? default(Prop<float>) : DialogFrame.WidthWide,
+        Height = HostedInWindow ? default(Prop<float>) : DialogHeight,
         BorderSize = BorderSizeStyle.All(1),
         BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
         Background = Theme.Color(s => s.DialogFrame.Background),
@@ -65,6 +66,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
                                     {
                                         Child = new Text
                                         {
+                                            Id = "settings-window-title",
                                             Value = L.T(s => s.SettingsTitle),
                                             FontSize = FontSize.Title,
                                             VAlign = TextAlignment.Center,

@@ -4,6 +4,7 @@ using GitBench.Features.Assistant;
 using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Features.Settings;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -26,6 +27,7 @@ internal sealed record AppWidget : Widget
                 new DialogSurface(),
                 new DiffWindowsView(),
                 new ReviewWindowsView(),
+                new SettingsWindowHost(),
             ],
         }
         .WithController<AppKeybindController>(ctx);

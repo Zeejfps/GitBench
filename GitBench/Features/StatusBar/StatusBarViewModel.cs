@@ -3,7 +3,6 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
-using GitBench.Features.Settings;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -112,8 +111,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private static bool HasTracking(StatusBarState s) => s.HasUpstream && !s.IsDetached;
 
     private void DoOpenSettings() =>
-        _bus.Broadcast(new ShowDialogMessage(onClose =>
-            new SettingsDialog { OnClose = onClose }.WithController<DialogKbmController>()));
+        _bus.Broadcast(new OpenSettingsWindowMessage());
 
     private void DoCheckForUpdates() =>
         _ = _updateService.CheckForUpdatesAsync(Dispatcher, userInitiated: true);

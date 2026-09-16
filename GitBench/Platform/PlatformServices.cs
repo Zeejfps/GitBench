@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using GitBench.App;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Settings;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -82,8 +81,7 @@ internal static class PlatformServices
                 bus.Broadcast(new ShowDialogMessage(onClose =>
                     new AboutDialog { OnClose = onClose }.WithController<DialogKbmController>()));
             void ShowSettings() =>
-                bus.Broadcast(new ShowDialogMessage(onClose =>
-                    new SettingsDialog { OnClose = onClose }.WithController<DialogKbmController>()));
+                bus.Broadcast(new OpenSettingsWindowMessage());
 
             AppMenuBar BuildMenuBar()
             {
