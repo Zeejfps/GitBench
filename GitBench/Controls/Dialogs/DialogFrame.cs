@@ -38,7 +38,7 @@ internal static class DialogFrame
     // that absorbs any height the frame is short on, and an optional pinned footer below it. The
     // header and footer stay put while the body scrolls, so a dialog capped to the window by
     // CenterView keeps its title and buttons visible no matter how tall its content is.
-    public static View Build(Context ctx, string title, Action onClose, View body, View? footer = null, float width = WidthStandard)
+    public static View Build(Context ctx, string title, Action onClose, View body, View? footer = null, float width = WidthStandard, bool scrollBody = true)
     {
         var column = new FlexColumnView
         {
@@ -56,7 +56,9 @@ internal static class DialogFrame
                 {
                     Grow = 1,
                     Shrink = 1,
-                    Child = new ScrollRegion { Content = new Raw { View = body }, StretchContent = true }.BuildView(ctx),
+                    Child = scrollBody
+                        ? new ScrollRegion { Content = new Raw { View = body }, StretchContent = true }.BuildView(ctx)
+                        : body,
                 },
             },
         };

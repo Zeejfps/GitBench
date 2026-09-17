@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 9,
+  "repos": [
+    {
+      "id": "45b1c439-6bf7-4679-b3ff-f962087040dc",
+      "path": "G:\\Dev\\C#\\GitBench",
+      "displayName": "GitBench",
+      "parentRepoId": null,
+      "branch": "main",
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 0
+    },
+    {
+      "id": "046c5495-a288-4a66-931f-82dfec968944",
+      "path": "G:\\Dev\\C#\\GitBench-workstream-01",
+      "displayName": "GitBench-workstream-01",
+      "parentRepoId": "45b1c439-6bf7-4679-b3ff-f962087040dc",
+      "branch": "usage",
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 1
+    },
+    {
+      "id": "4a85eb1e-7bcd-4a04-a86f-ba757d96583d",
+      "path": "G:\\Dev\\C#\\GitBench-wt-outline-name-pos",
+      "displayName": "GitBench-wt-outline-name-pos",
+      "parentRepoId": "45b1c439-6bf7-4679-b3ff-f962087040dc",
+      "branch": "usage-outline-name-pos",
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 1
+    },
+    {
+      "id": "1de22e28-8da4-427c-9236-fe70490f985e",
+      "path": "G:\\Dev\\C#\\GitBench\\external\\cs_tree_sitter",
+      "displayName": "cs_tree_sitter",
+      "parentRepoId": "45b1c439-6bf7-4679-b3ff-f962087040dc",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "bee734fc-33da-47d2-a5cf-81a87e85ee29",
+      "path": "G:\\Dev\\C#\\GitBench\\framework",
+      "displayName": "framework",
+      "parentRepoId": "45b1c439-6bf7-4679-b3ff-f962087040dc",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "c15854a1-d83e-4931-b21e-10f5bffa8f10",
+      "path": "G:\\Dev\\C#\\GitBench\\framework\\PngSharp",
+      "displayName": "PngSharp",
+      "parentRepoId": "bee734fc-33da-47d2-a5cf-81a87e85ee29",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "89985067-e510-45af-b21f-e0d885c7c70e",
+      "path": "G:\\Dev\\C#\\GitBench-workstream-01\\external\\cs_tree_sitter",
+      "displayName": "cs_tree_sitter",
+      "parentRepoId": "046c5495-a288-4a66-931f-82dfec968944",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "4f45b388-ec27-4d44-857f-309d8eaa3739",
+      "path": "G:\\Dev\\C#\\GitBench-workstream-01\\framework",
+      "displayName": "framework",
+      "parentRepoId": "046c5495-a288-4a66-931f-82dfec968944",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "b5aa9751-c876-4353-9c3b-22b3218c03aa",
+      "path": "G:\\Dev\\C#\\GitBench-workstream-01\\framework\\PngSharp",
+      "displayName": "PngSharp",
+      "parentRepoId": "4f45b388-ec27-4d44-857f-309d8eaa3739",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "1a4c0dd1-1e78-4ffe-8d80-ea02e1192e63",
+      "path": "G:\\Dev\\C#\\GitBench-wt-outline-name-pos\\external\\cs_tree_sitter",
+      "displayName": "cs_tree_sitter",
+      "parentRepoId": "4a85eb1e-7bcd-4a04-a86f-ba757d96583d",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "4d639d74-d74e-4937-8cff-23be62091ae2",
+      "path": "G:\\Dev\\C#\\GitBench-wt-outline-name-pos\\framework",
+      "displayName": "framework",
+      "parentRepoId": "4a85eb1e-7bcd-4a04-a86f-ba757d96583d",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    },
+    {
+      "id": "d349b357-d3a1-4ff1-add7-38f4e8d17902",
+      "path": "G:\\Dev\\C#\\GitBench-wt-outline-name-pos\\framework\\PngSharp",
+      "displayName": "PngSharp",
+      "parentRepoId": "4d639d74-d74e-4937-8cff-23be62091ae2",
+      "branch": null,
+      "customIconPath": null,
+      "customColor": null,
+      "customName": null,
+      "kind": 2
+    }
+  ],
+  "groups": [
+    {
+      "id": "d3ebb081-0869-4a9f-acab-b5907e8ac1d1",
+      "name": "Ungrouped",
+      "isCollapsed": false,
+      "repoIds": [
+        "45b1c439-6bf7-4679-b3ff-f962087040dc"
+      ]
+    }
+  ],
+  "activeRepoId": "45b1c439-6bf7-4679-b3ff-f962087040dc",
+  "branchesUi": {},
+  "fileBrowserUi": {
+    "45b1c439-6bf7-4679-b3ff-f962087040dc": {
+      "expanded": [],
+      "showHidden": true,
+      "cursor": null,
+      "renderMarkdown": true,
+      "tabs": [],
+      "activeTab": null
+    }
+  },
+  "worktreesExpanded": {},
+  "repoIdentityOverride": {},
+  "hotkeys": {},
+  "repoDirty": {
+    "45b1c439-6bf7-4679-b3ff-f962087040dc": true
+  }
+}

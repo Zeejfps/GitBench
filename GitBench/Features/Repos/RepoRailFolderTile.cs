@@ -109,7 +109,7 @@ internal sealed record RepoRailFolderTile : Widget<RailFolderState>
         BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         Background = Theme.Color(s => node.IsMissing.Value
             ? s.Palette.SurfaceHoverStrong
-            : RepoRailTile.IdentityColor(node.RepoId)),
+            : node.CustomColor.Value ?? RepoRailTile.IdentityColor(node.RepoId)),
         Children =
         [
             new Switch<string?>

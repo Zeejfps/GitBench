@@ -41,6 +41,8 @@ internal sealed record Dialog : Widget
     public required ActionSpec Action { get; init; }
     public IWidget[] Body { get; init; } = [];
     public float BodyGap { get; init; } = 12f;
+    /// <summary>Disable for a short form hosted in a window sized to fit all its controls.</summary>
+    public bool ScrollBody { get; init; } = true;
     public string? CancelLabel { get; init; }
 
     /// <summary>
@@ -70,6 +72,9 @@ internal sealed record Dialog : Widget
 
     /// <summary>Enter performs the action, Esc cancels — for input-free confirmation dialogs.</summary>
     public bool ConfirmKeys { get; init; }
+
+    /// <summary>Validation gate for a synchronous action. Async actions use Command.CanExecute.</summary>
+    public IReadable<bool>? ActionEnabled { get; init; }
 
     protected override View CreateView(Context ctx)
     {
@@ -119,10 +124,17 @@ internal sealed record Dialog : Widget
         foreach (var widget in Body)
             content.Children.Add(widget.BuildView(bodyScope));
         var errorView = DialogFrame.ErrorView(ctx);
+        errorView.IsVisible = false;
+        if (InlineError is not null)
+            errorView.Bind(InlineError, error =>
+            {
+                errorView.Text = error ?? string.Empty;
+                errorView.IsVisible = !string.IsNullOrEmpty(error);
+            });
         content.Children.Add(errorView);
 
         var width = Width.IsSet ? Width.Value : DialogFrame.WidthStandard;
-        var frame = DialogFrame.Build(ctx, Title, OnClose, content, footer, width);
+        var frame = DialogFrame.Build(ctx, Title, OnClose, content, footer, width, scrollBody: ScrollBody);
 
         // Stacked under a clip that keeps over-wide body content (e.g. unbreakable paths)
         // from drawing past the frame's rounded edge; the shadow sits outside the clip so
@@ -138,6 +150,8 @@ internal sealed record Dialog : Widget
         });
 
         var root = new ContainerView();
+        if (Command is null && ActionEnabled is { } enabled)
+            root.Bind(enabled, value => actionEnabled.Value = value);
         root.Children.Add(shadow);
         root.Children.Add(new ClippingView { Children = { frame } });
 
@@ -151,9 +165,6 @@ internal sealed record Dialog : Widget
                 if (running) spinner?.Start();
                 else spinner?.Stop();
             });
-
-            if (InlineError != null)
-                errorView.BindText(InlineError, s => s ?? string.Empty);
 
             // A failure goes to the dedicated operation-error dialog — the full scrollable error, a
             // copy button, and stale-lock recovery — stacked over this dialog so the user can read

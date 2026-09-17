@@ -33,7 +33,9 @@ internal sealed record PrimaryRepoRow : Widget<RepoRowState>
                         FontSize = 14f,
                         HAlign = TextAlignment.Center,
                         VAlign = TextAlignment.Center,
-                        Color = Theme.Color(s => s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, vm.IsMissing.Value)),
+                        Color = Theme.Color(s => vm.IsMissing.Value
+                            ? s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, true)
+                            : vm.CustomColor.Value ?? s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, false)),
                     },
                     new Switch<string?>
                     {

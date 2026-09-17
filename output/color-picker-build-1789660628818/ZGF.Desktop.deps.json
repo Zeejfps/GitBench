@@ -1,0 +1,99 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "ZGF.Desktop/0.0.0-alpha.0.2499": {
+        "dependencies": {
+          "Glfw.NET": "1.0.0",
+          "OpenGL.NET": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0",
+          "ZGF.KeyboardModule.GlfwAdapter": "1.0.0",
+          "ZGF.Rendering.Metal": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Desktop.dll": {}
+        }
+      },
+      "Glfw.NET/1.0.0": {
+        "runtime": {
+          "Glfw.NET.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "OpenGL.NET/1.0.0": {
+        "runtime": {
+          "OpenGL.NET.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.KeyboardModule/1.0.0": {
+        "runtime": {
+          "ZGF.KeyboardModule.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.KeyboardModule.GlfwAdapter/1.0.0": {
+        "dependencies": {
+          "Glfw.NET": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.KeyboardModule.GlfwAdapter.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Rendering.Metal/1.0.0": {
+        "runtime": {
+          "ZGF.Rendering.Metal.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ZGF.Desktop/0.0.0-alpha.0.2499": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Glfw.NET/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "OpenGL.NET/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.KeyboardModule/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.KeyboardModule.GlfwAdapter/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Rendering.Metal/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

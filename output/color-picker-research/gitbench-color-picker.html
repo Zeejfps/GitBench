@@ -1,0 +1,107 @@
+<div id="gb-color-study" aria-label="Repository color picker concept">
+  <style>
+    #gb-color-study { font: 14px 'Segoe UI', sans-serif; color: light-dark(#25272d,#e6e7eb); padding: 12px; }
+    #gb-color-study * { box-sizing: border-box; }
+    #gb-color-study .gb-panel { width: 288px; max-width: 100%; margin: auto; padding: 16px; background: light-dark(#ffffff,#25262c); border: 1px solid light-dark(#d7d9df,#45464e); border-radius: 8px; }
+    #gb-color-study .gb-heading { font-weight: 500; margin-bottom: 14px; }
+    #gb-color-study .gb-preview { display: flex; gap: 10px; align-items: center; padding: 10px; margin-bottom: 16px; background: light-dark(#f1f2f5,#1c1d22); border-radius: 5px; }
+    #gb-color-study .gb-icon { width: 30px; height: 30px; border-radius: 5px; display: grid; place-items: center; font-weight: 500; }
+    #gb-color-study .gb-swatches { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; margin: 8px 0 14px; }
+    #gb-color-study button { font: inherit; cursor: pointer; }
+    #gb-color-study .gb-swatch { width: 100%; aspect-ratio: 1; border: 1px solid light-dark(#00000025,#ffffff35); border-radius: 5px; padding: 0; }
+    #gb-color-study .gb-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px light-dark(#ffffff,#25262c),0 0 0 3px light-dark(#343640,#e6e7eb); }
+    #gb-color-study .gb-area { display: block; width: 100%; height: 148px; border: 1px solid light-dark(#00000020,#ffffff20); border-radius: 5px; position: relative; touch-action: none; padding: 0; }
+    #gb-color-study .gb-handle { position: absolute; width: 12px; height: 12px; border: 2px solid white; box-shadow: 0 0 0 1px #222; border-radius: 100%; transform: translate(-50%,-50%); pointer-events: none; }
+    #gb-color-study .gb-hue { display: block; appearance: none; width: 100%; height: 12px; border-radius: 6px; margin: 10px 0 14px; background: linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); }
+    #gb-color-study .gb-hue::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: transparent; border: 2px solid white; box-shadow: 0 0 0 1px #222; border-radius: 50%; cursor: ew-resize; }
+    #gb-color-study .gb-hue::-moz-range-thumb { width: 12px; height: 12px; background: transparent; border: 2px solid white; box-shadow: 0 0 0 1px #222; border-radius: 50%; cursor: ew-resize; }
+    #gb-color-study .gb-hex-row { display: flex; align-items: center; gap: 12px; }
+    #gb-color-study .gb-hex { width: 100%; min-width: 0; padding: 7px 9px; font: 14px Consolas,monospace; color: inherit; background: light-dark(#f7f8fa,#1c1d22); border: 1px solid light-dark(#d7d9df,#45464e); border-radius: 4px; }
+    #gb-color-study .gb-link { background: none; border: none; color: inherit; padding: 0; text-align: left; margin-bottom: 14px; }
+    #gb-color-study .gb-footer { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 16px; }
+    #gb-color-study .gb-footer button { color: inherit; background: light-dark(#f1f2f5,#34353d); border: 1px solid light-dark(#d7d9df,#50515a); padding: 6px 10px; border-radius: 4px; }
+    #gb-color-study .gb-status { color: light-dark(#535762,#b9bdc9); }
+    #gb-color-study .gb-error { color: light-dark(#b42318,#ffaea8); margin-top: 6px; }
+    #gb-color-study [hidden] { display: none; }
+    @media (pointer:coarse) { #gb-color-study .gb-swatches { grid-template-columns: repeat(4,1fr); } #gb-color-study button { min-height: 44px; } #gb-color-study .gb-hex { font-size: 16px; } }
+  </style>
+  <div class="gb-panel">
+    <div class="gb-heading">Repository color</div>
+    <div class="gb-preview"><span class="gb-icon">GB</span><span>GitBench</span></div>
+    <div>Presets</div>
+    <div class="gb-swatches" aria-label="Preset colors"></div>
+    <button class="gb-link" type="button" aria-expanded="true">Custom color ▴</button>
+    <div class="gb-custom">
+      <button class="gb-area" type="button" aria-label="Saturation and brightness; use arrow keys to adjust"><span class="gb-handle"></span></button>
+      <label>Hue<input class="gb-hue" type="range" min="0" max="360" value="220" aria-label="Hue"></label>
+    </div>
+    <label class="gb-hex-row">Hex<input class="gb-hex" value="#6195E8" spellcheck="false" maxlength="7" aria-label="Hex color"></label>
+    <div class="gb-error" role="alert" hidden>Enter a 3- or 6-digit hex color.</div>
+    <div class="gb-footer"><button type="button" class="gb-default">Use default</button><span class="gb-status" aria-live="polite">Live preview</span></div>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('gb-color-study');
+  const q = s => root.querySelector(s);
+  const options = { layout: 'Expanded', swatchShape: 'Rounded' };
+  const presets = [['Red','#E66B70'],['Orange','#E9954E'],['Amber','#D5AD42'],['Green','#70B572'],['Teal','#48B4A0'],['Cyan','#48A8C3'],['Blue','#6195E8'],['Indigo','#8584E8'],['Purple','#AC7CDE'],['Pink','#D97BB5'],['Brown','#AB8875'],['Gray','#969BA7']];
+  let h = 217, s = 0.582, v = 0.91;
+  function hexValue() {
+    const f = n => { const k = (n + h/60) % 6; return Math.round(255 * (v - v*s*Math.max(0,Math.min(k,4-k,1)))); };
+    return '#' + [f(5),f(3),f(1)].map(n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+  function choose(hex) {
+    const rgb = hex.slice(1).match(/../g).map(n=>parseInt(n,16)/255);
+    const [r,g,b] = rgb, max = Math.max(...rgb), min = Math.min(...rgb), d = max-min;
+    if(d) h = ((max===r ? (g-b)/d : max===g ? (b-r)/d+2 : (r-g)/d+4)*60+360)%360;
+    s = max ? d/max : 0; v=max; render();
+  }
+  function render(updateText=true) {
+    const hex = hexValue();
+    q('.gb-icon').style.background = hex;
+    const rgb = hex.slice(1).match(/../g).map(n=>parseInt(n,16)/255).map(c=>c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4);
+    q('.gb-icon').style.color = rgb[0]*0.2126+rgb[1]*0.7152+rgb[2]*0.0722 > 0.179 ? '#111111' : '#ffffff';
+    q('.gb-area').style.background = `linear-gradient(to top,black,transparent),linear-gradient(to right,white,hsl(${h} 100% 50%))`;
+    q('.gb-handle').style.left = `${s*100}%`;
+    q('.gb-handle').style.top = `${(1-v)*100}%`;
+    q('.gb-area').setAttribute('aria-label',`Saturation ${Math.round(s*100)} percent, brightness ${Math.round(v*100)} percent; use arrow keys to adjust`);
+    q('.gb-hue').value = h;
+    if(updateText) q('.gb-hex').value = hex;
+    q('.gb-error').hidden = true;
+    q('.gb-hex').removeAttribute('aria-invalid');
+    root.querySelectorAll('.gb-swatch').forEach(btn=>{
+      const selected = btn.dataset.hex === hex;
+      btn.setAttribute('aria-pressed',String(selected)); btn.textContent = selected ? '✓' : '';
+      btn.style.borderRadius = options.swatchShape==='Circle' ? '50%' : '5px';
+    });
+    const expanded=options.layout==='Expanded';
+    q('.gb-custom').hidden=!expanded;
+    q('.gb-link').setAttribute('aria-expanded',String(expanded));
+    q('.gb-link').textContent=expanded?'Custom color ▴':'Custom color ▾';
+  }
+  presets.forEach(([name,hex])=>{
+    const button=document.createElement('button'); button.type='button'; button.className='gb-swatch';
+    button.dataset.hex=hex; button.style.background=hex; button.style.color='#111';
+    button.setAttribute('aria-label',`${name} ${hex}`); button.onclick=()=>choose(hex); q('.gb-swatches').append(button);
+  });
+  q('.gb-link').onclick=()=>{options.layout=options.layout==='Expanded'?'Compact':'Expanded';render();};
+  q('.gb-hue').oninput=e=>{h=Number(e.target.value);render();};
+  q('.gb-hex').oninput=e=>{
+    let text=e.target.value.replace(/^#/,'');
+    if(/^[0-9a-f]{3}$/i.test(text)) text=text.split('').map(c=>c+c).join('');
+    if(/^[0-9a-f]{6}$/i.test(text)) {const typed=e.target.value;choose('#'+text);e.target.value=typed;}
+    else {q('.gb-error').hidden=false;e.target.setAttribute('aria-invalid','true');}
+  };
+  const area=q('.gb-area');
+  function drag(e) {const r=area.getBoundingClientRect();s=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));v=1-Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));render();}
+  area.onpointerdown=e=>{area.setPointerCapture(e.pointerId);drag(e);};
+  area.onpointermove=e=>{if(area.hasPointerCapture(e.pointerId))drag(e);};
+  area.onpointerup=e=>{if(area.hasPointerCapture(e.pointerId))area.releasePointerCapture(e.pointerId);};
+  area.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const step=e.shiftKey?0.1:0.01;s=Math.max(0,Math.min(1,s+(e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0)));v=Math.max(0,Math.min(1,v+(e.key==='ArrowUp'?step:e.key==='ArrowDown'?-step:0)));render();};
+  q('.gb-default').onclick=()=>{choose('#969BA7');q('.gb-status').textContent='Default preview';};
+  root.addEventListener('input',()=>q('.gb-status').textContent='Live preview');
+  choose('#6195E8');
+  if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>render()});tweak.addSelect(options,'layout',{label:'Layout',options:['Expanded','Compact']});tweak.addSelect(options,'swatchShape',{label:'Swatches',options:['Rounded','Circle']});}
+})();
+</script>

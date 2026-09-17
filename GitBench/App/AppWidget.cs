@@ -28,6 +28,7 @@ internal sealed record AppWidget : Widget
                 new DiffWindowsView(),
                 new ReviewWindowsView(),
                 new SettingsWindowHost(),
+                new RepoIconWindowHost(),
             ],
         }
         .WithController<AppKeybindController>(ctx);

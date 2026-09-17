@@ -1,0 +1,70 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "GitBench.Terminal.Vt/1.0.0": {
+        "dependencies": {
+          "XtermSharp": "1.0.0",
+          "XtermSharp.Reference": "1.0.0.0"
+        },
+        "runtime": {
+          "GitBench.Terminal.Vt.dll": {}
+        }
+      },
+      "NStack.Core/0.12.0": {
+        "runtime": {
+          "lib/netstandard1.5/NStack.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "XtermSharp/1.0.0": {
+        "dependencies": {
+          "NStack.Core": "0.12.0"
+        },
+        "runtime": {
+          "XtermSharp.dll": {
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "XtermSharp.Reference/1.0.0.0": {
+        "runtime": {
+          "XtermSharp.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "GitBench.Terminal.Vt/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "NStack.Core/0.12.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-WJpBPHWNaBRkPRxoWpFWI/4Tc2b0DHmng7HS6Js2CplVtmI/Q1Ud3zYPtwSxLgXi0CL9fvJ34Jf/sndhikaR/Q==",
+      "path": "nstack.core/0.12.0",
+      "hashPath": "nstack.core.0.12.0.nupkg.sha512"
+    },
+    "XtermSharp/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "XtermSharp.Reference/1.0.0.0": {
+      "type": "reference",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

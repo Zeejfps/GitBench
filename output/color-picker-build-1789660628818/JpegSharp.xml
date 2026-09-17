@@ -1,0 +1,1956 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>JpegSharp</name>
+    </assembly>
+    <members>
+        <member name="T:JpegSharp.Api.ChromaSubsampling">
+            <summary>
+            The chroma subsampling layout applied to the two chrominance components when encoding a
+            color image. The luminance component always keeps full resolution.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Api.ChromaSubsampling.Samp444">
+            <summary>4:4:4 — no chroma subsampling (luma sampling 1x1).</summary>
+        </member>
+        <member name="F:JpegSharp.Api.ChromaSubsampling.Samp422">
+            <summary>4:2:2 — horizontal chroma halved (luma sampling 2x1).</summary>
+        </member>
+        <member name="F:JpegSharp.Api.ChromaSubsampling.Samp420">
+            <summary>4:2:0 — horizontal and vertical chroma halved (luma sampling 2x2).</summary>
+        </member>
+        <member name="F:JpegSharp.Api.ChromaSubsampling.Samp411">
+            <summary>4:1:1 — horizontal chroma quartered (luma sampling 4x1).</summary>
+        </member>
+        <member name="T:JpegSharp.Api.ChromaSubsamplingExtensions">
+            <summary>Helpers for mapping <see cref="T:JpegSharp.Api.ChromaSubsampling"/> to luma sampling factors.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.ChromaSubsamplingExtensions.LumaFactors(JpegSharp.Api.ChromaSubsampling)">
+            <summary>Returns the luminance horizontal and vertical sampling factors for a layout.</summary>
+            <param name="subsampling">The subsampling layout.</param>
+            <returns>The (horizontal, vertical) luma sampling factors.</returns>
+        </member>
+        <member name="T:JpegSharp.Api.Exceptions.JpegCorruptException">
+            <summary>
+            Thrown when the JPEG headers are structurally valid but the entropy-coded data is corrupt:
+            an undecodable Huffman code, a coefficient magnitude out of range, a coefficient run that
+            overruns a block, or a missing restart marker. Distinguishes data corruption from the
+            header/format violations reported by the base <see cref="T:JpegSharp.Api.Exceptions.JpegFormatException"/>.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.Exceptions.JpegCorruptException.#ctor(System.String)">
+            <summary>Initializes a new instance with the specified message.</summary>
+            <param name="message">A description of the corruption.</param>
+        </member>
+        <member name="M:JpegSharp.Api.Exceptions.JpegCorruptException.#ctor(System.String,System.Exception)">
+            <summary>Initializes a new instance with a message and inner exception.</summary>
+            <param name="message">A description of the corruption.</param>
+            <param name="innerException">The underlying cause.</param>
+        </member>
+        <member name="T:JpegSharp.Api.Exceptions.JpegException">
+            <summary>
+            The base type for all exceptions raised by JpegSharp.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.Exceptions.JpegException.#ctor(System.String)">
+            <summary>Initializes a new instance with the specified message.</summary>
+            <param name="message">A description of the error.</param>
+        </member>
+        <member name="M:JpegSharp.Api.Exceptions.JpegException.#ctor(System.String,System.Exception)">
+            <summary>Initializes a new instance with a message and inner exception.</summary>
+            <param name="message">A description of the error.</param>
+            <param name="innerException">The underlying cause of the error.</param>
+        </member>
+        <member name="T:JpegSharp.Api.Exceptions.JpegFormatException">
+            <summary>
+            Thrown when JPEG data violates the format: an invalid marker, a malformed table,
+            an oversubscribed Huffman code, a truncated segment, or otherwise non-decodable input.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.Exceptions.JpegFormatException.#ctor(System.String)">
+            <summary>Initializes a new instance with the specified message.</summary>
+            <param name="message">A description of the format violation.</param>
+        </member>
+        <member name="M:JpegSharp.Api.Exceptions.JpegFormatException.#ctor(System.String,System.Exception)">
+            <summary>Initializes a new instance with a message and inner exception.</summary>
+            <param name="message">A description of the format violation.</param>
+            <param name="innerException">The underlying cause of the error.</param>
+        </member>
+        <member name="T:JpegSharp.Api.IFileSystem">
+            <summary>
+            Abstracts the file operations used by <see cref="T:JpegSharp.Api.Jpeg"/>'s path-based APIs so callers can
+            route reads and writes through their own storage instead of the physical file system.
+            Pass a custom implementation to the path-based <see cref="T:JpegSharp.Api.Jpeg"/> methods to intercept these
+            calls; when omitted they use <see cref="T:JpegSharp.Api.PhysicalFileSystem"/>.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.IFileSystem.Create(System.String)">
+            <summary>Creates or overwrites a file at the given path and returns a writable stream.</summary>
+            <param name="path">The destination path.</param>
+            <returns>A writable stream for the newly created file. The caller owns and disposes it.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.IFileSystem.OpenRead(System.String)">
+            <summary>Opens an existing file at the given path for reading.</summary>
+            <param name="path">The source path.</param>
+            <returns>A readable stream for the file. The caller owns and disposes it.</returns>
+        </member>
+        <member name="T:JpegSharp.Api.PhysicalFileSystem">
+            <summary>
+            The default <see cref="T:JpegSharp.Api.IFileSystem"/> implementation, backed by the physical file system
+            via <see cref="T:System.IO.File"/>.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.PhysicalFileSystem.Create(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:JpegSharp.Api.PhysicalFileSystem.OpenRead(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="T:JpegSharp.Api.IJpegImage">
+            <summary>
+            The common shape of a decoded image regardless of sample precision. Both the 8-bit
+            <see cref="T:JpegSharp.Api.JpegImage"/> and the high-precision <see cref="T:JpegSharp.Api.JpegImage16"/> implement this, so
+            display and pipeline code that only needs dimensions, color space and an 8-bit preview can be
+            written once against the interface. Use <see cref="P:JpegSharp.Api.IJpegImage.Precision"/> to detect which concrete type
+            you have and reach for its native sample buffer when full precision matters.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.IJpegImage.Width">
+            <summary>The image width in pixels.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.IJpegImage.Height">
+            <summary>The image height in pixels.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.IJpegImage.ColorSpace">
+            <summary>The color space of the sample data.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.IJpegImage.ComponentCount">
+            <summary>The number of interleaved channels per pixel (1 grayscale, 3 RGB, 4 CMYK).</summary>
+        </member>
+        <member name="P:JpegSharp.Api.IJpegImage.Precision">
+            <summary>The sample bit precision (8 for <see cref="T:JpegSharp.Api.JpegImage"/>, 9–16 for <see cref="T:JpegSharp.Api.JpegImage16"/>).</summary>
+        </member>
+        <member name="P:JpegSharp.Api.IJpegImage.Metadata">
+            <summary>Metadata associated with the image, or null.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.IJpegImage.ToRgba8888">
+            <summary>
+            Produces an 8-bit RGBA preview (one packed pixel per <see cref="T:System.Int32"/>), tone-mapping
+            higher-precision samples down to 8 bits. This is the precision-agnostic display bridge;
+            for full-precision access use the concrete type's native buffer or packing helpers.
+            </summary>
+            <returns>An array of <c>Width * Height</c> RGBA-packed pixels.</returns>
+        </member>
+        <member name="T:JpegSharp.Api.Jpeg">
+            <summary>
+            The primary entry point for encoding and decoding JPEG images. All methods are stateless
+            and thread-safe.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.Encode(JpegSharp.Api.JpegImage,JpegSharp.Api.JpegEncoderOptions)">
+            <summary>Encodes an image to a JPEG byte array.</summary>
+            <param name="image">The image to encode.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+            <returns>The encoded JPEG bytes.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.EncodeToStream(JpegSharp.Api.JpegImage,System.IO.Stream,JpegSharp.Api.JpegEncoderOptions)">
+            <summary>Encodes an image to a stream as JPEG.</summary>
+            <param name="image">The image to encode.</param>
+            <param name="stream">The destination stream.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.Encode16(JpegSharp.Api.JpegImage16,JpegSharp.Api.JpegEncoderOptions)">
+            <summary>
+            Encodes a high-precision (9–16 bit) image to a JPEG byte array as an extended-sequential
+            (SOF1) Huffman JPEG. Supports grayscale and RGB; chroma subsampling and progressive output
+            are not available at high precision.
+            </summary>
+            <param name="image">The image to encode.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+            <returns>The encoded JPEG bytes.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.Encode16ToStream(JpegSharp.Api.JpegImage16,System.IO.Stream,JpegSharp.Api.JpegEncoderOptions)">
+            <summary>Encodes a high-precision image to a stream. See <see cref="M:JpegSharp.Api.Jpeg.Encode16(JpegSharp.Api.JpegImage16,JpegSharp.Api.JpegEncoderOptions)"/>.</summary>
+            <param name="image">The image to encode.</param>
+            <param name="stream">The destination stream.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.Decode(System.Byte[],JpegSharp.Api.JpegDecoderOptions)">
+            <summary>Decodes a JPEG image from a byte array.</summary>
+            <param name="data">The JPEG bytes.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <returns>The decoded image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.Decode16(System.Byte[],JpegSharp.Api.JpegDecoderOptions)">
+            <summary>
+            Decodes a high-precision (9–16 bit) JPEG into a <see cref="T:JpegSharp.Api.JpegImage16"/>.
+            </summary>
+            <param name="data">The JPEG bytes.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <returns>The decoded high-precision image.</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegException">The source is 8-bit (use <see cref="M:JpegSharp.Api.Jpeg.Decode(System.Byte[],JpegSharp.Api.JpegDecoderOptions)"/>) or uses an unsupported precision.</exception>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeAnyPrecision(System.Byte[],JpegSharp.Api.JpegDecoderOptions)">
+            <summary>
+            Decodes a JPEG of any supported precision, returning the concrete image type that matches
+            the file: <see cref="T:JpegSharp.Api.JpegImage"/> for 8-bit sources, <see cref="T:JpegSharp.Api.JpegImage16"/> for 9–16 bit.
+            Inspect <see cref="P:JpegSharp.Api.IJpegImage.Precision"/> (or pattern-match the result) to reach a concrete
+            type's native buffer.
+            </summary>
+            <param name="data">The JPEG bytes.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <returns>The decoded image as an <see cref="T:JpegSharp.Api.IJpegImage"/>.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeAnyPrecisionFromStream(System.IO.Stream,JpegSharp.Api.JpegDecoderOptions)">
+            <summary>
+            Decodes a JPEG of any supported precision from a stream. See
+            <see cref="M:JpegSharp.Api.Jpeg.DecodeAnyPrecision(System.Byte[],JpegSharp.Api.JpegDecoderOptions)"/>.
+            </summary>
+            <param name="stream">The source stream.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <returns>The decoded image as an <see cref="T:JpegSharp.Api.IJpegImage"/>.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeAnyPrecisionFromStreamAsync(System.IO.Stream,JpegSharp.Api.JpegDecoderOptions,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads a JPEG of any supported precision from a stream and decodes it. The
+            stream is read asynchronously; the decode itself is CPU-bound and runs synchronously.
+            </summary>
+            <param name="stream">The source stream.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <param name="cancellationToken">A token to cancel the stream read.</param>
+            <returns>The decoded image as an <see cref="T:JpegSharp.Api.IJpegImage"/>.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.Identify(System.Byte[])">
+            <summary>
+            Reads structural information (dimensions, components, color space, precision,
+            progressive flag) from a JPEG stream by parsing only its headers.
+            </summary>
+            <param name="data">The JPEG bytes.</param>
+            <returns>The parsed <see cref="T:JpegSharp.Api.JpegInfo"/>.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.IdentifyFromStream(System.IO.Stream)">
+            <summary>Reads structural information from a JPEG stream.</summary>
+            <param name="stream">The source stream.</param>
+            <returns>The parsed <see cref="T:JpegSharp.Api.JpegInfo"/>.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeFromStream(System.IO.Stream,JpegSharp.Api.JpegDecoderOptions)">
+            <summary>Decodes a JPEG image from a stream.</summary>
+            <param name="stream">The source stream.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <returns>The decoded image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeFromStreamAsync(System.IO.Stream,JpegSharp.Api.JpegDecoderOptions,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously reads a JPEG from a stream and decodes it. The stream is read
+            asynchronously; the decode itself is CPU-bound and runs synchronously afterwards.
+            </summary>
+            <param name="stream">The source stream.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <param name="cancellationToken">A token to cancel the stream read.</param>
+            <returns>The decoded image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.EncodeToStreamAsync(JpegSharp.Api.JpegImage,System.IO.Stream,JpegSharp.Api.JpegEncoderOptions,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously encodes an image and writes it to a stream. Encoding is CPU-bound and
+            runs synchronously; the resulting bytes are written to the stream asynchronously.
+            </summary>
+            <param name="image">The image to encode.</param>
+            <param name="stream">The destination stream.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+            <param name="cancellationToken">A token to cancel the stream write.</param>
+            <returns>A task that completes when the bytes have been written.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeFromFile(System.String,JpegSharp.Api.IFileSystem)">
+            <summary>Loads and decodes a JPEG image from a file.</summary>
+            <param name="path">The file path.</param>
+            <param name="fileSystem">The file system to read through, or null to use the physical file system.</param>
+            <returns>The decoded image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.EncodeToFile(JpegSharp.Api.JpegImage,System.String,JpegSharp.Api.JpegEncoderOptions,JpegSharp.Api.IFileSystem)">
+            <summary>Encodes an image and saves it to a file as JPEG.</summary>
+            <param name="image">The image to encode.</param>
+            <param name="path">The destination file path.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+            <param name="fileSystem">The file system to write through, or null to use the physical file system.</param>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.DecodeFromFileAsync(System.String,JpegSharp.Api.JpegDecoderOptions,JpegSharp.Api.IFileSystem,System.Threading.CancellationToken)">
+            <summary>Asynchronously loads and decodes a JPEG image from a file.</summary>
+            <param name="path">The file path.</param>
+            <param name="options">Decoding options, or null for defaults.</param>
+            <param name="fileSystem">The file system to read through, or null to use the physical file system.</param>
+            <param name="cancellationToken">A token to cancel the file read.</param>
+            <returns>The decoded image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.Jpeg.EncodeToFileAsync(JpegSharp.Api.JpegImage,System.String,JpegSharp.Api.JpegEncoderOptions,JpegSharp.Api.IFileSystem,System.Threading.CancellationToken)">
+            <summary>Asynchronously encodes an image and saves it to a file as JPEG.</summary>
+            <param name="image">The image to encode.</param>
+            <param name="path">The destination file path.</param>
+            <param name="options">Encoding options, or null for defaults.</param>
+            <param name="fileSystem">The file system to write through, or null to use the physical file system.</param>
+            <param name="cancellationToken">A token to cancel the file write.</param>
+            <returns>A task that completes when the file has been written.</returns>
+        </member>
+        <member name="T:JpegSharp.Api.JpegColorSpace">
+            <summary>
+            The color space of a decoded or to-be-encoded <see cref="T:JpegSharp.Api.JpegImage"/>.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegColorSpace.Grayscale">
+            <summary>Single-channel luminance.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegColorSpace.Rgb">
+            <summary>Three interleaved 8-bit channels in R, G, B order.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegColorSpace.Cmyk">
+            <summary>Four interleaved 8-bit channels in C, M, Y, K order.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegDecoderOptions">
+            <summary>
+            Options controlling JPEG decoding.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegDecoderOptions.MaxPixels">
+            <summary>
+            The maximum number of pixels (width × height) the decoder will accept before throwing.
+            Guards against maliciously large dimensions causing excessive allocation. Defaults to
+            500 million.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegDecoderOptions.MaxDecodedBytes">
+            <summary>
+            The maximum estimated PEAK decode allocation, in bytes, the decoder will accept before
+            throwing. Unlike <see cref="P:JpegSharp.Api.JpegDecoderOptions.MaxPixels"/>, this bounds actual memory: it accounts for the
+            component sample planes (2 bytes/sample at 12-bit precision, 1 byte at 8-bit), the
+            per-component coefficient buffers a progressive (SOF2) decode additionally allocates, the
+            full-size chroma-upsampling scratch plane each subsampled component allocates during
+            assembly, and the final output image buffer. A pixel count alone does not bound memory, since a
+            multi-component, 12-bit, and/or progressive image consumes far more bytes per pixel than a
+            single-component 8-bit baseline image. Enforced ALONGSIDE <see cref="P:JpegSharp.Api.JpegDecoderOptions.MaxPixels"/> (whichever
+            limit trips first), and independently of the internal int-overflow guards. Defaults to
+            1 GiB (1,073,741,824 bytes).
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegDecoderOptions.ReadMetadata">
+            <summary>
+            When true (the default), the decoder collects metadata (JFIF, Exif, ICC, Adobe, COM)
+            and exposes it via <see cref="P:JpegSharp.Api.JpegImage.Metadata"/>. When false, metadata is skipped
+            and <see cref="P:JpegSharp.Api.JpegImage.Metadata"/> is left null.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegDecoderOptions.StrictRestartMarkers">
+            <summary>
+            Controls how restart markers (RST0–RST7) are validated at restart-interval boundaries.
+            When false (the default), a missing or out-of-sequence restart marker is handled
+            leniently: the decoder resyncs, resets its DC predictors and continues, matching its
+            general tolerance of truncated or corrupt entropy data. When true, a missing or
+            misordered restart marker throws <see cref="T:JpegSharp.Api.Exceptions.JpegCorruptException"/>.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegEncoderOptions">
+            <summary>
+            Options controlling JPEG encoding.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.Quality">
+            <summary>
+            The quality factor from 1 (smallest, lowest quality) to 100 (largest, highest quality).
+            Defaults to 75. Values outside the range are clamped.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.Subsampling">
+            <summary>
+            The chroma subsampling layout for color images. Defaults to 4:2:0. Ignored for
+            grayscale images.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.OptimizeHuffman">
+            <summary>
+            When true, the encoder performs a second pass to build entropy-optimal Huffman tables
+            instead of using the standard Annex K tables. Produces smaller files at some CPU cost.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.Progressive">
+            <summary>
+            When true, the encoder produces a progressive (SOF2) JPEG that separates the DC and AC
+            coefficient bands into multiple scans. When false (the default), a baseline (SOF0)
+            sequential JPEG is produced.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.RestartInterval">
+            <summary>
+            The number of MCUs between restart markers, or 0 to disable restart intervals.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.RgbEncoding">
+            <summary>
+            For RGB images, selects whether the encoder applies the YCbCr color transform (the
+            default, smaller files) or stores the R, G, B channels directly without a transform
+            (larger, but avoids any color-conversion loss). Ignored for non-RGB images.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.CmykAsYcck">
+            <summary>
+            When true, CMYK images are encoded using the Adobe YCCK color transform (a YCbCr
+            transform applied to the inverted CMY channels, APP14 transform 2) instead of storing
+            CMYK directly (transform 0). Ignored for non-CMYK images.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.LuminanceQuantizationTable">
+            <summary>
+            A custom quantization table for the luminance component, overriding the quality-derived
+            table. When null, the standard table scaled by <see cref="P:JpegSharp.Api.JpegEncoderOptions.Quality"/> is used.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.ChrominanceQuantizationTable">
+            <summary>
+            A custom quantization table for the chrominance components, overriding the
+            quality-derived table. When null, the standard table scaled by <see cref="P:JpegSharp.Api.JpegEncoderOptions.Quality"/> is used.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.LuminanceDcHuffmanTable">
+            <summary>Custom DC Huffman table for luminance. Ignored when <see cref="P:JpegSharp.Api.JpegEncoderOptions.OptimizeHuffman"/> is true.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.LuminanceAcHuffmanTable">
+            <summary>Custom AC Huffman table for luminance. Ignored when <see cref="P:JpegSharp.Api.JpegEncoderOptions.OptimizeHuffman"/> is true.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.ChrominanceDcHuffmanTable">
+            <summary>Custom DC Huffman table for chrominance. Ignored when <see cref="P:JpegSharp.Api.JpegEncoderOptions.OptimizeHuffman"/> is true.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.ChrominanceAcHuffmanTable">
+            <summary>Custom AC Huffman table for chrominance. Ignored when <see cref="P:JpegSharp.Api.JpegEncoderOptions.OptimizeHuffman"/> is true.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegEncoderOptions.Metadata">
+            <summary>
+            Optional metadata (JFIF density, Exif, ICC profile, comments) to embed in the output.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegImage">
+            <summary>
+            An in-memory raster image exchanged with the JPEG encoder and decoder. Samples are 8-bit
+            and stored interleaved in row-major order with <see cref="P:JpegSharp.Api.JpegImage.ComponentCount"/> channels per
+            pixel. For 9–16 bit sample data see <see cref="T:JpegSharp.Api.JpegImage16"/>.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.#ctor(System.Int32,System.Int32,JpegSharp.Api.JpegColorSpace,System.Byte[])">
+            <summary>Creates an image from raw interleaved pixel data.</summary>
+            <param name="width">Image width in pixels (must be positive).</param>
+            <param name="height">Image height in pixels (must be positive).</param>
+            <param name="colorSpace">The color space of the sample data.</param>
+            <param name="pixelData">
+            Interleaved samples, length <c>width * height * ComponentCount</c>.
+            </param>
+            <exception cref="T:System.ArgumentOutOfRangeException">A dimension is not positive.</exception>
+            <exception cref="T:System.ArgumentException">The pixel buffer length does not match the dimensions.</exception>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.Width">
+            <summary>The image width in pixels.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.Height">
+            <summary>The image height in pixels.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.ColorSpace">
+            <summary>The color space of the sample data.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.ComponentCount">
+            <summary>The number of interleaved channels per pixel (1 grayscale, 3 RGB, 4 CMYK).</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.Precision">
+            <summary>The sample bit precision. Always 8 for <see cref="T:JpegSharp.Api.JpegImage"/>.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.PixelData">
+            <summary>The interleaved sample data in row-major order.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage.Metadata">
+            <summary>
+            Metadata associated with the image. Populated by the decoder; may be set before
+            encoding via <see cref="P:JpegSharp.Api.JpegEncoderOptions.Metadata"/>.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateGrayscale(System.Int32,System.Int32,System.Byte[])">
+            <summary>Creates a single-channel grayscale image.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">Grayscale samples, one byte per pixel.</param>
+            <returns>The grayscale image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateRgb(System.Int32,System.Int32,System.Byte[])">
+            <summary>Creates a three-channel RGB image.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">Interleaved R,G,B samples.</param>
+            <returns>The RGB image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateCmyk(System.Int32,System.Int32,System.Byte[])">
+            <summary>Creates a four-channel CMYK image.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">Interleaved C,M,Y,K samples.</param>
+            <returns>The CMYK image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateFromPackedPixels(System.Int32,System.Int32,System.ReadOnlySpan{System.Int32},JpegSharp.Api.PackedPixelFormat)">
+            <summary>
+            Creates an RGB image from one packed 32-bit color per pixel, in row-major order. This is
+            the inverse of <see cref="M:JpegSharp.Api.JpegImage.ToPackedPixels(JpegSharp.Api.PackedPixelFormat)"/>. Any alpha channel in the
+            packed value is discarded, since JPEG stores no alpha.
+            </summary>
+            <param name="width">Image width in pixels (must be positive).</param>
+            <param name="height">Image height in pixels (must be positive).</param>
+            <param name="pixels">The packed pixels, exactly <c>width * height</c> long.</param>
+            <param name="format">The channel ordering of each packed pixel.</param>
+            <returns>The RGB image.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">A dimension is not positive.</exception>
+            <exception cref="T:System.ArgumentException">The pixel count does not match the dimensions.</exception>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateFromRgba8888(System.Int32,System.Int32,System.ReadOnlySpan{System.Int32})">
+            <summary>Creates an RGB image from RGBA-packed pixels (R in the high byte). Alpha is discarded.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">The packed pixels, exactly <c>width * height</c> long.</param>
+            <returns>The RGB image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateFromArgb8888(System.Int32,System.Int32,System.ReadOnlySpan{System.Int32})">
+            <summary>Creates an RGB image from ARGB-packed pixels (A in the high byte). Alpha is discarded.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">The packed pixels, exactly <c>width * height</c> long.</param>
+            <returns>The RGB image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateFromBgra8888(System.Int32,System.Int32,System.ReadOnlySpan{System.Int32})">
+            <summary>Creates an RGB image from BGRA-packed pixels (B in the high byte). Alpha is discarded.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">The packed pixels, exactly <c>width * height</c> long.</param>
+            <returns>The RGB image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.CreateFromAbgr8888(System.Int32,System.Int32,System.ReadOnlySpan{System.Int32})">
+            <summary>Creates an RGB image from ABGR-packed pixels (A in the high byte). Alpha is discarded.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="pixels">The packed pixels, exactly <c>width * height</c> long.</param>
+            <returns>The RGB image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.ComponentsFor(JpegSharp.Api.JpegColorSpace)">
+            <summary>Returns the number of channels for a color space.</summary>
+            <param name="colorSpace">The color space.</param>
+            <returns>The channel count.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.ToRgb">
+            <summary>
+            Returns an RGB copy of this image. Grayscale luminance is replicated across R, G and B,
+            and CMYK is converted with the standard multiplicative model (the decoder has already
+            undone any Adobe inversion / YCCK transform). An image that is already RGB is copied so
+            the result never shares its <see cref="P:JpegSharp.Api.JpegImage.PixelData"/> with the original. <see cref="P:JpegSharp.Api.JpegImage.Metadata"/>
+            is carried over to the result by reference.
+            </summary>
+            <returns>A new RGB <see cref="T:JpegSharp.Api.JpegImage"/> of the same dimensions.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.ToPackedPixels(JpegSharp.Api.PackedPixelFormat)">
+            <summary>
+            Converts the image to one packed 32-bit color per pixel, in row-major order. Grayscale
+            samples are replicated across R, G and B, and CMYK samples are converted to RGB with the
+            standard multiplicative model. Alpha is always fully opaque (255) since JPEG carries no
+            alpha channel.
+            </summary>
+            <param name="format">The channel ordering of each packed pixel.</param>
+            <returns>An array of <c>Width * Height</c> packed pixels.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage.ToPackedPixels(System.Span{System.Int32},JpegSharp.Api.PackedPixelFormat)">
+            <summary>
+            Converts the image to one packed 32-bit color per pixel, writing into a caller-supplied
+            span to avoid an allocation. See <see cref="M:JpegSharp.Api.JpegImage.ToPackedPixels(JpegSharp.Api.PackedPixelFormat)"/> for the
+            channel, color-space and alpha semantics.
+            </summary>
+            <param name="destination">
+            The buffer to fill, in row-major order. Must be at least <c>Width * Height</c> long; any
+            extra elements are left untouched.
+            </param>
+            <param name="format">The channel ordering of each packed pixel.</param>
+            <exception cref="T:System.ArgumentException">The destination is too small to hold every pixel.</exception>
+        </member>
+        <member name="T:JpegSharp.Api.JpegImage16">
+            <summary>
+            An in-memory raster image with 9–16 bit samples (typically 12-bit), stored interleaved in
+            row-major order as <see cref="T:System.UInt16"/> values. Samples are right-aligned in
+            <c>[0, MaxSampleValue]</c> — the literal values from the JPEG file, not rescaled to the full
+            16-bit range. For the common 8-bit case use <see cref="T:JpegSharp.Api.JpegImage"/>; call <see cref="M:JpegSharp.Api.JpegImage16.To8Bit"/>
+            to bridge to it (and thereby to every 8-bit helper such as encoding, <c>ToRgb</c>, or the
+            32-bit packing helpers).
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.#ctor(System.Int32,System.Int32,JpegSharp.Api.JpegColorSpace,System.Int32,System.UInt16[])">
+            <summary>Creates a high-precision image from raw interleaved samples.</summary>
+            <param name="width">Image width in pixels (must be positive).</param>
+            <param name="height">Image height in pixels (must be positive).</param>
+            <param name="colorSpace">The color space of the sample data.</param>
+            <param name="precision">The sample bit precision, 9–16.</param>
+            <param name="pixelData">Interleaved samples, length <c>width * height * ComponentCount</c>.</param>
+            <exception cref="T:System.ArgumentOutOfRangeException">A dimension is not positive, or the precision is outside 9–16.</exception>
+            <exception cref="T:System.ArgumentException">The pixel buffer length does not match the dimensions.</exception>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.Width">
+            <inheritdoc />
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.Height">
+            <inheritdoc />
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.ColorSpace">
+            <inheritdoc />
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.ComponentCount">
+            <inheritdoc />
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.Precision">
+            <inheritdoc />
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.MaxSampleValue">
+            <summary>The largest valid sample value, <c>(1 &lt;&lt; Precision) - 1</c> (e.g. 4095 for 12-bit).</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.PixelData">
+            <summary>The interleaved sample data in row-major order; values in <c>[0, MaxSampleValue]</c>.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegImage16.Metadata">
+            <inheritdoc cref="P:JpegSharp.Api.JpegImage.Metadata" />
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateGrayscale(System.Int32,System.Int32,System.Int32,System.UInt16[])">
+            <summary>Creates a single-channel high-precision grayscale image.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="precision">The sample bit precision, 9–16.</param>
+            <param name="pixels">Grayscale samples, one value per pixel.</param>
+            <returns>The grayscale image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateRgb(System.Int32,System.Int32,System.Int32,System.UInt16[])">
+            <summary>Creates a three-channel high-precision RGB image.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="precision">The sample bit precision, 9–16.</param>
+            <param name="pixels">Interleaved R,G,B samples.</param>
+            <returns>The RGB image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateCmyk(System.Int32,System.Int32,System.Int32,System.UInt16[])">
+            <summary>Creates a four-channel high-precision CMYK image.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="precision">The sample bit precision, 9–16.</param>
+            <param name="pixels">Interleaved C,M,Y,K samples.</param>
+            <returns>The CMYK image.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.To8Bit">
+            <summary>
+            Down-samples to an 8-bit <see cref="T:JpegSharp.Api.JpegImage"/> by right-shifting each sample by
+            <c>Precision - 8</c>. This is the bridge to every 8-bit API: encoding, <c>ToRgb</c>, and
+            the 32-bit packing helpers. Color space and <see cref="P:JpegSharp.Api.JpegImage16.Metadata"/> are preserved.
+            </summary>
+            <returns>An 8-bit image of the same dimensions and color space.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.ToRgba8888">
+            <summary>
+            Produces an 8-bit RGBA preview by tone-mapping via <see cref="M:JpegSharp.Api.JpegImage16.To8Bit"/>. Grayscale and
+            CMYK are handled through the 8-bit conversion. For full-precision output use
+            <see cref="M:JpegSharp.Api.JpegImage16.ToPackedPixels64(JpegSharp.Api.PackedPixelFormat64)"/>.
+            </summary>
+            <returns>An array of <c>Width * Height</c> RGBA-packed 8-bit pixels.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.ToPackedPixels64(JpegSharp.Api.PackedPixelFormat64)">
+            <summary>
+            Converts the image to one packed 64-bit color per pixel (16 bits per channel), in
+            row-major order, preserving full precision. Channel values are the native right-aligned
+            samples in <c>[0, MaxSampleValue]</c>; grayscale is replicated across R, G and B, CMYK is
+            converted to RGB with the standard multiplicative model, and alpha is set to
+            <see cref="P:JpegSharp.Api.JpegImage16.MaxSampleValue"/> (fully opaque in the sample scale).
+            </summary>
+            <param name="format">The channel ordering of each packed pixel.</param>
+            <returns>An array of <c>Width * Height</c> packed pixels.</returns>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.ToPackedPixels64(System.Span{System.Int64},JpegSharp.Api.PackedPixelFormat64)">
+            <summary>
+            Converts the image to one packed 64-bit color per pixel, writing into a caller-supplied
+            span to avoid an allocation. See <see cref="M:JpegSharp.Api.JpegImage16.ToPackedPixels64(JpegSharp.Api.PackedPixelFormat64)"/> for
+            the channel and alpha semantics.
+            </summary>
+            <param name="destination">The buffer to fill, at least <c>Width * Height</c> long; extra elements are left untouched.</param>
+            <param name="format">The channel ordering of each packed pixel.</param>
+            <exception cref="T:System.ArgumentException">The destination is too small to hold every pixel.</exception>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateFromPackedPixels64(System.Int32,System.Int32,System.Int32,System.ReadOnlySpan{System.Int64},JpegSharp.Api.PackedPixelFormat64)">
+            <summary>
+            Creates a high-precision RGB image from one packed 64-bit color per pixel. This is the
+            inverse of <see cref="M:JpegSharp.Api.JpegImage16.ToPackedPixels64(JpegSharp.Api.PackedPixelFormat64)"/>. Alpha is discarded, since
+            JPEG stores no alpha; channel values are taken as native samples in <c>[0, MaxSampleValue]</c>.
+            </summary>
+            <param name="width">Image width in pixels (must be positive).</param>
+            <param name="height">Image height in pixels (must be positive).</param>
+            <param name="precision">The sample bit precision, 9–16.</param>
+            <param name="pixels">The packed pixels, exactly <c>width * height</c> long.</param>
+            <param name="format">The channel ordering of each packed pixel.</param>
+            <returns>The RGB image.</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException">A dimension is not positive, or the precision is outside 9–16.</exception>
+            <exception cref="T:System.ArgumentException">The pixel count does not match the dimensions.</exception>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateFromRgba16161616(System.Int32,System.Int32,System.Int32,System.ReadOnlySpan{System.Int64})">
+            <summary>Creates a high-precision RGB image from RGBA-packed pixels. Alpha is discarded.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateFromArgb16161616(System.Int32,System.Int32,System.Int32,System.ReadOnlySpan{System.Int64})">
+            <summary>Creates a high-precision RGB image from ARGB-packed pixels. Alpha is discarded.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateFromBgra16161616(System.Int32,System.Int32,System.Int32,System.ReadOnlySpan{System.Int64})">
+            <summary>Creates a high-precision RGB image from BGRA-packed pixels. Alpha is discarded.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16.CreateFromAbgr16161616(System.Int32,System.Int32,System.Int32,System.ReadOnlySpan{System.Int64})">
+            <summary>Creates a high-precision RGB image from ABGR-packed pixels. Alpha is discarded.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegImage16PackingExtensions">
+            <summary>
+            Convenience wrappers over <see cref="M:JpegSharp.Api.JpegImage16.ToPackedPixels64(JpegSharp.Api.PackedPixelFormat64)"/>, one
+            per <see cref="T:JpegSharp.Api.PackedPixelFormat64"/>, for callers who prefer a named method to passing the
+            enum. Each has an allocating overload that returns a new array and a zero-allocation overload
+            that fills a caller-supplied span.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToRgba16161616(JpegSharp.Api.JpegImage16)">
+            <summary>Packs the image as 16-bit RGBA (R in the high lane).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToRgba16161616(JpegSharp.Api.JpegImage16,System.Span{System.Int64})">
+            <summary>Packs the image as 16-bit RGBA into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToArgb16161616(JpegSharp.Api.JpegImage16)">
+            <summary>Packs the image as 16-bit ARGB (A in the high lane).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToArgb16161616(JpegSharp.Api.JpegImage16,System.Span{System.Int64})">
+            <summary>Packs the image as 16-bit ARGB into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToBgra16161616(JpegSharp.Api.JpegImage16)">
+            <summary>Packs the image as 16-bit BGRA (B in the high lane).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToBgra16161616(JpegSharp.Api.JpegImage16,System.Span{System.Int64})">
+            <summary>Packs the image as 16-bit BGRA into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToAbgr16161616(JpegSharp.Api.JpegImage16)">
+            <summary>Packs the image as 16-bit ABGR (A in the high lane).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImage16PackingExtensions.ToAbgr16161616(JpegSharp.Api.JpegImage16,System.Span{System.Int64})">
+            <summary>Packs the image as 16-bit ABGR into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegImagePackingExtensions">
+            <summary>
+            Convenience wrappers over <see cref="M:JpegSharp.Api.JpegImage.ToPackedPixels(JpegSharp.Api.PackedPixelFormat)"/>, one per
+            <see cref="T:JpegSharp.Api.PackedPixelFormat"/>, for callers who prefer a named method to passing the enum.
+            Each has an allocating overload that returns a new array and a zero-allocation overload that
+            fills a caller-supplied span.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToRgba8888(JpegSharp.Api.JpegImage)">
+            <summary>Packs the image as RGBA (R in the high byte, A in the low byte).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToRgba8888(JpegSharp.Api.JpegImage,System.Span{System.Int32})">
+            <summary>Packs the image as RGBA into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToArgb8888(JpegSharp.Api.JpegImage)">
+            <summary>Packs the image as ARGB (A in the high byte, B in the low byte).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToArgb8888(JpegSharp.Api.JpegImage,System.Span{System.Int32})">
+            <summary>Packs the image as ARGB into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToBgra8888(JpegSharp.Api.JpegImage)">
+            <summary>Packs the image as BGRA (B in the high byte, A in the low byte).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToBgra8888(JpegSharp.Api.JpegImage,System.Span{System.Int32})">
+            <summary>Packs the image as BGRA into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToAbgr8888(JpegSharp.Api.JpegImage)">
+            <summary>Packs the image as ABGR (A in the high byte, R in the low byte).</summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegImagePackingExtensions.ToAbgr8888(JpegSharp.Api.JpegImage,System.Span{System.Int32})">
+            <summary>Packs the image as ABGR into <paramref name="destination"/>.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegInfo">
+            <summary>
+            Lightweight structural information about a JPEG stream, obtained by parsing only its
+            headers (up to and including the frame header) without decoding pixel data.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Api.JpegInfo.#ctor(System.Int32,System.Int32,System.Int32,JpegSharp.Api.JpegColorSpace,System.Int32,System.Boolean)">
+            <summary>Creates a new info record.</summary>
+            <param name="width">Image width in pixels.</param>
+            <param name="height">Image height in pixels.</param>
+            <param name="componentCount">The number of color components.</param>
+            <param name="colorSpace">The inferred output color space.</param>
+            <param name="precision">The sample bit precision.</param>
+            <param name="isProgressive">Whether the frame is a progressive DCT frame.</param>
+        </member>
+        <member name="P:JpegSharp.Api.JpegInfo.Width">
+            <summary>The image width in pixels.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegInfo.Height">
+            <summary>The image height in pixels.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegInfo.ComponentCount">
+            <summary>The number of color components in the frame.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegInfo.ColorSpace">
+            <summary>The color space that a full decode would produce.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegInfo.Precision">
+            <summary>The sample bit precision (typically 8).</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegInfo.IsProgressive">
+            <summary>Whether the frame uses progressive DCT coding.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegDensityUnit">
+            <summary>
+            The unit of the JFIF pixel density fields.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegDensityUnit.None">
+            <summary>No units; the density values express only a pixel aspect ratio.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegDensityUnit.DotsPerInch">
+            <summary>Pixels per inch.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegDensityUnit.DotsPerCentimeter">
+            <summary>Pixels per centimeter.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JfifDensity">
+            <summary>
+            The JFIF pixel density (APP0) describing physical resolution or aspect ratio.
+            </summary>
+            <param name="Unit">The density unit.</param>
+            <param name="X">Horizontal density.</param>
+            <param name="Y">Vertical density.</param>
+        </member>
+        <member name="M:JpegSharp.Api.JfifDensity.#ctor(JpegSharp.Api.JpegDensityUnit,System.Int32,System.Int32)">
+            <summary>
+            The JFIF pixel density (APP0) describing physical resolution or aspect ratio.
+            </summary>
+            <param name="Unit">The density unit.</param>
+            <param name="X">Horizontal density.</param>
+            <param name="Y">Vertical density.</param>
+        </member>
+        <member name="P:JpegSharp.Api.JfifDensity.Unit">
+            <summary>The density unit.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JfifDensity.X">
+            <summary>Horizontal density.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JfifDensity.Y">
+            <summary>Vertical density.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegApplicationSegment">
+            <summary>
+            A raw application (APPn) or otherwise unrecognized segment preserved verbatim so it can
+            round-trip through decode and encode.
+            </summary>
+            <param name="MarkerCode">The marker code (0xE0–0xEF for APP0–APP15).</param>
+            <param name="Data">The segment payload (excluding the marker and length bytes).</param>
+        </member>
+        <member name="M:JpegSharp.Api.JpegApplicationSegment.#ctor(System.Byte,System.Byte[])">
+            <summary>
+            A raw application (APPn) or otherwise unrecognized segment preserved verbatim so it can
+            round-trip through decode and encode.
+            </summary>
+            <param name="MarkerCode">The marker code (0xE0–0xEF for APP0–APP15).</param>
+            <param name="Data">The segment payload (excluding the marker and length bytes).</param>
+        </member>
+        <member name="P:JpegSharp.Api.JpegApplicationSegment.MarkerCode">
+            <summary>The marker code (0xE0–0xEF for APP0–APP15).</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegApplicationSegment.Data">
+            <summary>The segment payload (excluding the marker and length bytes).</summary>
+        </member>
+        <member name="T:JpegSharp.Api.HeaderSegmentKind">
+            <summary>The kind of a header metadata segment recorded in the encounter-order manifest.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.HeaderSegmentKind.Jfif">
+            <summary>JFIF density (APP0).</summary>
+        </member>
+        <member name="F:JpegSharp.Api.HeaderSegmentKind.Adobe">
+            <summary>Adobe color transform (APP14).</summary>
+        </member>
+        <member name="F:JpegSharp.Api.HeaderSegmentKind.Exif">
+            <summary>Exif (APP1).</summary>
+        </member>
+        <member name="F:JpegSharp.Api.HeaderSegmentKind.Icc">
+            <summary>ICC profile (APP2); recorded once at the position of its first chunk.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.HeaderSegmentKind.Comment">
+            <summary>A comment (COM); <see cref="P:JpegSharp.Api.HeaderSegmentRef.Index"/> selects which comment.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.HeaderSegmentKind.App">
+            <summary>A preserved application segment; <see cref="P:JpegSharp.Api.HeaderSegmentRef.Index"/> selects which entry.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.HeaderSegmentRef">
+            <summary>
+            A reference to one header metadata segment in on-disk encounter order, used to replay the
+            original segment ordering on re-encode.
+            </summary>
+            <param name="Kind">The segment kind.</param>
+            <param name="Index">For <see cref="F:JpegSharp.Api.HeaderSegmentKind.Comment"/> the index into the comment lists,
+            for <see cref="F:JpegSharp.Api.HeaderSegmentKind.App"/> the index into <see cref="P:JpegSharp.Api.JpegMetadata.ApplicationSegments"/>;
+            otherwise unused.</param>
+        </member>
+        <member name="M:JpegSharp.Api.HeaderSegmentRef.#ctor(JpegSharp.Api.HeaderSegmentKind,System.Int32)">
+            <summary>
+            A reference to one header metadata segment in on-disk encounter order, used to replay the
+            original segment ordering on re-encode.
+            </summary>
+            <param name="Kind">The segment kind.</param>
+            <param name="Index">For <see cref="F:JpegSharp.Api.HeaderSegmentKind.Comment"/> the index into the comment lists,
+            for <see cref="F:JpegSharp.Api.HeaderSegmentKind.App"/> the index into <see cref="P:JpegSharp.Api.JpegMetadata.ApplicationSegments"/>;
+            otherwise unused.</param>
+        </member>
+        <member name="P:JpegSharp.Api.HeaderSegmentRef.Kind">
+            <summary>The segment kind.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.HeaderSegmentRef.Index">
+            <summary>For <see cref="F:JpegSharp.Api.HeaderSegmentKind.Comment"/> the index into the comment lists,
+            for <see cref="F:JpegSharp.Api.HeaderSegmentKind.App"/> the index into <see cref="P:JpegSharp.Api.JpegMetadata.ApplicationSegments"/>;
+            otherwise unused.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegMetadata">
+            <summary>
+            Optional metadata carried alongside a JPEG image: JFIF density, Exif, ICC profile, the
+            Adobe color transform, comment segments, and any preserved unrecognized application
+            segments. Any field may be null or empty.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.Density">
+            <summary>The JFIF pixel density from the APP0 segment, if present.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.Exif">
+            <summary>The raw Exif payload (the bytes after the "Exif\0\0" APP1 identifier), if present.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.IccProfile">
+            <summary>The complete ICC profile reassembled from APP2 segments, if present.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.AdobeColorTransform">
+            <summary>The Adobe color transform from the APP14 segment (0, 1, or 2), if present.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.Comments">
+            <summary>The comment (COM) segments in file order.</summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.CommentBytes">
+            <summary>
+            The raw comment (COM) segment payloads in file order. COM data is defined as arbitrary
+            bytes (T.81 B.2.4.5), so this is the lossless source of truth that round-trips binary or
+            non-UTF-8 comments exactly. When non-empty it takes precedence over <see cref="P:JpegSharp.Api.JpegMetadata.Comments"/>
+            on encode; <see cref="P:JpegSharp.Api.JpegMetadata.Comments"/> is a best-effort UTF-8 string view of the same data.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.ApplicationSegments">
+            <summary>
+            Application segments the codec does not interpret (any APPn that is not a recognized
+            JFIF/Exif/ICC/Adobe segment), preserved in file order for round-tripping.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Api.JpegMetadata.HeaderSegmentOrder">
+            <summary>
+            The on-disk encounter order of the header metadata segments, populated by the decoder so the
+            encoder can replay the original ordering. Empty for user-constructed metadata, in which case
+            the encoder falls back to its fixed segment order.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Api.JpegRgbEncoding">
+            <summary>
+            Selects the color representation used when encoding an RGB image.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegRgbEncoding.YCbCr">
+            <summary>
+            Apply the YCbCr color transform (the JFIF default). Enables chroma subsampling and
+            produces smaller files.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Api.JpegRgbEncoding.Rgb">
+            <summary>
+            Store the R, G, B channels directly with no color transform (Adobe APP14 transform 0).
+            Larger files, but free of any color-conversion loss.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Api.PackedPixelFormat">
+            <summary>
+            The channel ordering of a pixel packed into a 32-bit <see cref="T:System.Int32"/>. Each name lists the
+            channels from the most-significant byte to the least-significant, so the value is unambiguous
+            regardless of platform endianness. For example <see cref="F:JpegSharp.Api.PackedPixelFormat.Rgba8888"/> packs a pixel as
+            <c>(R &lt;&lt; 24) | (G &lt;&lt; 16) | (B &lt;&lt; 8) | A</c>.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat.Rgba8888">
+            <summary>Red in the high byte, then green, blue, alpha in the low byte.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat.Argb8888">
+            <summary>Alpha in the high byte, then red, green, blue in the low byte. Matches the int layout used by System.Drawing.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat.Bgra8888">
+            <summary>Blue in the high byte, then green, red, alpha in the low byte.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat.Abgr8888">
+            <summary>Alpha in the high byte, then blue, green, red in the low byte.</summary>
+        </member>
+        <member name="T:JpegSharp.Api.PackedPixelFormat64">
+            <summary>
+            The channel ordering of a high-precision pixel packed into a 64-bit <see cref="T:System.Int64"/>, with
+            each channel occupying 16 bits. Named from the most-significant 16-bit lane to the least, so
+            the value is unambiguous regardless of endianness — for example <see cref="F:JpegSharp.Api.PackedPixelFormat64.Rgba16161616"/>
+            packs a pixel as <c>(R &lt;&lt; 48) | (G &lt;&lt; 32) | (B &lt;&lt; 16) | A</c>.
+            </summary>
+            <remarks>
+            Channel values are the image's native, right-aligned samples in <c>[0, MaxSampleValue]</c>
+            (e.g. 0–4095 for 12-bit) — they are <em>not</em> rescaled to the full 16-bit range. Consumers
+            that expect full-range 16-bit channels should scale by the image's precision first.
+            </remarks>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat64.Rgba16161616">
+            <summary>Red in the high lane, then green, blue, alpha in the low lane.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat64.Argb16161616">
+            <summary>Alpha in the high lane, then red, green, blue in the low lane.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat64.Bgra16161616">
+            <summary>Blue in the high lane, then green, red, alpha in the low lane.</summary>
+        </member>
+        <member name="F:JpegSharp.Api.PackedPixelFormat64.Abgr16161616">
+            <summary>Alpha in the high lane, then blue, green, red in the low lane.</summary>
+        </member>
+        <member name="T:JpegSharp.Bitstream.RestartResync">
+            <summary>Outcome of a restart-marker resync at a restart-interval boundary.</summary>
+        </member>
+        <member name="F:JpegSharp.Bitstream.RestartResync.FoundExpected">
+            <summary>The expected RSTn marker was found and consumed.</summary>
+        </member>
+        <member name="F:JpegSharp.Bitstream.RestartResync.FoundMismatch">
+            <summary>A restart marker was found and consumed, but its number did not match the expected one.</summary>
+        </member>
+        <member name="F:JpegSharp.Bitstream.RestartResync.Missing">
+            <summary>No restart marker was found within the bounded resync window.</summary>
+        </member>
+        <member name="T:JpegSharp.Bitstream.BitReader">
+            <summary>
+            An MSB-first bit reader over a JPEG entropy-coded segment. Transparently removes
+            <c>0x00</c> stuffing bytes that follow a <c>0xFF</c> data byte and detects marker codes
+            (a <c>0xFF</c> followed by a non-zero, non-fill byte), at which point further reads
+            return padding <c>1</c> bits and <see cref="P:JpegSharp.Bitstream.BitReader.MarkerReached"/> becomes <see langword="true"/>.
+            </summary>
+            <remarks>
+            This is a <see langword="ref"/> struct so it can wrap a <see cref="T:System.ReadOnlySpan`1"/> of
+            the compressed data with zero allocation and be mutated in place by the entropy decoder.
+            </remarks>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.#ctor(System.ReadOnlySpan{System.Byte})">
+            <summary>Creates a reader positioned at the start of the given entropy data.</summary>
+            <param name="data">The compressed entropy-coded bytes (may include markers).</param>
+        </member>
+        <member name="P:JpegSharp.Bitstream.BitReader.MarkerReached">
+            <summary>Gets a value indicating whether a marker has been encountered.</summary>
+        </member>
+        <member name="P:JpegSharp.Bitstream.BitReader.Marker">
+            <summary>Gets the marker code (the byte after <c>0xFF</c>) once one is reached.</summary>
+        </member>
+        <member name="P:JpegSharp.Bitstream.BitReader.BytePosition">
+            <summary>Gets the current byte offset into the source data.</summary>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.ReadBits(System.Int32)">
+            <summary>
+            Reads <paramref name="count"/> bits MSB-first and returns them right-aligned.
+            If a marker or the end of data is reached, missing bits are supplied as <c>1</c>.
+            </summary>
+            <param name="count">Number of bits to read (0..24).</param>
+            <returns>The bits read, right-aligned in the low bits of the result.</returns>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.ReadBit">
+            <summary>Reads a single bit MSB-first.</summary>
+            <returns>The next bit as 0 or 1.</returns>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.PeekByte">
+            <summary>
+            Returns the next 8 bits MSB-first <em>without consuming them</em>, padding with
+            <c>1</c> bits at a marker or the end of data. Used for Huffman lookahead.
+            </summary>
+            <returns>The next 8 bits, right-aligned (0..255).</returns>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.SkipBits(System.Int32)">
+            <summary>
+            Consumes <paramref name="count"/> bits that are already buffered (for example after a
+            successful <see cref="M:JpegSharp.Bitstream.BitReader.PeekByte"/> lookahead).
+            </summary>
+            <param name="count">Number of buffered bits to consume (must not exceed the buffer).</param>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.AlignToByte">
+            <summary>Discards buffered bits back to the next byte boundary.</summary>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.ResetForRestart">
+            <summary>
+            Clears a reached restart marker (RST0–RST7), advances past it, and resets the bit
+            buffer so decoding can resume with the following entropy data.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.SkipRestartMarker(System.Int32,System.Boolean)">
+            <summary>
+            Discards any buffered bits and performs a bounded, byte-aligned resync onto the restart
+            marker (RST0–RST7) expected at the current restart-interval boundary. Only a couple of
+            leftover bytes and any 0xFF fill run are skipped; the scan never runs unboundedly.
+            </summary>
+            <param name="expectedRst">The RSTn number (0–7) expected at this boundary.</param>
+            <param name="strict">
+            When true, a mismatched or missing marker throws <see cref="T:JpegSharp.Api.Exceptions.JpegCorruptException"/>;
+            when false the reader resyncs leniently and reports the outcome.
+            </param>
+            <returns>What was found at the boundary.</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegCorruptException">
+            A marker is missing or out of sequence and <paramref name="strict"/> is true.
+            </exception>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitReader.Extend(System.Int32,System.Int32)">
+            <summary>
+            Sign-extends a <paramref name="magnitude"/>-bit received value into the signed
+            coefficient it represents (ITU-T T.81 Figure F.12, EXTEND).
+            </summary>
+            <param name="value">The raw received bits.</param>
+            <param name="magnitude">The magnitude category (bit length).</param>
+            <returns>The sign-extended value.</returns>
+        </member>
+        <member name="T:JpegSharp.Bitstream.BitWriter">
+            <summary>
+            An MSB-first bit writer for JPEG entropy-coded segments. Emits bytes to the underlying
+            stream and automatically inserts a <c>0x00</c> stuffing byte after every <c>0xFF</c>
+            data byte so that entropy data can never be mistaken for a marker.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitWriter.#ctor(System.IO.Stream)">
+            <summary>Creates a writer that appends entropy data to the given stream.</summary>
+            <param name="stream">The destination stream.</param>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitWriter.WriteBits(System.Int32,System.Int32)">
+            <summary>
+            Writes the low <paramref name="count"/> bits of <paramref name="value"/> MSB-first.
+            </summary>
+            <param name="value">The value whose low bits are written.</param>
+            <param name="count">Number of bits to write (0..24).</param>
+        </member>
+        <member name="M:JpegSharp.Bitstream.BitWriter.Flush">
+            <summary>
+            Flushes any buffered partial byte, padding the remaining bits with <c>1</c>s as
+            required by the JPEG specification.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Coding.BlockScanCoder">
+            <summary>
+            Encodes and decodes a single 8x8 block of quantized coefficients (in zig-zag order) for
+            baseline sequential JPEG, following ITU-T T.81 §F.1.2: DC differential prediction plus
+            AC run-length/magnitude Huffman coding.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Coding.BlockScanCoder.MagnitudeCategory(System.Int32)">
+            <summary>
+            Returns the JPEG magnitude category (SSSS) for a coefficient value: the number of
+            bits required to represent its magnitude, or 0 for zero.
+            </summary>
+            <param name="value">The coefficient value.</param>
+            <returns>The magnitude category (0..).</returns>
+        </member>
+        <member name="M:JpegSharp.Coding.BlockScanCoder.EncodeBlock(JpegSharp.Bitstream.BitWriter,System.ReadOnlySpan{System.Int16},System.Int32,JpegSharp.Huffman.HuffmanTable,JpegSharp.Huffman.HuffmanTable)">
+            <summary>
+            Encodes one block and returns the DC value to use as the predictor for the next block
+            of the same component.
+            </summary>
+            <param name="writer">The entropy bit writer.</param>
+            <param name="block">64 quantized coefficients in zig-zag order.</param>
+            <param name="dcPredictor">The previous DC value for this component.</param>
+            <param name="dc">The DC Huffman table.</param>
+            <param name="ac">The AC Huffman table.</param>
+            <returns>The DC value of this block (the next predictor).</returns>
+        </member>
+        <member name="M:JpegSharp.Coding.BlockScanCoder.DecodeBlock(JpegSharp.Bitstream.BitReader@,System.Span{System.Int16},System.Int32,JpegSharp.Huffman.HuffmanTable,JpegSharp.Huffman.HuffmanTable)">
+            <summary>
+            Decodes one block into zig-zag order and returns the DC value to use as the predictor
+            for the next block of the same component.
+            </summary>
+            <param name="reader">The entropy bit reader.</param>
+            <param name="block">Destination for 64 coefficients in zig-zag order; cleared first.</param>
+            <param name="dcPredictor">The previous DC value for this component.</param>
+            <param name="dc">The DC Huffman table.</param>
+            <param name="ac">The AC Huffman table.</param>
+            <returns>The DC value of this block (the next predictor).</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">The entropy data is malformed.</exception>
+        </member>
+        <member name="M:JpegSharp.Coding.BlockScanCoder.GatherBlockFrequencies(System.ReadOnlySpan{System.Int16},System.Int32,System.Span{System.Int32},System.Span{System.Int32})">
+            <summary>
+            Accumulates the Huffman symbol frequencies this block would emit, without writing bits.
+            Used by the two-pass optimized-Huffman encoder.
+            </summary>
+            <param name="block">64 quantized coefficients in zig-zag order.</param>
+            <param name="dcPredictor">The previous DC value for this component.</param>
+            <param name="dcFrequencies">DC symbol frequency accumulator (length 256).</param>
+            <param name="acFrequencies">AC symbol frequency accumulator (length 256).</param>
+            <returns>The DC value of this block (the next predictor).</returns>
+        </member>
+        <member name="M:JpegSharp.Coding.BlockScanCoder.Mantissa(System.Int32,System.Int32)">
+            <summary>
+            Computes the magnitude bits transmitted for a nonzero coefficient value: the low
+            <paramref name="category"/> bits of the value, with negative values stored as
+            (value - 1).
+            </summary>
+            <param name="value">The coefficient value.</param>
+            <param name="category">The magnitude category (bit length).</param>
+            <returns>The magnitude bits to transmit.</returns>
+        </member>
+        <member name="T:JpegSharp.Color.ChromaSampler">
+            <summary>
+            Downsamples and upsamples component planes between full resolution and the reduced
+            resolution implied by a component's sampling factors. Downsampling box-averages each
+            sample block; upsampling replicates samples (nearest-neighbour), which is spec-valid and
+            exact for constant regions.
+            </summary>
+            <remarks>
+            The horizontal and vertical factors express how many full-resolution samples map to one
+            subsampled sample. Common layouts: 4:4:4 → (1,1), 4:2:2 → (2,1), 4:2:0 → (2,2),
+            4:1:1 → (4,1). Arbitrary factors are supported.
+            </remarks>
+        </member>
+        <member name="M:JpegSharp.Color.ChromaSampler.SubsampledSize(System.Int32,System.Int32)">
+            <summary>Returns the subsampled extent for a full-resolution extent and factor (rounded up).</summary>
+            <param name="fullSize">The full-resolution dimension.</param>
+            <param name="factor">The sampling factor (samples averaged per output sample).</param>
+            <returns>The subsampled dimension.</returns>
+        </member>
+        <member name="M:JpegSharp.Color.ChromaSampler.Downsample(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Int32,System.Int32,System.Span{System.Byte},System.Int32,System.Int32)">
+            <summary>
+            Box-averages a full-resolution plane down into a subsampled plane.
+            </summary>
+            <param name="src">Full-resolution samples (row-major).</param>
+            <param name="srcWidth">Full-resolution width.</param>
+            <param name="srcHeight">Full-resolution height.</param>
+            <param name="hFactor">Horizontal averaging factor (≥ 1).</param>
+            <param name="vFactor">Vertical averaging factor (≥ 1).</param>
+            <param name="dst">Destination subsampled samples (row-major).</param>
+            <param name="dstWidth">Subsampled width; must equal <see cref="M:JpegSharp.Color.ChromaSampler.SubsampledSize(System.Int32,System.Int32)"/>(srcWidth, hFactor).</param>
+            <param name="dstHeight">Subsampled height; must equal <see cref="M:JpegSharp.Color.ChromaSampler.SubsampledSize(System.Int32,System.Int32)"/>(srcHeight, vFactor).</param>
+        </member>
+        <member name="M:JpegSharp.Color.ChromaSampler.Upsample(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Int32,System.Int32,System.Span{System.Byte},System.Int32,System.Int32)">
+            <summary>
+            Replicates a subsampled plane up to full resolution.
+            </summary>
+            <param name="src">Subsampled samples (row-major).</param>
+            <param name="srcWidth">Subsampled width.</param>
+            <param name="srcHeight">Subsampled height.</param>
+            <param name="hFactor">Horizontal replication factor (≥ 1).</param>
+            <param name="vFactor">Vertical replication factor (≥ 1).</param>
+            <param name="dst">Destination full-resolution samples (row-major).</param>
+            <param name="dstWidth">Full-resolution width.</param>
+            <param name="dstHeight">Full-resolution height.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ChromaSampler.UpsampleLinear(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Span{System.Byte},System.Int32,System.Int32)">
+            <summary>
+            Upsamples a subsampled plane to a target resolution using centered bilinear
+            interpolation, producing smoother chroma than nearest-neighbour replication. Handles
+            arbitrary ratios and is exact when the dimensions already match.
+            </summary>
+            <param name="src">Subsampled samples (row-major).</param>
+            <param name="srcWidth">Subsampled width.</param>
+            <param name="srcHeight">Subsampled height.</param>
+            <param name="dst">Destination full-resolution samples (row-major).</param>
+            <param name="dstWidth">Full-resolution width.</param>
+            <param name="dstHeight">Full-resolution height.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ChromaSampler.Downsample(System.ReadOnlySpan{System.UInt16},System.Int32,System.Int32,System.Int32,System.Int32,System.Span{System.UInt16},System.Int32,System.Int32)">
+            <summary>
+            High-precision counterpart of <see cref="M:JpegSharp.Color.ChromaSampler.Downsample(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Int32,System.Int32,System.Span{System.Byte},System.Int32,System.Int32)"/>,
+            box-averaging <see cref="T:System.UInt16"/> samples.
+            </summary>
+            <param name="src">Full-resolution samples (row-major).</param>
+            <param name="srcWidth">Full-resolution width.</param>
+            <param name="srcHeight">Full-resolution height.</param>
+            <param name="hFactor">Horizontal averaging factor (≥ 1).</param>
+            <param name="vFactor">Vertical averaging factor (≥ 1).</param>
+            <param name="dst">Destination subsampled samples (row-major).</param>
+            <param name="dstWidth">Subsampled width.</param>
+            <param name="dstHeight">Subsampled height.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ChromaSampler.UpsampleLinear(System.ReadOnlySpan{System.UInt16},System.Int32,System.Int32,System.Span{System.UInt16},System.Int32,System.Int32,System.Int32)">
+            <summary>
+            High-precision counterpart of <see cref="M:JpegSharp.Color.ChromaSampler.UpsampleLinear(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Span{System.Byte},System.Int32,System.Int32)"/>,
+            operating on <see cref="T:System.UInt16"/> samples and clamping to <paramref name="maxValue"/>.
+            </summary>
+            <param name="src">Subsampled samples (row-major).</param>
+            <param name="srcWidth">Subsampled width.</param>
+            <param name="srcHeight">Subsampled height.</param>
+            <param name="dst">Destination full-resolution samples (row-major).</param>
+            <param name="dstWidth">Full-resolution width.</param>
+            <param name="dstHeight">Full-resolution height.</param>
+            <param name="maxValue">The maximum sample value, e.g. 4095 for 12-bit.</param>
+        </member>
+        <member name="T:JpegSharp.Color.ColorConverter">
+            <summary>
+            Converts between the color spaces used by JPEG: RGB, JFIF YCbCr (ITU-R BT.601),
+            CMYK, and Adobe YCCK. All transforms use 16-bit fixed-point arithmetic for determinism
+            and speed, matching the coefficients used by libjpeg.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.RgbToYCbCr(System.Byte,System.Byte,System.Byte,System.Byte@,System.Byte@,System.Byte@)">
+            <summary>Converts a single RGB pixel to JFIF YCbCr.</summary>
+            <param name="r">Red channel.</param>
+            <param name="g">Green channel.</param>
+            <param name="b">Blue channel.</param>
+            <param name="y">Resulting luma.</param>
+            <param name="cb">Resulting blue-difference chroma.</param>
+            <param name="cr">Resulting red-difference chroma.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.YCbCrToRgb(System.Byte,System.Byte,System.Byte,System.Byte@,System.Byte@,System.Byte@)">
+            <summary>Converts a single JFIF YCbCr pixel to RGB.</summary>
+            <param name="y">Luma.</param>
+            <param name="cb">Blue-difference chroma.</param>
+            <param name="cr">Red-difference chroma.</param>
+            <param name="r">Resulting red channel.</param>
+            <param name="g">Resulting green channel.</param>
+            <param name="b">Resulting blue channel.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.YCbCrToRgb(System.Int32,System.Int32,System.Int32,System.Int32,System.UInt16@,System.UInt16@,System.UInt16@)">
+            <summary>
+            Converts a single high-precision JFIF YCbCr pixel to RGB. The chroma center and output
+            clamp scale with <paramref name="maxValue"/> (<c>(1 &lt;&lt; precision) - 1</c>); the
+            coefficients themselves are precision-independent.
+            </summary>
+            <param name="y">Luma.</param>
+            <param name="cb">Blue-difference chroma.</param>
+            <param name="cr">Red-difference chroma.</param>
+            <param name="maxValue">The maximum sample value, e.g. 4095 for 12-bit.</param>
+            <param name="r">Resulting red channel.</param>
+            <param name="g">Resulting green channel.</param>
+            <param name="b">Resulting blue channel.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.RgbToYCbCr(System.Int32,System.Int32,System.Int32,System.Int32,System.UInt16@,System.UInt16@,System.UInt16@)">
+            <summary>Converts a single high-precision RGB pixel to JFIF YCbCr.</summary>
+            <param name="r">Red channel.</param>
+            <param name="g">Green channel.</param>
+            <param name="b">Blue channel.</param>
+            <param name="maxValue">The maximum sample value, e.g. 4095 for 12-bit.</param>
+            <param name="y">Resulting luma.</param>
+            <param name="cb">Resulting blue-difference chroma.</param>
+            <param name="cr">Resulting red-difference chroma.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.RgbToYCbCr(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},System.Span{System.Byte},System.Span{System.Byte})">
+            <summary>Converts interleaved RGB samples to three YCbCr planes.</summary>
+            <param name="rgb">Interleaved R,G,B triples.</param>
+            <param name="y">Destination luma plane.</param>
+            <param name="cb">Destination Cb plane.</param>
+            <param name="cr">Destination Cr plane.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.YCbCrToRgb(System.ReadOnlySpan{System.Byte},System.ReadOnlySpan{System.Byte},System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <summary>Converts three YCbCr planes to interleaved RGB samples.</summary>
+            <param name="y">Luma plane.</param>
+            <param name="cb">Cb plane.</param>
+            <param name="cr">Cr plane.</param>
+            <param name="rgb">Destination interleaved R,G,B triples.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.CmykToRgb(System.Byte,System.Byte,System.Byte,System.Byte,System.Byte@,System.Byte@,System.Byte@)">
+            <summary>Converts a CMYK pixel to RGB using the standard multiplicative model.</summary>
+            <param name="c">Cyan channel.</param>
+            <param name="m">Magenta channel.</param>
+            <param name="y">Yellow channel.</param>
+            <param name="k">Black channel.</param>
+            <param name="r">Resulting red channel.</param>
+            <param name="g">Resulting green channel.</param>
+            <param name="b">Resulting blue channel.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.CmykToRgb(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.UInt16@,System.UInt16@,System.UInt16@)">
+            <summary>
+            Converts a high-precision CMYK pixel to RGB using the standard multiplicative model, scaled
+            to <paramref name="maxValue"/> (<c>(1 &lt;&lt; precision) - 1</c>). Inputs and outputs are
+            native samples in <c>[0, maxValue]</c>.
+            </summary>
+            <param name="c">Cyan channel.</param>
+            <param name="m">Magenta channel.</param>
+            <param name="y">Yellow channel.</param>
+            <param name="k">Black channel.</param>
+            <param name="maxValue">The maximum sample value, e.g. 4095 for 12-bit.</param>
+            <param name="r">Resulting red channel.</param>
+            <param name="g">Resulting green channel.</param>
+            <param name="b">Resulting blue channel.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.RgbToCmyk(System.Byte,System.Byte,System.Byte,System.Byte@,System.Byte@,System.Byte@,System.Byte@)">
+            <summary>Converts an RGB pixel to CMYK using maximum black generation.</summary>
+            <param name="r">Red channel.</param>
+            <param name="g">Green channel.</param>
+            <param name="b">Blue channel.</param>
+            <param name="c">Resulting cyan channel.</param>
+            <param name="m">Resulting magenta channel.</param>
+            <param name="y">Resulting yellow channel.</param>
+            <param name="k">Resulting black channel.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.YcckToCmyk(System.Byte,System.Byte,System.Byte,System.Byte,System.Byte@,System.Byte@,System.Byte@,System.Byte@)">
+            <summary>Converts an Adobe YCCK pixel to CMYK.</summary>
+            <param name="yc">Luma-like channel.</param>
+            <param name="cb">Blue-difference chroma.</param>
+            <param name="cr">Red-difference chroma.</param>
+            <param name="k">Black channel (passed through).</param>
+            <param name="c">Resulting cyan channel.</param>
+            <param name="m">Resulting magenta channel.</param>
+            <param name="y">Resulting yellow channel.</param>
+            <param name="outK">The unchanged black channel.</param>
+        </member>
+        <member name="M:JpegSharp.Color.ColorConverter.CmykToYcck(System.Byte,System.Byte,System.Byte,System.Byte,System.Byte@,System.Byte@,System.Byte@,System.Byte@)">
+            <summary>Converts a CMYK pixel to Adobe YCCK.</summary>
+            <param name="c">Cyan channel.</param>
+            <param name="m">Magenta channel.</param>
+            <param name="y">Yellow channel.</param>
+            <param name="k">Black channel (passed through).</param>
+            <param name="yc">Resulting luma-like channel.</param>
+            <param name="cb">Resulting blue-difference chroma.</param>
+            <param name="cr">Resulting red-difference chroma.</param>
+            <param name="outK">The unchanged black channel.</param>
+        </member>
+        <member name="T:JpegSharp.Decoder.BaselineDecoder">
+            <summary>
+            Decodes a baseline sequential DCT (SOF0) Huffman-coded JPEG into a <see cref="T:JpegSharp.Api.JpegImage"/>.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Encoder.BaselineEncoder">
+            <summary>
+            Encodes a <see cref="T:JpegSharp.Api.JpegImage"/> as a baseline sequential DCT JPEG (SOF0) with Huffman
+            coding. Supports grayscale and RGB (encoded as YCbCr) with configurable chroma subsampling
+            and optional optimized Huffman tables.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Encoder.BaselineEncoder.MaxDimension">
+            <summary>The maximum image dimension representable in a JPEG frame header (16-bit).</summary>
+        </member>
+        <member name="M:JpegSharp.Encoder.BaselineEncoder.#ctor(JpegSharp.Api.JpegImage16,JpegSharp.Api.JpegEncoderOptions)">
+            <summary>
+            Encodes a high-precision (9–16 bit) image as an extended-sequential (SOF1) Huffman JPEG.
+            Supports grayscale and RGB (as YCbCr, or stored directly with <see cref="F:JpegSharp.Api.JpegRgbEncoding.Rgb"/>);
+            chroma subsampling and progressive output are not supported at high precision.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Encoder.BaselineEncoder.WriteHeader(JpegSharp.Markers.MarkerWriter,System.Byte,JpegSharp.Huffman.HuffmanTable[])">
+            <summary>
+            Writes the common header prelude shared by baseline and progressive output: SOI, the
+            APPn/COM metadata segments, quantization tables, the frame header, Huffman tables, and
+            the optional restart-interval definition.
+            </summary>
+        </member>
+        <member name="T:JpegSharp.Huffman.HuffmanTable">
+            <summary>
+            A canonical JPEG Huffman table built from the DHT representation: 16 code-length counts
+            (BITS) and the ordered list of symbols (HUFFVAL). The table supports both decoding
+            (symbol lookup from a <see cref="T:JpegSharp.Bitstream.BitReader"/>) and encoding (code/size lookup per symbol),
+            following ITU-T T.81 Annex C and Annex F.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Huffman.HuffmanTable.#ctor(System.ReadOnlySpan{System.Byte},System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Builds a Huffman table from its DHT representation.
+            </summary>
+            <param name="counts">Exactly 16 entries: the number of codes of each length 1..16.</param>
+            <param name="symbols">The symbols in canonical order; its length must equal the sum of <paramref name="counts"/>.</param>
+            <exception cref="T:System.ArgumentException">
+            The counts span is not 16 long, the symbol count does not match, or the table is
+            oversubscribed (declares more codes of a length than that length can represent).
+            </exception>
+        </member>
+        <member name="M:JpegSharp.Huffman.HuffmanTable.BuildOptimized(System.ReadOnlySpan{System.Int32})">
+            <summary>
+            Builds an entropy-optimal, length-limited (max 16-bit) canonical Huffman table from
+            per-symbol frequencies, following the procedure in ITU-T T.81 Annex K.2.
+            </summary>
+            <param name="frequencies">
+            Exactly 256 symbol occurrence counts. Symbols with zero frequency are omitted from
+            the resulting table.
+            </param>
+            <returns>An optimized Huffman table for the given distribution.</returns>
+            <exception cref="T:System.ArgumentException">The span is not exactly 256 elements.</exception>
+        </member>
+        <member name="P:JpegSharp.Huffman.HuffmanTable.Counts">
+            <summary>Gets the 16 code-length counts (BITS), for writing a DHT segment.</summary>
+        </member>
+        <member name="P:JpegSharp.Huffman.HuffmanTable.Symbols">
+            <summary>Gets the ordered symbols (HUFFVAL), for writing a DHT segment.</summary>
+        </member>
+        <member name="M:JpegSharp.Huffman.HuffmanTable.DecodeSymbol(JpegSharp.Bitstream.BitReader@)">
+            <summary>
+            Decodes the next symbol from the bit reader using the canonical DECODE procedure
+            (ITU-T T.81 Figure F.16).
+            </summary>
+            <param name="reader">The entropy bit reader.</param>
+            <returns>The decoded symbol value.</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">The bitstream does not contain a valid code.</exception>
+        </member>
+        <member name="M:JpegSharp.Huffman.HuffmanTable.GetCode(System.Int32,System.Int32@,System.Int32@)">
+            <summary>
+            Retrieves the canonical code and its bit length for the given symbol.
+            </summary>
+            <param name="symbol">The symbol value (0..255).</param>
+            <param name="code">The canonical Huffman code.</param>
+            <param name="size">The number of bits in the code.</param>
+            <exception cref="T:System.ArgumentException">The symbol is not present in the table.</exception>
+        </member>
+        <member name="M:JpegSharp.Huffman.HuffmanTable.Encode(JpegSharp.Bitstream.BitWriter,System.Int32)">
+            <summary>Writes the canonical code for the given symbol to the bit writer.</summary>
+            <param name="writer">The entropy bit writer.</param>
+            <param name="symbol">The symbol value to encode.</param>
+        </member>
+        <member name="T:JpegSharp.Huffman.StandardHuffmanTables">
+            <summary>
+            The example Huffman tables from ITU-T T.81 Annex K.3, used for baseline encoding when
+            optimized tables are not requested and as defaults during decoding compatibility tests.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Huffman.StandardHuffmanTables.DcLuminance">
+            <summary>The Annex K.3 DC luminance Huffman table.</summary>
+        </member>
+        <member name="P:JpegSharp.Huffman.StandardHuffmanTables.DcChrominance">
+            <summary>The Annex K.3 DC chrominance Huffman table.</summary>
+        </member>
+        <member name="P:JpegSharp.Huffman.StandardHuffmanTables.AcLuminance">
+            <summary>The Annex K.3 AC luminance Huffman table.</summary>
+        </member>
+        <member name="P:JpegSharp.Huffman.StandardHuffmanTables.AcChrominance">
+            <summary>The Annex K.3 AC chrominance Huffman table.</summary>
+        </member>
+        <member name="T:JpegSharp.Markers.JpegMarkers">
+            <summary>
+            The JPEG marker codes (the byte following the <c>0xFF</c> marker prefix) and helpers to
+            classify them, as defined in ITU-T T.81 Table B.1.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.StartOfImage">
+            <summary>Start of image.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.EndOfImage">
+            <summary>End of image.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.StartOfFrameBaseline">
+            <summary>Baseline sequential DCT frame (SOF0).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.StartOfFrameExtendedSequential">
+            <summary>Extended sequential DCT, Huffman coding (SOF1).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.StartOfFrameProgressive">
+            <summary>Progressive DCT, Huffman coding (SOF2).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.StartOfFrameLossless">
+            <summary>Lossless (sequential), Huffman coding (SOF3).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.DefineHuffmanTables">
+            <summary>Define Huffman table(s).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.DefineArithmeticConditioning">
+            <summary>Define arithmetic coding conditioning(s).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.DefineQuantizationTables">
+            <summary>Define quantization table(s).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.DefineRestartInterval">
+            <summary>Define restart interval.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.DefineNumberOfLines">
+            <summary>Define number of lines.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.StartOfScan">
+            <summary>Start of scan.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.Comment">
+            <summary>Comment.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.Temporary">
+            <summary>Temporary private use in arithmetic coding.</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.Restart0">
+            <summary>First restart marker (RST0).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.Restart7">
+            <summary>Last restart marker (RST7).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.App0">
+            <summary>First application segment (APP0, JFIF).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.App1">
+            <summary>APP1 application segment (Exif / XMP).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.App2">
+            <summary>APP2 application segment (ICC profile).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.App14">
+            <summary>APP14 application segment (Adobe).</summary>
+        </member>
+        <member name="F:JpegSharp.Markers.JpegMarkers.App15">
+            <summary>Last application segment (APP15).</summary>
+        </member>
+        <member name="M:JpegSharp.Markers.JpegMarkers.IsRestartMarker(System.Byte)">
+            <summary>Returns true if the marker is a restart marker (RST0–RST7).</summary>
+            <param name="code">The marker code.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.JpegMarkers.IsAppMarker(System.Byte)">
+            <summary>Returns true if the marker is an application segment (APP0–APP15).</summary>
+            <param name="code">The marker code.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.JpegMarkers.IsStartOfFrame(System.Byte)">
+            <summary>
+            Returns true if the marker begins a frame header (any Start-of-Frame variant, but not
+            the DHT/DAC/DNL/JPGn markers that also fall in the 0xC0–0xCF range).
+            </summary>
+            <param name="code">The marker code.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.JpegMarkers.HasLengthField(System.Byte)">
+            <summary>
+            Returns true if the marker carries a two-byte length field and payload. Standalone
+            markers (SOI, EOI, RSTn, TEM) do not.
+            </summary>
+            <param name="code">The marker code.</param>
+        </member>
+        <member name="T:JpegSharp.Markers.MarkerReader">
+            <summary>
+            Reads JPEG markers and their length-prefixed segment payloads from a stream. Entropy-coded
+            scan data (which follows an SOS segment) is not consumed here; the decoder reads it
+            separately via a bit reader.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerReader.#ctor(System.IO.Stream)">
+            <summary>Creates a reader over the given source stream.</summary>
+            <param name="stream">The stream positioned at (or before) a marker.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerReader.ReadMarker">
+            <summary>
+            Reads the next marker code, requiring a <c>0xFF</c> prefix and skipping any fill
+            <c>0xFF</c> bytes that precede the code.
+            </summary>
+            <returns>The marker code byte.</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">
+            The next byte is not a marker prefix, or the stream ended unexpectedly.
+            </exception>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerReader.ReadUInt16">
+            <summary>Reads a big-endian unsigned 16-bit value.</summary>
+            <returns>The value read.</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">The stream ended unexpectedly.</exception>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerReader.ReadSegment">
+            <summary>
+            Reads a length-prefixed segment payload (the two-byte length includes itself, so the
+            payload is <c>length - 2</c> bytes).
+            </summary>
+            <returns>The payload bytes.</returns>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">The length is invalid or the payload is truncated.</exception>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerReader.ReadExact(System.Span{System.Byte})">
+            <summary>Reads exactly <paramref name="buffer"/>.Length bytes or throws.</summary>
+            <param name="buffer">The destination buffer.</param>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">The stream ended before the buffer was filled.</exception>
+        </member>
+        <member name="T:JpegSharp.Markers.MarkerWriter">
+            <summary>
+            Writes JPEG markers and length-prefixed segments to a stream.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerWriter.#ctor(System.IO.Stream)">
+            <summary>Creates a writer over the given destination stream.</summary>
+            <param name="stream">The stream to write markers to.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerWriter.WriteMarker(System.Byte)">
+            <summary>Writes a marker (the <c>0xFF</c> prefix followed by the code).</summary>
+            <param name="code">The marker code.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerWriter.WriteUInt16(System.UInt16)">
+            <summary>Writes a big-endian unsigned 16-bit value.</summary>
+            <param name="value">The value to write.</param>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerWriter.WriteSegment(System.Byte,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Writes a marker followed by its length-prefixed payload. The written length field is
+            <c>payload.Length + 2</c>.
+            </summary>
+            <param name="code">The marker code.</param>
+            <param name="payload">The segment payload.</param>
+            <exception cref="T:JpegSharp.Api.Exceptions.JpegFormatException">The payload exceeds the 65533-byte segment limit.</exception>
+        </member>
+        <member name="M:JpegSharp.Markers.MarkerWriter.WriteRaw(System.ReadOnlySpan{System.Byte})">
+            <summary>Writes raw bytes directly to the stream (e.g. entropy-coded scan data).</summary>
+            <param name="bytes">The bytes to write.</param>
+        </member>
+        <member name="T:JpegSharp.Quantization.QuantizationTable">
+            <summary>
+            An immutable 8x8 JPEG quantization table holding 64 divisor values in natural
+            (row-major) order. Instances are produced from the standard Annex K tables at a given
+            quality, from custom values, or parsed from a DQT marker segment.
+            </summary>
+        </member>
+        <member name="F:JpegSharp.Quantization.QuantizationTable.Size">
+            <summary>The number of entries in a quantization table.</summary>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.#ctor(System.ReadOnlySpan{System.UInt16})">
+            <summary>
+            Creates a quantization table from 64 values given in natural (row-major) order.
+            </summary>
+            <param name="valuesNaturalOrder">Exactly 64 non-zero quantization steps.</param>
+            <exception cref="T:System.ArgumentException">
+            The span is not exactly 64 elements, or contains a zero divisor.
+            </exception>
+        </member>
+        <member name="P:JpegSharp.Quantization.QuantizationTable.Item(System.Int32)">
+            <summary>Gets the quantization step at the given natural-order index (0..63).</summary>
+            <param name="index">Natural-order coefficient index.</param>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.AsSpan">
+            <summary>Gets the table values in natural (row-major) order.</summary>
+            <returns>A read-only view over the 64 quantization steps.</returns>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.AsZigZagSpan">
+            <summary>
+            Gets the table values permuted into zig-zag order, so that entry <c>k</c> is the
+            quantization step for the coefficient coded at zig-zag position <c>k</c>. Precomputed
+            once per table for fused (de)quantization directly against zig-zag-ordered coefficients.
+            </summary>
+            <returns>A read-only view over the 64 quantization steps in zig-zag order.</returns>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.Luminance(System.Int32,System.Int32)">
+            <summary>
+            Builds a luminance quantization table for the given quality factor using the IJG
+            scaling of the Annex K.1 base table.
+            </summary>
+            <param name="quality">Quality factor; clamped to 1..100. 100 yields all-ones.</param>
+            <param name="samplePrecision">Target sample precision in bits; >8 permits 16-bit steps.</param>
+            <returns>The scaled luminance table.</returns>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.Chrominance(System.Int32,System.Int32)">
+            <summary>
+            Builds a chrominance quantization table for the given quality factor using the IJG
+            scaling of the Annex K.2 base table.
+            </summary>
+            <param name="quality">Quality factor; clamped to 1..100. 100 yields all-ones.</param>
+            <param name="samplePrecision">Target sample precision in bits; >8 permits 16-bit steps.</param>
+            <returns>The scaled chrominance table.</returns>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.FromZigZag(System.ReadOnlySpan{System.UInt16})">
+            <summary>
+            Creates a quantization table from 64 values given in zig-zag order, as they appear
+            in a DQT marker segment.
+            </summary>
+            <param name="valuesZigZag">Exactly 64 non-zero quantization steps in zig-zag order.</param>
+            <returns>The table with values converted to natural order.</returns>
+            <exception cref="T:System.ArgumentException">The span is not exactly 64 elements.</exception>
+        </member>
+        <member name="M:JpegSharp.Quantization.QuantizationTable.CopyToZigZag(System.Span{System.UInt16})">
+            <summary>
+            Copies the table values into the destination span in zig-zag order, ready to be
+            written into a DQT marker segment.
+            </summary>
+            <param name="destination">A span of at least 64 elements.</param>
+            <exception cref="T:System.ArgumentException">The destination is shorter than 64 elements.</exception>
+        </member>
+        <member name="T:JpegSharp.Quantization.Quantizer">
+            <summary>
+            Applies and reverses quantization on 8x8 blocks of DCT coefficients. Both operations
+            work on blocks in natural (row-major) order and are allocation-free.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Quantization.Quantizer.Quantize(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.UInt16},System.Span{System.Int16})">
+            <summary>
+            Divides each DCT coefficient by its quantization step, rounding to the nearest
+            integer (ties away from zero).
+            </summary>
+            <param name="coefficients">64 DCT coefficients in natural order.</param>
+            <param name="table">64 quantization steps in natural order.</param>
+            <param name="output">Receives the 64 quantized coefficients.</param>
+        </member>
+        <member name="M:JpegSharp.Quantization.Quantizer.Dequantize(System.ReadOnlySpan{System.Int16},System.ReadOnlySpan{System.UInt16},System.Span{System.Double})">
+            <summary>
+            Multiplies each quantized coefficient by its quantization step to recover the
+            (lossy) DCT coefficient.
+            </summary>
+            <param name="quantized">64 quantized coefficients in natural order.</param>
+            <param name="table">64 quantization steps in natural order.</param>
+            <param name="output">Receives the 64 dequantized coefficients.</param>
+        </member>
+        <member name="M:JpegSharp.Quantization.Quantizer.QuantizeToZigZag(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.UInt16},System.Span{System.Int16})">
+            <summary>
+            Quantizes DCT coefficients and emits the results directly in zig-zag order, fusing the
+            quantization and zig-zag reordering into a single pass. Bit-identical to
+            <see cref="M:JpegSharp.Quantization.Quantizer.Quantize(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.UInt16},System.Span{System.Int16})"/> followed by <see cref="M:JpegSharp.Transforms.ZigZag.FromNatural(System.ReadOnlySpan{System.Int16},System.Span{System.Int16})"/>.
+            </summary>
+            <param name="coefficients">64 DCT coefficients in natural order.</param>
+            <param name="zigzagTable">64 quantization steps permuted into zig-zag order.</param>
+            <param name="zigzagOutput">Receives the 64 quantized coefficients in zig-zag order.</param>
+        </member>
+        <member name="M:JpegSharp.Quantization.Quantizer.DequantizeFromZigZag(System.ReadOnlySpan{System.Int16},System.ReadOnlySpan{System.UInt16},System.Span{System.Double})">
+            <summary>
+            Dequantizes coefficients read in zig-zag order, scattering the results into a natural-order
+            buffer, fusing the dequantization and zig-zag reordering into a single pass. Bit-identical
+            to <see cref="M:JpegSharp.Transforms.ZigZag.ToNatural(System.ReadOnlySpan{System.Int16},System.Span{System.Int16})"/> followed by <see cref="M:JpegSharp.Quantization.Quantizer.Dequantize(System.ReadOnlySpan{System.Int16},System.ReadOnlySpan{System.UInt16},System.Span{System.Double})"/>.
+            </summary>
+            <param name="zigzagQuantized">64 quantized coefficients in zig-zag order.</param>
+            <param name="zigzagTable">64 quantization steps permuted into zig-zag order.</param>
+            <param name="naturalOutput">Receives the 64 dequantized coefficients in natural order.</param>
+        </member>
+        <member name="M:JpegSharp.Quantization.Quantizer.DequantizeFromZigZagToInt(System.ReadOnlySpan{System.Int16},System.ReadOnlySpan{System.UInt16},System.Span{System.Int32})">
+            <summary>
+            Dequantizes coefficients read in zig-zag order into an integer natural-order buffer, fusing
+            dequantization and zig-zag reordering for the fixed-point <see cref="T:JpegSharp.Transforms.IntegerIdct"/>
+            decode path. Equivalent to <see cref="M:JpegSharp.Quantization.Quantizer.DequantizeFromZigZag(System.ReadOnlySpan{System.Int16},System.ReadOnlySpan{System.UInt16},System.Span{System.Double})"/> but without a floating-point step.
+            </summary>
+            <param name="zigzagQuantized">64 quantized coefficients in zig-zag order.</param>
+            <param name="zigzagTable">64 quantization steps permuted into zig-zag order.</param>
+            <param name="naturalOutput">Receives the 64 dequantized coefficients in natural order.</param>
+        </member>
+        <member name="T:JpegSharp.Quantization.StandardQuantizationTables">
+            <summary>
+            The example luminance and chrominance quantization tables from ITU-T T.81 Annex K.1,
+            stored in natural (row-major) 8x8 order. These are the base tables from which
+            quality-scaled tables are derived using the IJG scaling algorithm.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Quantization.StandardQuantizationTables.Luminance">
+            <summary>Annex K.1 luminance quantization table (natural order).</summary>
+        </member>
+        <member name="P:JpegSharp.Quantization.StandardQuantizationTables.Chrominance">
+            <summary>Annex K.2 chrominance quantization table (natural order).</summary>
+        </member>
+        <member name="M:JpegSharp.Quantization.StandardQuantizationTables.QualityToScale(System.Int32)">
+            <summary>
+            Converts an IJG-style quality factor (1..100) into the linear scale percentage
+            applied to the base table values.
+            </summary>
+            <param name="quality">Requested quality; clamped to the range 1..100.</param>
+            <returns>The scale percentage where 100 reproduces the base table.</returns>
+        </member>
+        <member name="M:JpegSharp.Quantization.StandardQuantizationTables.ScaleValue(System.UInt16,System.Int32,System.Int32)">
+            <summary>
+            Scales a single base quantization value by the given scale percentage and clamps the
+            result to the target element range: [1, 255] for an 8-bit table (Pq=0) or [1, 65535]
+            for a high-precision table (Pq=1) when <paramref name="samplePrecision"/> exceeds 8.
+            </summary>
+            <param name="baseValue">The unscaled Annex K table entry.</param>
+            <param name="scale">The scale percentage from <see cref="M:JpegSharp.Quantization.StandardQuantizationTables.QualityToScale(System.Int32)"/>.</param>
+            <param name="samplePrecision">Target sample precision in bits; >8 permits 16-bit steps.</param>
+            <returns>The scaled, clamped quantization step.</returns>
+        </member>
+        <member name="T:JpegSharp.Transforms.Dct">
+            <summary>
+            Reference 8x8 two-dimensional Discrete Cosine Transform (type II) and its inverse,
+            implemented in the orthonormal (energy-preserving) formulation used by JPEG.
+            </summary>
+            <remarks>
+            <para>
+            The transform is separable: a 2D DCT of an 8x8 block equals <c>A · f · Aᵀ</c> where
+            <c>A</c> is the orthonormal 1D DCT basis matrix. The implementation therefore applies
+            a 1D transform to the rows and then to the columns, giving O(n³) work per block on a
+            tiny fixed 8x8 grid.
+            </para>
+            <para>
+            This is the numerically exact <em>reference</em> transform used to validate the faster
+            integer/AAN fixed-point paths. Because the basis is orthonormal, <see cref="M:JpegSharp.Transforms.Dct.Forward(System.ReadOnlySpan{System.Double},System.Span{System.Double})"/>
+            and <see cref="M:JpegSharp.Transforms.Dct.Inverse(System.ReadOnlySpan{System.Double},System.Span{System.Double})"/> are exact inverses (to floating-point tolerance) and the DC
+            coefficient of a flat block equals eight times the sample value.
+            </para>
+            </remarks>
+        </member>
+        <member name="F:JpegSharp.Transforms.Dct.N">
+            <summary>The side length of a DCT block.</summary>
+        </member>
+        <member name="F:JpegSharp.Transforms.Dct.BlockSize">
+            <summary>The number of coefficients in a block (<see cref="F:JpegSharp.Transforms.Dct.N"/> × <see cref="F:JpegSharp.Transforms.Dct.N"/>).</summary>
+        </member>
+        <member name="M:JpegSharp.Transforms.Dct.Forward(System.ReadOnlySpan{System.Double},System.Span{System.Double})">
+            <summary>
+            Applies the forward 2D DCT to a block of spatial samples.
+            </summary>
+            <param name="input">64 spatial samples in row-major order.</param>
+            <param name="output">Receives 64 frequency coefficients in row-major (u,v) order.</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+        <member name="M:JpegSharp.Transforms.Dct.Inverse(System.ReadOnlySpan{System.Double},System.Span{System.Double})">
+            <summary>
+            Applies the inverse 2D DCT to a block of frequency coefficients.
+            </summary>
+            <param name="input">64 frequency coefficients in row-major (u,v) order.</param>
+            <param name="output">Receives 64 reconstructed spatial samples in row-major order.</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+        <member name="T:JpegSharp.Transforms.FastDct">
+            <summary>
+            A fast, numerically exact 8x8 DCT/IDCT using the even/odd decomposition of the 1D
+            transform. Exploiting the symmetry <c>cos((2(7-x)+1)uπ/16) = (-1)ᵘ cos((2x+1)uπ/16)</c>
+            splits each 8-point 1D transform into two 4-point sums, halving the multiplications
+            relative to a naive matrix multiply while producing identical results (to floating-point
+            tolerance) to the reference <see cref="T:JpegSharp.Transforms.Dct"/>.
+            </summary>
+            <remarks>
+            This is the transform used on the encode and decode hot paths. The reference
+            <see cref="T:JpegSharp.Transforms.Dct"/> remains the correctness oracle it is validated against.
+            </remarks>
+        </member>
+        <member name="M:JpegSharp.Transforms.FastDct.Forward(System.ReadOnlySpan{System.Double},System.Span{System.Double})">
+            <summary>Applies the forward 2D DCT to a block of spatial samples.</summary>
+            <param name="input">64 spatial samples in row-major order.</param>
+            <param name="output">Receives 64 frequency coefficients in row-major order.</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+        <member name="M:JpegSharp.Transforms.FastDct.Inverse(System.ReadOnlySpan{System.Double},System.Span{System.Double})">
+            <summary>Applies the inverse 2D DCT to a block of frequency coefficients.</summary>
+            <param name="input">64 frequency coefficients in row-major order.</param>
+            <param name="output">Receives 64 reconstructed spatial samples in row-major order.</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+        <member name="T:JpegSharp.Transforms.IntegerIdct">
+            <summary>
+            Fixed-point (integer) inverse 8x8 DCT modelled on libjpeg-turbo's "islow" transform
+            (<c>jidctint.c</c>). Uses 13-bit constants with a two-pass Loeffler-style factorization:
+            the column pass keeps 2 guard bits (<see cref="F:JpegSharp.Transforms.IntegerIdct.Pass1Bits"/>) and the row pass performs the
+            final descale. The output is the centred spatial value (still requiring the +128 level shift),
+            rounded to the nearest integer.
+            </summary>
+            <remarks>
+            This path is used for 8-bit baseline and progressive decode. It matches the double-precision
+            reference <see cref="T:JpegSharp.Transforms.Dct"/>/<see cref="T:JpegSharp.Transforms.FastDct"/> to within ~1 least-significant bit per pixel.
+            The double transforms remain the correctness oracle.
+            </remarks>
+        </member>
+        <member name="M:JpegSharp.Transforms.IntegerIdct.Inverse(System.ReadOnlySpan{System.Int32},System.Span{System.Int32})">
+            <summary>
+            Applies the inverse 2D DCT to a block of already-dequantized coefficients.
+            </summary>
+            <param name="coefficients">64 dequantized coefficients in natural (row-major) order.</param>
+            <param name="output">Receives 64 centred spatial samples in natural order (add 128 to level-shift).</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+        <member name="T:JpegSharp.Transforms.ZigZag">
+            <summary>
+            Provides the JPEG zig-zag coefficient ordering (ITU-T T.81 Annex A, Figure A.6)
+            and helpers to convert an 8x8 block between natural raster order and zig-zag order.
+            </summary>
+            <remarks>
+            Entropy coding walks the 64 quantized coefficients of a block in zig-zag order so that
+            low-frequency (typically non-zero) coefficients are grouped ahead of high-frequency
+            (typically zero) coefficients, maximizing run-lengths of zeros.
+            </remarks>
+        </member>
+        <member name="F:JpegSharp.Transforms.ZigZag.BlockSize">
+            <summary>The number of coefficients in an 8x8 DCT block.</summary>
+        </member>
+        <member name="P:JpegSharp.Transforms.ZigZag.Order">
+            <summary>
+            Maps a zig-zag position (0..63) to the natural raster index (0..63) of the coefficient
+            stored there. <c>Order[0]</c> is always the DC coefficient at natural index 0.
+            </summary>
+        </member>
+        <member name="P:JpegSharp.Transforms.ZigZag.InverseOrder">
+            <summary>
+            Maps a natural raster index (0..63) to the zig-zag position (0..63) at which that
+            coefficient is coded. This is the inverse permutation of <see cref="P:JpegSharp.Transforms.ZigZag.Order"/>.
+            </summary>
+        </member>
+        <member name="M:JpegSharp.Transforms.ZigZag.FromNatural(System.ReadOnlySpan{System.Int16},System.Span{System.Int16})">
+            <summary>
+            Reorders a block from natural raster order into zig-zag order.
+            </summary>
+            <param name="natural">Source block of 64 coefficients in natural raster order.</param>
+            <param name="zigzag">Destination block of 64 coefficients in zig-zag order.</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+        <member name="M:JpegSharp.Transforms.ZigZag.ToNatural(System.ReadOnlySpan{System.Int16},System.Span{System.Int16})">
+            <summary>
+            Reorders a block from zig-zag order back into natural raster order.
+            </summary>
+            <param name="zigzag">Source block of 64 coefficients in zig-zag order.</param>
+            <param name="natural">Destination block of 64 coefficients in natural raster order.</param>
+            <exception cref="T:System.ArgumentException">A span is not exactly 64 elements long.</exception>
+        </member>
+    </members>
+</doc>

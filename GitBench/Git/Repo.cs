@@ -29,6 +29,9 @@ public sealed record Repo(
     // glyph / generated initials. Child rows keep their kind glyphs and never carry this value.
     public string? CustomIconPath { get; init; }
 
+    // Opaque ARGB override for the primary folder glyph and rail tile. Null uses the theme/identity color.
+    public uint? CustomColor { get; init; }
+
     // A name the user typed over a worktree's folder-derived one, or null while the row still
     // tracks its folder. Kept apart from DisplayName because worktree discovery rewrites
     // DisplayName on every sync — this is what survives that and is re-applied afterwards.

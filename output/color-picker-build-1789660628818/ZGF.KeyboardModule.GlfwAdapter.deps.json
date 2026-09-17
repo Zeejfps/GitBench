@@ -1,0 +1,53 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "ZGF.KeyboardModule.GlfwAdapter/0.0.0-alpha.0.2499": {
+        "dependencies": {
+          "Glfw.NET": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.KeyboardModule.GlfwAdapter.dll": {}
+        }
+      },
+      "Glfw.NET/1.0.0": {
+        "runtime": {
+          "Glfw.NET.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.KeyboardModule/1.0.0": {
+        "runtime": {
+          "ZGF.KeyboardModule.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ZGF.KeyboardModule.GlfwAdapter/0.0.0-alpha.0.2499": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Glfw.NET/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.KeyboardModule/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

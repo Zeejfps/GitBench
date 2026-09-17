@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "TreeSitter/1.0.0": {
+        "dependencies": {
+          "TreeSitter.Bindings": "1.0.0"
+        },
+        "runtime": {
+          "TreeSitter.dll": {}
+        }
+      },
+      "TreeSitter.Bindings/1.0.0": {
+        "runtime": {
+          "TreeSitter.Bindings.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TreeSitter/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "TreeSitter.Bindings/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

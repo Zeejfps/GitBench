@@ -32,7 +32,7 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
             Width = TileSize,
             Height = TileSize,
             BorderRadius = BorderRadiusStyle.All(Radius.Lg),
-            Background = Theme.Color(s => vm.IsMissing.Value ? s.Palette.SurfaceHoverStrong : identityColor),
+            Background = Theme.Color(s => vm.IsMissing.Value ? s.Palette.SurfaceHoverStrong : vm.CustomColor.Value ?? identityColor),
             Children =
             [
                 new Text
@@ -42,7 +42,8 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
                     Weight = FontWeight.Bold,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => vm.IsMissing.Value ? s.Palette.TextDisabled : s.Palette.TextOnAccent),
+                    Color = Theme.Color(s => vm.IsMissing.Value ? s.Palette.TextDisabled
+                        : vm.CustomColor.Value is { } color ? HsvColor.Foreground(color) : s.Palette.TextOnAccent),
                 },
                 new Switch<string?>
                 {

@@ -1,0 +1,861 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "DiffDino/0.0.0-dev": {
+        "dependencies": {
+          "GitBench.Lsp": "1.0.0",
+          "GitBench.Pty": "1.0.0",
+          "GitBench.Terminal.Vt": "1.0.0",
+          "JpegSharp": "0.0.0",
+          "PngSharp": "0.0.0",
+          "TextMateSharp": "2.0.3",
+          "TextMateSharp.Grammars": "2.0.3",
+          "TreeSitter": "1.0.0",
+          "Velopack": "1.1.1",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Gui": "1.0.0",
+          "ZGF.Gui.Desktop": "1.0.0",
+          "XtermSharp.Reference": "1.0.0.0"
+        },
+        "runtime": {
+          "DiffDino.dll": {}
+        }
+      },
+      "FreeTypeSharp/3.0.1": {
+        "runtime": {
+          "lib/net8.0/FreeTypeSharp.dll": {
+            "assemblyVersion": "3.0.1.0",
+            "fileVersion": "3.0.1.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/libfreetype.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx/native/libfreetype.dylib": {
+            "rid": "osx",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/freetype.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "2.13.2.0"
+          },
+          "runtimes/win-x64/native/freetype.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "2.13.2.0"
+          },
+          "runtimes/win-x86/native/freetype.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "2.13.2.0"
+          }
+        }
+      },
+      "HarfBuzzSharp/8.3.0.1": {
+        "dependencies": {
+          "HarfBuzzSharp.NativeAssets.Win32": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.macOS": "8.3.0.1"
+        },
+        "runtime": {
+          "lib/net8.0/HarfBuzzSharp.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "8.3.0.1"
+          }
+        }
+      },
+      "HarfBuzzSharp.NativeAssets.Linux/8.3.0.1": {
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libHarfBuzzSharp.so": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libHarfBuzzSharp.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libHarfBuzzSharp.so": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libHarfBuzzSharp.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "HarfBuzzSharp.NativeAssets.macOS/8.3.0.1": {
+        "runtimeTargets": {
+          "runtimes/osx/native/libHarfBuzzSharp.dylib": {
+            "rid": "osx",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "HarfBuzzSharp.NativeAssets.Win32/8.3.0.1": {
+        "runtimeTargets": {
+          "runtimes/win-arm64/native/libHarfBuzzSharp.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libHarfBuzzSharp.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/libHarfBuzzSharp.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "Humanizer.Core/2.14.1": {
+        "runtime": {
+          "lib/net6.0/Humanizer.dll": {
+            "assemblyVersion": "2.14.0.0",
+            "fileVersion": "2.14.1.48190"
+          }
+        }
+      },
+      "Json.More.Net/2.1.1": {
+        "runtime": {
+          "lib/net9.0/Json.More.dll": {
+            "assemblyVersion": "2.0.0.0",
+            "fileVersion": "2.1.1.0"
+          }
+        }
+      },
+      "JsonPointer.Net/5.3.1": {
+        "dependencies": {
+          "Humanizer.Core": "2.14.1",
+          "Json.More.Net": "2.1.1"
+        },
+        "runtime": {
+          "lib/net9.0/JsonPointer.Net.dll": {
+            "assemblyVersion": "5.0.0.0",
+            "fileVersion": "5.3.1.0"
+          }
+        }
+      },
+      "JsonSchema.Net/7.3.3": {
+        "dependencies": {
+          "JsonPointer.Net": "5.3.1"
+        },
+        "runtime": {
+          "lib/net9.0/JsonSchema.Net.dll": {
+            "assemblyVersion": "7.0.0.0",
+            "fileVersion": "7.3.3.0"
+          }
+        }
+      },
+      "McpSdk.Adapter.StreamableHttpServer/1.2.0": {
+        "dependencies": {
+          "McpSdk.Server": "1.2.0"
+        },
+        "runtime": {
+          "lib/net10.0/McpSdk.Adapter.StreamableHttpServer.dll": {
+            "assemblyVersion": "1.2.0.0",
+            "fileVersion": "1.2.0.0"
+          }
+        }
+      },
+      "McpSdk.Adapter.System.Text.Json/1.2.0": {
+        "dependencies": {
+          "JsonSchema.Net": "7.3.3",
+          "McpSdk.Protocol": "1.2.0"
+        },
+        "runtime": {
+          "lib/net10.0/McpSdk.Adapter.System.Text.Json.dll": {
+            "assemblyVersion": "1.2.0.0",
+            "fileVersion": "1.2.0.0"
+          }
+        }
+      },
+      "McpSdk.Protocol/1.2.0": {
+        "runtime": {
+          "lib/net10.0/McpSdk.Protocol.dll": {
+            "assemblyVersion": "1.2.0.0",
+            "fileVersion": "1.2.0.0"
+          }
+        }
+      },
+      "McpSdk.Server/1.2.0": {
+        "dependencies": {
+          "McpSdk.Protocol": "1.2.0",
+          "McpSdk.Shared": "1.2.0"
+        },
+        "runtime": {
+          "lib/net10.0/McpSdk.Server.dll": {
+            "assemblyVersion": "1.2.0.0",
+            "fileVersion": "1.2.0.0"
+          }
+        }
+      },
+      "McpSdk.Shared/1.2.0": {
+        "dependencies": {
+          "McpSdk.Protocol": "1.2.0"
+        },
+        "runtime": {
+          "lib/net10.0/McpSdk.Shared.dll": {
+            "assemblyVersion": "1.2.0.0",
+            "fileVersion": "1.2.0.0"
+          }
+        }
+      },
+      "NStack.Core/0.12.0": {
+        "runtime": {
+          "lib/netstandard1.5/NStack.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "Onigwrap/1.0.10": {
+        "runtime": {
+          "lib/netstandard2.0/Onigwrap.dll": {
+            "assemblyVersion": "1.0.10.0",
+            "fileVersion": "1.0.10.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-arm64/native/libonigwrap.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-bionic-arm64/native/libonigwrap.so": {
+            "rid": "linux-bionic-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-bionic-x64/native/libonigwrap.so": {
+            "rid": "linux-bionic-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-arm64/native/libonigwrap.so": {
+            "rid": "linux-musl-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libonigwrap.so": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libonigwrap.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/maccatalyst-arm64/native/libonigwrap.dylib": {
+            "rid": "maccatalyst-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/maccatalyst-x64/native/libonigwrap.dylib": {
+            "rid": "maccatalyst-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-arm64/native/libonigwrap.dylib": {
+            "rid": "osx-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libonigwrap.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/libonigwrap.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libonigwrap.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/libonigwrap.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "TextMateSharp/2.0.3": {
+        "dependencies": {
+          "Onigwrap": "1.0.10"
+        },
+        "runtime": {
+          "lib/netstandard2.0/TextMateSharp.dll": {
+            "assemblyVersion": "2.0.3.0",
+            "fileVersion": "2.0.3.0"
+          }
+        }
+      },
+      "TextMateSharp.Grammars/2.0.3": {
+        "dependencies": {
+          "TextMateSharp": "2.0.3"
+        },
+        "runtime": {
+          "lib/netstandard2.0/TextMateSharp.Grammars.dll": {
+            "assemblyVersion": "2.0.3.0",
+            "fileVersion": "2.0.3.0"
+          }
+        }
+      },
+      "Velopack/1.1.1": {
+        "runtime": {
+          "lib/net10.0/Velopack.dll": {
+            "assemblyVersion": "1.1.0.0",
+            "fileVersion": "1.1.1.23494"
+          }
+        }
+      },
+      "GitBench.Lsp/1.0.0": {
+        "runtime": {
+          "GitBench.Lsp.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "GitBench.Pty/1.0.0": {
+        "runtime": {
+          "GitBench.Pty.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "GitBench.Terminal.Vt/1.0.0": {
+        "dependencies": {
+          "XtermSharp": "1.0.0"
+        },
+        "runtime": {
+          "GitBench.Terminal.Vt.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "Glfw.NET/1.0.0": {
+        "runtime": {
+          "Glfw.NET.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "JpegSharp/0.0.0": {
+        "runtime": {
+          "JpegSharp.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "OpenGL.NET/1.0.0": {
+        "runtime": {
+          "OpenGL.NET.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "PngSharp/0.0.0": {
+        "runtime": {
+          "PngSharp.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "TreeSitter/1.0.0": {
+        "dependencies": {
+          "TreeSitter.Bindings": "1.0.0"
+        },
+        "runtime": {
+          "TreeSitter.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "TreeSitter.Bindings/1.0.0": {
+        "runtime": {
+          "TreeSitter.Bindings.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "XtermSharp/1.0.0": {
+        "dependencies": {
+          "NStack.Core": "0.12.0"
+        },
+        "runtime": {
+          "XtermSharp.dll": {
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.AppUtils/1.0.0": {
+        "runtime": {
+          "ZGF.AppUtils.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Desktop/1.0.0": {
+        "dependencies": {
+          "Glfw.NET": "1.0.0",
+          "OpenGL.NET": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0",
+          "ZGF.KeyboardModule.GlfwAdapter": "1.0.0",
+          "ZGF.Rendering.Metal": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Desktop.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Fonts/1.0.0": {
+        "dependencies": {
+          "FreeTypeSharp": "3.0.1",
+          "HarfBuzzSharp": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.Linux": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.Win32": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.macOS": "8.3.0.1"
+        },
+        "runtime": {
+          "ZGF.Fonts.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Geometry/1.0.0": {
+        "runtime": {
+          "ZGF.Geometry.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Gui/1.0.0": {
+        "dependencies": {
+          "PngSharp": "0.0.0",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Fonts": "1.0.0",
+          "ZGF.Geometry": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0",
+          "ZGF.Svg": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Gui.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Gui.Desktop/1.0.0": {
+        "dependencies": {
+          "McpSdk.Adapter.StreamableHttpServer": "1.2.0",
+          "McpSdk.Adapter.System.Text.Json": "1.2.0",
+          "McpSdk.Server": "1.2.0",
+          "OpenGL.NET": "1.0.0",
+          "PngSharp": "0.0.0",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Desktop": "1.0.0",
+          "ZGF.Fonts": "1.0.0",
+          "ZGF.Geometry": "1.0.0",
+          "ZGF.Gui": "1.0.0",
+          "ZGF.Gui.Metal": "1.0.0",
+          "ZGF.Gui.OpenGL": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0",
+          "ZGF.Rendering.Metal": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Gui.Desktop.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Gui.Metal/1.0.0": {
+        "dependencies": {
+          "PngSharp": "0.0.0",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Fonts": "1.0.0",
+          "ZGF.Geometry": "1.0.0",
+          "ZGF.Gui": "1.0.0",
+          "ZGF.Rendering.Metal": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Gui.Metal.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Gui.OpenGL/1.0.0": {
+        "dependencies": {
+          "OpenGL.NET": "1.0.0",
+          "PngSharp": "0.0.0",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Fonts": "1.0.0",
+          "ZGF.Geometry": "1.0.0",
+          "ZGF.Gui": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Gui.OpenGL.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.KeyboardModule/1.0.0": {
+        "runtime": {
+          "ZGF.KeyboardModule.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.KeyboardModule.GlfwAdapter/1.0.0": {
+        "dependencies": {
+          "Glfw.NET": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.KeyboardModule.GlfwAdapter.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Rendering.Metal/1.0.0": {
+        "runtime": {
+          "ZGF.Rendering.Metal.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Svg/1.0.0": {
+        "runtime": {
+          "ZGF.Svg.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "XtermSharp.Reference/1.0.0.0": {
+        "runtime": {
+          "XtermSharp.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "DiffDino/0.0.0-dev": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "FreeTypeSharp/3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-XRdbJhPAg94NI0xN0PczfIP7oSV/sA8hpbuWqtW/uR4ZM03v29OlxUONT7XS291rUTLsshoiMWG8ijeIUEvdkw==",
+      "path": "freetypesharp/3.0.1",
+      "hashPath": "freetypesharp.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-rwLpl+W6uqu0DuvzqNhTMuFcXfy1Vc0uq0YXgPEmtTSfeUSAye1FcARrm2YIPOSiCBwBOGu3cLvMX5Fp6OKe2g==",
+      "path": "harfbuzzsharp/8.3.0.1",
+      "hashPath": "harfbuzzsharp.8.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp.NativeAssets.Linux/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Qn8drjWx6xRm+KZ38pGK5Np44h58BI9rGAqQmJOmXNuAwsnfgrce8oWW8KI0O8CBSuu1R5Y2yhe8N+PayuAhNA==",
+      "path": "harfbuzzsharp.nativeassets.linux/8.3.0.1",
+      "hashPath": "harfbuzzsharp.nativeassets.linux.8.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp.NativeAssets.macOS/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-2o6U05LAmK+rwX7TvmJ2X0anXJG2hSE7kHVmCshhHy0tKfByJ5ykBacvhmmooHchlOwq15KBZeROGafCT8nN+g==",
+      "path": "harfbuzzsharp.nativeassets.macos/8.3.0.1",
+      "hashPath": "harfbuzzsharp.nativeassets.macos.8.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp.NativeAssets.Win32/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ow0DtGEUjo65qhiI22of7qiVbN1xDFsZ5P5xJljRmGZ5WSxNy+1batLNJFGxahqhB1MTHYV8kAXf0GqC8WaevQ==",
+      "path": "harfbuzzsharp.nativeassets.win32/8.3.0.1",
+      "hashPath": "harfbuzzsharp.nativeassets.win32.8.3.0.1.nupkg.sha512"
+    },
+    "Humanizer.Core/2.14.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-lQKvtaTDOXnoVJ20ibTuSIOf2i0uO0MPbDhd1jm238I+U/2ZnRENj0cktKZhtchBMtCUSRQ5v4xBCUbKNmyVMw==",
+      "path": "humanizer.core/2.14.1",
+      "hashPath": "humanizer.core.2.14.1.nupkg.sha512"
+    },
+    "Json.More.Net/2.1.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ZXAKl2VsdnIZeUo1PFII3Oi1m1L4YQjEyDjygHfHln5vgsjgIo749X6xWkv7qFYp8RROES+vOEfDcvvoVgs8kA==",
+      "path": "json.more.net/2.1.1",
+      "hashPath": "json.more.net.2.1.1.nupkg.sha512"
+    },
+    "JsonPointer.Net/5.3.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3e2OJjU0OaE26XC/klgxbJuXvteFWTDJIJv0ITYWcJEoskq7jzUwPSC1s0iz4wPPQnfN7vwwFmg2gJfwRAPwgw==",
+      "path": "jsonpointer.net/5.3.1",
+      "hashPath": "jsonpointer.net.5.3.1.nupkg.sha512"
+    },
+    "JsonSchema.Net/7.3.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-d1cSLfTHzv81aOqq5SqpJv6Uw78a45sovxr7EpEPHBG0Nrc8xSg1F5/jRdETeV5cbbytFGcTaVhVFaT7MCEdJg==",
+      "path": "jsonschema.net/7.3.3",
+      "hashPath": "jsonschema.net.7.3.3.nupkg.sha512"
+    },
+    "McpSdk.Adapter.StreamableHttpServer/1.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-4WiFOO91yAahJB3cqOhZ+FoSQD18sH8yZGM4BF7+JTpF8e9XjgNpUfQCUPdS8E14BXKGoLC+cj1J+CoKinpwLQ==",
+      "path": "mcpsdk.adapter.streamablehttpserver/1.2.0",
+      "hashPath": "mcpsdk.adapter.streamablehttpserver.1.2.0.nupkg.sha512"
+    },
+    "McpSdk.Adapter.System.Text.Json/1.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-0Zpu5Vwfsmb1k9KOjHsa64E7XRhro3Sak5hg+Y/17YlXJPvF3BKmheS2TXgSfc6vyJvGqQdZeEg1XxjTyiLyFg==",
+      "path": "mcpsdk.adapter.system.text.json/1.2.0",
+      "hashPath": "mcpsdk.adapter.system.text.json.1.2.0.nupkg.sha512"
+    },
+    "McpSdk.Protocol/1.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-w/m/bLofsl2CVyVnB+VfFFObkeXcZpMyXhWfSKlt1EaKD4SOXD1IUHA0edN/NH3sSzyk/c8tjgw56RpD9Z7GYw==",
+      "path": "mcpsdk.protocol/1.2.0",
+      "hashPath": "mcpsdk.protocol.1.2.0.nupkg.sha512"
+    },
+    "McpSdk.Server/1.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-MzaYAMzDspmyXF34b5EFC76Q2aDnxbVSMnjG+Me66JC+Ymki8KGw+cLpWeWti2dHvF5ZPU8xjw0c5SVc5v/fkA==",
+      "path": "mcpsdk.server/1.2.0",
+      "hashPath": "mcpsdk.server.1.2.0.nupkg.sha512"
+    },
+    "McpSdk.Shared/1.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-HpRzsBt48wx3ovMKL1zBB/ZypPTF3iVVKKgQuLbFF9uqWSgVQzgkRkvcpYDza/G2GGc+WJeJBUIX5pGIWmgmrA==",
+      "path": "mcpsdk.shared/1.2.0",
+      "hashPath": "mcpsdk.shared.1.2.0.nupkg.sha512"
+    },
+    "NStack.Core/0.12.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-WJpBPHWNaBRkPRxoWpFWI/4Tc2b0DHmng7HS6Js2CplVtmI/Q1Ud3zYPtwSxLgXi0CL9fvJ34Jf/sndhikaR/Q==",
+      "path": "nstack.core/0.12.0",
+      "hashPath": "nstack.core.0.12.0.nupkg.sha512"
+    },
+    "Onigwrap/1.0.10": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-eujNEpEhCl4UiqHTG0CeG/sWS8v/iYXGqUpaVkgBmYRZp3Utmz/aw38fuFL2rcnhj1FNfHwHaxGDeLY34a3nEA==",
+      "path": "onigwrap/1.0.10",
+      "hashPath": "onigwrap.1.0.10.nupkg.sha512"
+    },
+    "TextMateSharp/2.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-w0wGeqlBi9SYrzxpS1DBcEfiVCs5NY18Yl5YBIsHzXTXQd0OLOh3mP4LRuFvcktR/1MG8nSBHSMJj0rFvrPk+A==",
+      "path": "textmatesharp/2.0.3",
+      "hashPath": "textmatesharp.2.0.3.nupkg.sha512"
+    },
+    "TextMateSharp.Grammars/2.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-qkI1ogusuyGCGTgeyhljDM+GEfATOexoUTqLIgSb5P0ojmfhRXWfSTRXXJRpZkLDErShJ7RWOb+p10lHfhhO+Q==",
+      "path": "textmatesharp.grammars/2.0.3",
+      "hashPath": "textmatesharp.grammars.2.0.3.nupkg.sha512"
+    },
+    "Velopack/1.1.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-NvPcAHnGj97qFToV4HZIEs05UfWYMXo0BAFUVmsf+/Xb1Bxqvk7H09CXanCqb5Vpd42tN5h7dz/qHLvWnTMpzw==",
+      "path": "velopack/1.1.1",
+      "hashPath": "velopack.1.1.1.nupkg.sha512"
+    },
+    "GitBench.Lsp/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "GitBench.Pty/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "GitBench.Terminal.Vt/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Glfw.NET/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "JpegSharp/0.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "OpenGL.NET/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PngSharp/0.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "TreeSitter/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "TreeSitter.Bindings/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "XtermSharp/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.AppUtils/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Desktop/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Fonts/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Geometry/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Gui/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Gui.Desktop/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Gui.Metal/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Gui.OpenGL/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.KeyboardModule/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.KeyboardModule.GlfwAdapter/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Rendering.Metal/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Svg/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "XtermSharp.Reference/1.0.0.0": {
+      "type": "reference",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

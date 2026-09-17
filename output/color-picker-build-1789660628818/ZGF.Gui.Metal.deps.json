@@ -1,0 +1,304 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "ZGF.Gui.Metal/0.0.0-alpha.0.2499": {
+        "dependencies": {
+          "PngSharp": "0.0.0",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Fonts": "1.0.0",
+          "ZGF.Geometry": "1.0.0",
+          "ZGF.Gui": "1.0.0",
+          "ZGF.Rendering.Metal": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Gui.Metal.dll": {}
+        }
+      },
+      "FreeTypeSharp/3.0.1": {
+        "runtime": {
+          "lib/net8.0/FreeTypeSharp.dll": {
+            "assemblyVersion": "3.0.1.0",
+            "fileVersion": "3.0.1.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/libfreetype.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx/native/libfreetype.dylib": {
+            "rid": "osx",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/freetype.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "2.13.2.0"
+          },
+          "runtimes/win-x64/native/freetype.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "2.13.2.0"
+          },
+          "runtimes/win-x86/native/freetype.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "2.13.2.0"
+          }
+        }
+      },
+      "HarfBuzzSharp/8.3.0.1": {
+        "dependencies": {
+          "HarfBuzzSharp.NativeAssets.Win32": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.macOS": "8.3.0.1"
+        },
+        "runtime": {
+          "lib/net8.0/HarfBuzzSharp.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "8.3.0.1"
+          }
+        }
+      },
+      "HarfBuzzSharp.NativeAssets.Linux/8.3.0.1": {
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libHarfBuzzSharp.so": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libHarfBuzzSharp.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libHarfBuzzSharp.so": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-musl-x64/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libHarfBuzzSharp.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libHarfBuzzSharp.so.0.60830.0": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "HarfBuzzSharp.NativeAssets.macOS/8.3.0.1": {
+        "runtimeTargets": {
+          "runtimes/osx/native/libHarfBuzzSharp.dylib": {
+            "rid": "osx",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "HarfBuzzSharp.NativeAssets.Win32/8.3.0.1": {
+        "runtimeTargets": {
+          "runtimes/win-arm64/native/libHarfBuzzSharp.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libHarfBuzzSharp.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/libHarfBuzzSharp.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "PngSharp/0.0.0": {
+        "runtime": {
+          "PngSharp.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.AppUtils/1.0.0": {
+        "runtime": {
+          "ZGF.AppUtils.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Fonts/1.0.0": {
+        "dependencies": {
+          "FreeTypeSharp": "3.0.1",
+          "HarfBuzzSharp": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.Linux": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.Win32": "8.3.0.1",
+          "HarfBuzzSharp.NativeAssets.macOS": "8.3.0.1"
+        },
+        "runtime": {
+          "ZGF.Fonts.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Geometry/1.0.0": {
+        "runtime": {
+          "ZGF.Geometry.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Gui/1.0.0": {
+        "dependencies": {
+          "PngSharp": "0.0.0",
+          "ZGF.AppUtils": "1.0.0",
+          "ZGF.Fonts": "1.0.0",
+          "ZGF.Geometry": "1.0.0",
+          "ZGF.KeyboardModule": "1.0.0",
+          "ZGF.Svg": "1.0.0"
+        },
+        "runtime": {
+          "ZGF.Gui.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.KeyboardModule/1.0.0": {
+        "runtime": {
+          "ZGF.KeyboardModule.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Rendering.Metal/1.0.0": {
+        "runtime": {
+          "ZGF.Rendering.Metal.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "ZGF.Svg/1.0.0": {
+        "runtime": {
+          "ZGF.Svg.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ZGF.Gui.Metal/0.0.0-alpha.0.2499": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "FreeTypeSharp/3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-XRdbJhPAg94NI0xN0PczfIP7oSV/sA8hpbuWqtW/uR4ZM03v29OlxUONT7XS291rUTLsshoiMWG8ijeIUEvdkw==",
+      "path": "freetypesharp/3.0.1",
+      "hashPath": "freetypesharp.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-rwLpl+W6uqu0DuvzqNhTMuFcXfy1Vc0uq0YXgPEmtTSfeUSAye1FcARrm2YIPOSiCBwBOGu3cLvMX5Fp6OKe2g==",
+      "path": "harfbuzzsharp/8.3.0.1",
+      "hashPath": "harfbuzzsharp.8.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp.NativeAssets.Linux/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Qn8drjWx6xRm+KZ38pGK5Np44h58BI9rGAqQmJOmXNuAwsnfgrce8oWW8KI0O8CBSuu1R5Y2yhe8N+PayuAhNA==",
+      "path": "harfbuzzsharp.nativeassets.linux/8.3.0.1",
+      "hashPath": "harfbuzzsharp.nativeassets.linux.8.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp.NativeAssets.macOS/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-2o6U05LAmK+rwX7TvmJ2X0anXJG2hSE7kHVmCshhHy0tKfByJ5ykBacvhmmooHchlOwq15KBZeROGafCT8nN+g==",
+      "path": "harfbuzzsharp.nativeassets.macos/8.3.0.1",
+      "hashPath": "harfbuzzsharp.nativeassets.macos.8.3.0.1.nupkg.sha512"
+    },
+    "HarfBuzzSharp.NativeAssets.Win32/8.3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ow0DtGEUjo65qhiI22of7qiVbN1xDFsZ5P5xJljRmGZ5WSxNy+1batLNJFGxahqhB1MTHYV8kAXf0GqC8WaevQ==",
+      "path": "harfbuzzsharp.nativeassets.win32/8.3.0.1",
+      "hashPath": "harfbuzzsharp.nativeassets.win32.8.3.0.1.nupkg.sha512"
+    },
+    "PngSharp/0.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.AppUtils/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Fonts/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Geometry/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Gui/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.KeyboardModule/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Rendering.Metal/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ZGF.Svg/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

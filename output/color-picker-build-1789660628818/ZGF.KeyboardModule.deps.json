@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v6.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v6.0": {
+      "ZGF.KeyboardModule/0.0.0-alpha.0.2499": {
+        "runtime": {
+          "ZGF.KeyboardModule.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ZGF.KeyboardModule/0.0.0-alpha.0.2499": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

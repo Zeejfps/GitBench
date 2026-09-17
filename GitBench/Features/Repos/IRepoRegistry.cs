@@ -67,8 +67,9 @@ public interface IRepoRegistry
     void RenameRepo(Guid id, string newName);
     // Drops a custom name, returning the row to tracking its folder. No-op without one.
     void ResetRepoName(Guid id);
-    // Sets or clears the image used for a primary repo in both forms of the repository sidebar.
-    void SetCustomIcon(Guid id, string? iconPath);
+    // Imports a resized image into app data, or clears it. On failure the saved icon is unchanged.
+    bool SetCustomIcon(Guid id, string? iconPath);
+    void SetCustomColor(Guid id, uint? color);
     void BeginRenameRepo(Guid id);
     void EndRenameRepo();
     BranchesUiState GetBranchesUi(Guid repoId);

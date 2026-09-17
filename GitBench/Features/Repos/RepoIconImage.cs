@@ -16,10 +16,11 @@ internal sealed record RepoIconImage : Widget
 {
     public required string Path { get; init; }
     public required float Size { get; init; }
+    public Func<string, ImageFrame?> LoadFrame { get; init; } = Load;
 
     protected override IWidget Build(Context ctx)
     {
-        var frame = Load(Path);
+        var frame = LoadFrame(Path);
         if (frame is null) return Empty.Widget;
         return new Raw
         {
@@ -29,7 +30,7 @@ internal sealed record RepoIconImage : Widget
 
     internal static bool CanLoad(string path) => Load(path) is not null;
 
-    private static ImageFrame? Load(string path)
+    internal static ImageFrame? Load(string path)
     {
         try
         {

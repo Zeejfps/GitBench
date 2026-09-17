@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "ZGF.Rendering.Metal/0.0.0-alpha.0.2499": {
+        "runtime": {
+          "ZGF.Rendering.Metal.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ZGF.Rendering.Metal/0.0.0-alpha.0.2499": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
