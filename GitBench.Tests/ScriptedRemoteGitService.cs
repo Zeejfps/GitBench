@@ -63,7 +63,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
 
     public Func<Repo, GitOutcome>? OnFetch { get; set; }
     public Func<Repo, PullStrategy?, PullOutcome>? OnPull { get; set; }
-    public Func<Repo, bool, GitOutcome>? OnPush { get; set; }
+    public Func<Repo, bool, PushOutcome>? OnPush { get; set; }
 
     public GitOutcome Fetch(Repo repo)
     {
@@ -80,7 +80,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
         return OnPull is { } scripted ? scripted(repo, strategy) : inner.Pull(repo, strategy);
     }
 
-    public GitOutcome Push(Repo repo, bool force = false)
+    public PushOutcome Push(Repo repo, bool force = false)
     {
         Interlocked.Increment(ref _pushCalls);
         WaitWhileHeld();

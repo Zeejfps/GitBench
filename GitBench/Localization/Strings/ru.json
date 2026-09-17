@@ -837,6 +837,10 @@
   "operations.reconcile_strategy_rebase": "Перебазирование (--rebase)",
   "operations.reconcile_strategy_ff_only": "Только перемотка вперёд (--ff-only)",
   "operations.reconcile_note": "Слияние или перебазирование может остановиться на конфликтах — в баннере операции появится кнопка «Прервать». Только перемотка вперёд не выполнится, если ваша ветка сдвинулась.",
+  "operations.push_rejected_title": "Push отклонён",
+  "operations.push_rejected_desc": "В upstream ветки '{name}' есть коммиты, которых у вас ещё нет — кто-то сделал push после вашего последнего fetch. Заберите их, затем повторите push.",
+  "operations.push_rejected_action": "Pull и push",
+  "operations.push_rejected_note": "Перебазирование переносит ваши коммиты поверх чужих; слияние добавляет коммит слияния. Оба могут остановиться на конфликтах — в баннере операции появится «Прервать», а после разрешения можно будет сделать push.",
 
   "submodules.add_title": "Добавление подмодуля",
   "submodules.add_path_label": "Путь внутри родителя",

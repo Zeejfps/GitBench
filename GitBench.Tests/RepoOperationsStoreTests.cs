@@ -30,6 +30,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
     private readonly List<RemoteSyncOptimisticMessage> _optimistic = new();
     private readonly List<ShowOperationErrorMessage> _errorDialogs = new();
     private readonly List<Repo> _diverged = new();
+    private readonly List<Repo> _rejected = new();
 
     public RepoOperationsStoreTests()
     {
@@ -48,6 +49,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
         _bus.Subscribe<RemoteSyncOptimisticMessage>(_optimistic.Add);
         _bus.Subscribe<ShowOperationErrorMessage>(_errorDialogs.Add);
         _store.PullDiverged += _diverged.Add;
+        _store.PushRejected += _rejected.Add;
     }
 
     public void Dispose()
@@ -103,7 +105,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
     [Fact]
     public void Push_OnSuccess_SnapsAheadToZero()
     {
-        _git.OnPush = (_, _) => GitOutcome.Ok;
+        _git.OnPush = (_, _) => PushOutcome.Ok;
 
         _store.Push(_onScreen);
         Settle(() => _toasts.Count > 0, "the success toast");
@@ -253,6 +255,34 @@ public sealed class RepoOperationsStoreTests : IDisposable
         Settle(() => _store.HasUnseenError(_background.Id), "the pending error badge");
 
         Assert.Empty(_diverged);
+    }
+
+    // A non-fast-forward rejection on the repo in front of the user is recoverable by pulling first,
+    // so it goes to the pull-then-push dialog rather than the generic failure dialog.
+    [Fact]
+    public void Push_RejectedOnTheRepoOnScreen_HandsTheRejectionToThePullAndPushDialog()
+    {
+        _git.OnPush = (_, _) => new PushOutcome.Rejected("! [rejected] main -> main (fetch first)");
+
+        _store.Push(_onScreen);
+        Settle(() => _rejected.Count > 0, "the rejected message");
+
+        Assert.Equal(_onScreen, Assert.Single(_rejected));
+        Assert.Empty(_errorDialogs);
+        Assert.False(_store.HasUnseenError(_onScreen.Id));
+        Assert.Empty(_toasts);
+        Assert.False(_store.Active.Value.IsPushing);
+    }
+
+    [Fact]
+    public void Push_RejectedOnARepoTheUserIsNotLookingAt_ParksThePendingErrorBadgeInstead()
+    {
+        _git.OnPush = (_, _) => new PushOutcome.Rejected("! [rejected] main -> main (fetch first)");
+
+        _store.Push(_background);
+        Settle(() => _store.HasUnseenError(_background.Id), "the pending error badge");
+
+        Assert.Empty(_rejected);
     }
 
     // The completion is keyed by the repo the op started on, so switching away mid-fetch must not

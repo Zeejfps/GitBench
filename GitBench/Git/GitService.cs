@@ -1924,25 +1924,38 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // force=true uses --force-with-lease: refuses if the remote moved since our last fetch,
     // so a teammate's concurrent push isn't silently clobbered. Caller is expected to have
     // confirmed with the user before passing force=true.
-    public GitOutcome Push(Repo repo, bool force = false)
-        => RunRemoteOperation(repo, () =>
+    public PushOutcome Push(Repo repo, bool force = false)
+        => RunLocked<PushOutcome>(repo, GitResource.Remote, () =>
         {
             // Pre-flight: refuse to push from detached HEAD or a branch with no upstream,
             // because the resulting `git push` error is less actionable than these messages.
             var info = GetHeadInfo(repo.Path);
             if (info.IsDetached)
-                return new GitOutcome.Failed("HEAD is detached. Check out a branch first.");
+                return new PushOutcome.Failed("HEAD is detached. Check out a branch first.");
             if (!info.HasUpstream)
             {
                 var name = info.CurrentBranchName ?? "(unknown)";
-                return new GitOutcome.Failed(
+                return new PushOutcome.Failed(
                     $"Branch '{name}' has no upstream. Set one with: git push -u <remote> {name}");
             }
 
             var args = new List<string> { "push" };
             if (force) args.Add("--force-with-lease");
-            return ToOutcome(_runner.Run(repo.Path, args), "git push");
-        });
+            var result = _runner.Run(repo.Path, args);
+            if (result.Ok) return PushOutcome.Ok;
+
+            var message = result.BlockError("git push");
+            // git labels the two non-fast-forward refusals "(fetch first)" and "(non-fast-forward)";
+            // both mean the upstream moved and integrating it is the fix.
+            if (!force && IsNonFastForwardRejection(result.PreferredStream))
+                return new PushOutcome.Rejected(message);
+            return new PushOutcome.Failed(message);
+        }, static m => new PushOutcome.Failed(m));
+
+    private static bool IsNonFastForwardRejection(string output)
+        => output.Contains("[rejected]", StringComparison.OrdinalIgnoreCase)
+           && (output.Contains("fetch first", StringComparison.OrdinalIgnoreCase)
+               || output.Contains("non-fast-forward", StringComparison.OrdinalIgnoreCase));
 
     public GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream)
         => RunOperation(repo, () =>

@@ -8,7 +8,7 @@ public interface IGitRemoteOperations
     string? GetRemoteUrl(Repo repo, string remoteName);
     GitOutcome AddRemote(Repo repo, string name, string url);
     GitOutcome EditRemote(Repo repo, string oldName, string newName, string url);
-    GitOutcome Push(Repo repo, bool force = false);
+    PushOutcome Push(Repo repo, bool force = false);
     PullOutcome Pull(Repo repo, PullStrategy? strategy = null);
     GitOutcome Fetch(Repo repo);
     // Clones url into targetPath (a not-yet-existing or empty directory). onLine streams git's

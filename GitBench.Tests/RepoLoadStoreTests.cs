@@ -186,6 +186,7 @@ public sealed class RepoLoadStoreTests
         public bool HasUnseenError(Guid repoId) => false;
         public bool IsBusy(Guid repoId) => _busy.Contains(repoId);
         public event Action<Repo>? PullDiverged { add { } remove { } }
+        public event Action<Repo>? PushRejected { add { } remove { } }
         public void Push(Repo repo, bool force = false) { }
         public void Pull(Repo repo, PullStrategy? strategy = null) { }
         public void Fetch(Repo repo) { }

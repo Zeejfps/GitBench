@@ -735,6 +735,10 @@
   "operations.reconcile_strategy_rebase": "Rebase (--rebase)",
   "operations.reconcile_strategy_ff_only": "Solo avance rápido (--ff-only)",
   "operations.reconcile_note": "La fusión o el rebase pueden detenerse por conflictos — el banner de Operación ofrecerá Cancelar. El avance rápido solo se rechaza a menos que tu rama no haya avanzado.",
+  "operations.push_rejected_title": "Push rechazado",
+  "operations.push_rejected_desc": "El upstream de '{name}' tiene commits que aún no tienes — alguien hizo push desde tu último fetch. Tráelos y luego vuelve a hacer push.",
+  "operations.push_rejected_action": "Pull y push",
+  "operations.push_rejected_note": "Rebase reaplica tus commits sobre los suyos; la fusión añade un commit de fusión. Ambos pueden detenerse por conflictos — el banner de Operación ofrecerá Cancelar, y podrás hacer push una vez resueltos.",
 
   "submodules.add_title": "Añadir submódulo",
   "submodules.add_path_label": "Ruta dentro del padre",
