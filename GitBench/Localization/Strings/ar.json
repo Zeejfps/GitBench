@@ -597,6 +597,7 @@
   "commits.reset_mode_hard": "صعب",
   "commits.reset_mode_hard_desc": "تجاهل كل التغييرات المحلية",
 
+  "diff.open_file": "فتح الملف",
   "diff.header_title": "عرض الفروق",
   "diff.fullfile_toggle_tooltip": "تبديل عرض الملف الكامل",
   "diff.preview_toggle_tooltip": "تبديل المعاينة",

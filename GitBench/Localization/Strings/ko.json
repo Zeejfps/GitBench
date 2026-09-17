@@ -497,6 +497,7 @@
   "commits.reset_mode_hard": "Hard",
   "commits.reset_mode_hard_desc": "모든 로컬 변경 사항 폐기",
 
+  "diff.open_file": "파일 열기",
   "diff.header_title": "차이 보기",
   "diff.fullfile_toggle_tooltip": "전체 파일 표시 전환",
   "diff.preview_toggle_tooltip": "미리보기 전환",

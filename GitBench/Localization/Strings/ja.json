@@ -497,6 +497,7 @@
   "commits.reset_mode_hard": "Hard",
   "commits.reset_mode_hard_desc": "すべてのローカル変更を破棄",
 
+  "diff.open_file": "ファイルを開く",
   "diff.header_title": "差分ビュー",
   "diff.fullfile_toggle_tooltip": "ファイル全体の表示を切り替え",
   "diff.preview_toggle_tooltip": "プレビューの表示を切り替え",

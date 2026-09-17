@@ -498,6 +498,7 @@
   "commits.reset_mode_hard": "Hard",
   "commits.reset_mode_hard_desc": "Discard all local changes",
 
+  "diff.open_file": "Open file",
   "diff.header_title": "Diff View",
   "diff.fullfile_toggle_tooltip": "Toggle full file",
   "diff.preview_toggle_tooltip": "Toggle preview",

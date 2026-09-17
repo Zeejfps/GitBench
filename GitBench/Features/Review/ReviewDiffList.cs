@@ -17,6 +17,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Review;
 
@@ -26,9 +27,11 @@ namespace GitBench.Features.Review;
 /// </summary>
 internal sealed record ReviewDiffPanel : IWidget
 {
+    public Action<string>? OnOpenFile { get; init; }
+
     public View BuildView(Context ctx)
     {
-        var content = new ReviewDiffListView(ctx);
+        var content = new ReviewDiffListView(ctx, OnOpenFile);
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);
         // The code grid it scrolls is pinned LTR (see DiffRowPainter), so the bar must not mirror:
@@ -83,6 +86,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     // The full-file toggle beside it (a lone glyph), shown once the card's diff is loaded.
     private const float FullFileZoneWidth = 24f;
     private const float PreviewZoneWidth = 24f;
+    private const float OpenFileZoneWidth = 24f;
     // Sections within this margin of the viewport get their diffs loaded ahead of arrival.
     private const float LoadMarginPx = 1600f;
     // Ceiling on an image body so a tall asset can't push every other file off the surface; the
@@ -184,6 +188,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     }
 
     private readonly Context _ctx;
+    private readonly Action<string>? _onOpenFile;
+    private readonly State<bool> _openFileHovered = new(false);
+    private RectF _openFileAnchor;
     private readonly ILocalizationService _loc;
     private readonly IReviewSurfaceModel _vm;
     private readonly CommitDetailsViewModel _details;
@@ -233,8 +240,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     public float VerticalScale => _list.VerticalScale;
     public float HorizontalScale => _scroll.HorizontalScale;
 
-    public ReviewDiffListView(Context ctx)
+    public ReviewDiffListView(Context ctx, Action<string>? onOpenFile = null)
     {
+        _onOpenFile = onOpenFile;
         var input = ctx.Require<InputSystem>();
         _ctx = ctx;
         _loc = ctx.Localization();
@@ -265,6 +273,14 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // Hover only — clicks flow through the list's RowClicked like the gap expanders. Attached
         // before the selection controller to mirror DiffContentView's ordering.
         this.UseController(input, () => new HoverController(this), EventPhaseFilter.Capture);
+        this.Use(() => new Tooltip(this, ctx, L.T(s => s.DiffOpenFile).ToReadable(ctx),
+            _openFileHovered, () => _openFileAnchor));
+        this.Use(() =>
+        {
+            void OnScroll(float _) => ClearHover();
+            _list.VerticalScrollPositionChanged += OnScroll;
+            return new ActionDisposable(() => _list.VerticalScrollPositionChanged -= OnScroll);
+        });
         // Wheel over a conflict view (a sibling of the list) still scrolls the list beneath it.
         this.UseController(input, () => new WheelScrollController((dx, dy) =>
         {
@@ -866,8 +882,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             _vm.ToggleFileViewed(s.File.Path);
         else if (IsInFullFileZone(point) && HasFullFileToggle(s))
             ToggleFullFile(s);
-        else if (IsInPreviewZone(point) && HasPreviewToggle(s))
+        else if (IsInPreviewZone(s, point) && HasPreviewToggle(s))
             TogglePreview(s);
+        else if (IsInOpenFileZone(point) && HasOpenFileAction(s))
+            _onOpenFile!(s.File.Path);
         else
             SetFolded(s, true);
         _vm.ReportActiveFile(s.File.Path);
@@ -885,11 +903,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         : point.X < CardRight() - ViewedZoneWidth
             && point.X >= CardRight() - ViewedZoneWidth - FullFileZoneWidth;
 
-    private bool IsInPreviewZone(PointF point) => IsRtl
-        ? point.X > CardLeft() + ViewedZoneWidth + FullFileZoneWidth
-            && point.X <= CardLeft() + ViewedZoneWidth + FullFileZoneWidth + PreviewZoneWidth
-        : point.X < CardRight() - ViewedZoneWidth - FullFileZoneWidth
-            && point.X >= CardRight() - ViewedZoneWidth - FullFileZoneWidth - PreviewZoneWidth;
+    private bool IsInPreviewZone(Section s, PointF point)
+    {
+        var offset = ViewedZoneWidth + FullFileZoneWidth + (HasOpenFileAction(s) ? OpenFileZoneWidth : 0f);
+        return IsRtl
+            ? point.X > CardLeft() + offset && point.X <= CardLeft() + offset + PreviewZoneWidth
+            : point.X < CardRight() - offset && point.X >= CardRight() - offset - PreviewZoneWidth;
+    }
 
     // The header toggle needs a loaded, unfolded card: an unloaded section has no DiffViewModel to
     // flip, and a folded one has no visible body for the mode to mean anything.
@@ -901,6 +921,17 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private static void ToggleFullFile(Section s) => s.Diff?.Diff.ToggleFullFile();
 
     private static void TogglePreview(Section s) => s.Diff?.Diff.TogglePreview();
+
+    private bool HasOpenFileAction(Section s) => _onOpenFile != null
+        && s.File.Status is not (FileChangeStatus.Deleted or FileChangeStatus.Submodule);
+
+    private bool IsInOpenFileZone(PointF point)
+    {
+        const float offset = ViewedZoneWidth + FullFileZoneWidth;
+        return IsRtl
+            ? point.X > CardLeft() + offset && point.X <= CardLeft() + offset + OpenFileZoneWidth
+            : point.X < CardRight() - offset && point.X >= CardRight() - offset - OpenFileZoneWidth;
+    }
 
     // ---- hunk actions ----
 
@@ -931,6 +962,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     private void OnPointerMove(PointF point)
     {
+        UpdateOpenFileHover(point);
         var s = BodySectionAt(point);
         if (!ReferenceEquals(s, _hoveredSection))
         {
@@ -942,8 +974,38 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     private void ClearHover()
     {
+        _openFileHovered.Value = false;
         _hoveredSection?.Surface.ClearHover();
         _hoveredSection = null;
+    }
+
+    private void UpdateOpenFileHover(PointF point)
+    {
+        if (point.Y <= _list.Position.Top - PanelPaddingY && _list.Position.ContainsPoint(point))
+        {
+            if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point))
+            {
+                HoverHeader(sticky.Section, sticky.Band, point);
+                return;
+            }
+            var index = _list.RowIndexAt(point);
+            if (index >= 0 && Locate(index, out var local) is { } section && local == 0
+                && _list.TryGetRowRect(index, out var row) && point.Y <= row.Top - SectionGap)
+            {
+                HoverHeader(section, new RectF(CardLeft(), row.Bottom, CardViewportWidth(), HeaderBandHeight), point);
+                return;
+            }
+        }
+        _openFileHovered.Value = false;
+    }
+
+    private void HoverHeader(Section section, RectF band, PointF point)
+    {
+        var hovered = HasOpenFileAction(section) && IsInOpenFileZone(point);
+        var anchor = Place(band, CardRight() - ViewedZoneWidth - FullFileZoneWidth - OpenFileZoneWidth, OpenFileZoneWidth);
+        if (!_openFileAnchor.Equals(anchor)) _openFileHovered.Value = false;
+        _openFileAnchor = anchor;
+        _openFileHovered.Value = hovered;
     }
 
     // ---- input ----
@@ -955,6 +1017,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     private void OnRowClicked(int index, InputModifiers modifiers, PointF point)
     {
+        _openFileHovered.Value = false;
         // Rows under the top padding strip are hidden; clicks there target nothing.
         if (point.Y > _list.Position.Top - PanelPaddingY) return;
         // The pinned header covers whatever row scrolled beneath it; it owns clicks there.
@@ -978,8 +1041,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 _vm.ToggleFileViewed(s.File.Path);
             else if (IsInFullFileZone(point) && HasFullFileToggle(s))
                 ToggleFullFile(s);
-            else if (IsInPreviewZone(point) && HasPreviewToggle(s))
+            else if (IsInPreviewZone(s, point) && HasPreviewToggle(s))
                 TogglePreview(s);
+            else if (IsInOpenFileZone(point) && HasOpenFileAction(s))
+                _onOpenFile!(s.File.Path);
             else
                 SetFolded(s, !s.Folded);
             _vm.ReportActiveFile(s.File.Path);
@@ -1266,10 +1331,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var zoneLeft = cardLeft + cardWidth - ViewedZoneWidth;
         var showFullFileToggle = HasFullFileToggle(s);
         var showPreviewToggle = HasPreviewToggle(s);
-        var previewLeft = zoneLeft - FullFileZoneWidth - PreviewZoneWidth;
+        var showOpenFile = HasOpenFileAction(s);
+        var openFileLeft = zoneLeft - FullFileZoneWidth - OpenFileZoneWidth;
+        var previewLeft = zoneLeft - FullFileZoneWidth - (showOpenFile ? OpenFileZoneWidth : 0f) - PreviewZoneWidth;
         var pathRight = showPreviewToggle
             ? previewLeft
-            : showFullFileToggle ? zoneLeft - FullFileZoneWidth : zoneLeft;
+            : showOpenFile ? openFileLeft : showFullFileToggle ? zoneLeft - FullFileZoneWidth : zoneLeft;
         var textWidth = Math.Max(0f, pathRight - x - HeaderPaddingX);
         if (textWidth > 0)
         {
@@ -1310,6 +1377,18 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             {
                 Position = Place(band, previewLeft, PreviewZoneWidth),
                 Text = LucideIcons.BookOpen,
+                Style = HeaderGlyphStyle,
+                ZIndex = z + 2,
+            });
+        }
+
+        if (showOpenFile)
+        {
+            HeaderGlyphStyle.TextColor = _theme.Palette.TextSecondary;
+            c.DrawText(new DrawTextInputs
+            {
+                Position = Place(band, openFileLeft, OpenFileZoneWidth),
+                Text = LucideIcons.ExternalLink,
                 Style = HeaderGlyphStyle,
                 ZIndex = z + 2,
             });

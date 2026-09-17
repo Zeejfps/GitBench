@@ -498,6 +498,7 @@
   "commits.reset_mode_hard": "Duro",
   "commits.reset_mode_hard_desc": "Descartar todos los cambios locales",
 
+  "diff.open_file": "Abrir archivo",
   "diff.header_title": "Vista de diferencias",
   "diff.fullfile_toggle_tooltip": "Alternar archivo completo",
   "diff.preview_toggle_tooltip": "Alternar vista previa",

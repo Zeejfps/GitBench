@@ -497,6 +497,7 @@
   "commits.reset_mode_hard": "Hard",
   "commits.reset_mode_hard_desc": "丢弃所有本地更改",
 
+  "diff.open_file": "打开文件",
   "diff.header_title": "差异视图",
   "diff.fullfile_toggle_tooltip": "切换完整文件",
   "diff.preview_toggle_tooltip": "切换预览",

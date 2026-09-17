@@ -1,6 +1,8 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Input;
@@ -11,6 +13,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
@@ -153,7 +156,17 @@ internal sealed record WorkingTreeReviewView : Widget
                 {
                     Children =
                     [
-                        new ReviewDiffPanel(),
+                        new ReviewDiffPanel
+                        {
+                            OnOpenFile = path =>
+                            {
+                                if (ctx.Require<IFileBrowserStore>().Active.Value is not { } browser) return;
+                                var fullPath = Path.Combine(browser.RootPath, path);
+                                if (!File.Exists(fullPath)) return;
+                                browser.NavigateTo(fullPath, 1);
+                                ctx.Require<State<SidebarPane>>().Value = SidebarPane.Files;
+                            },
+                        },
                         new Show
                         {
                             When = model.IsLoading,

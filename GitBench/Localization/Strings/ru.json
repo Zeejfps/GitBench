@@ -580,6 +580,7 @@
   "commits.reset_mode_hard": "Жёсткий",
   "commits.reset_mode_hard_desc": "Отбросить все локальные изменения",
 
+  "diff.open_file": "Открыть файл",
   "diff.header_title": "Просмотр различий",
   "diff.fullfile_toggle_tooltip": "Показать файл целиком",
   "diff.preview_toggle_tooltip": "Показать предпросмотр",

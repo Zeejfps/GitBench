@@ -13,6 +13,7 @@ public sealed class Tooltip : IDisposable
     private readonly Context _context;
     private readonly IReadable<string?> _text;
     private readonly IReadable<bool> _isHovered;
+    private readonly Func<RectF>? _anchor;
 
     private readonly IDisposable _hoverSub;
     private CancellationTokenSource? _pendingCts;
@@ -22,12 +23,14 @@ public sealed class Tooltip : IDisposable
         View target,
         Context context,
         IReadable<string?> text,
-        IReadable<bool> isHovered)
+        IReadable<bool> isHovered,
+        Func<RectF>? anchor = null)
     {
         _target = target;
         _context = context;
         _text = text;
         _isHovered = isHovered;
+        _anchor = anchor;
 
         _hoverSub = _isHovered.Subscribe(OnHoverChanged);
     }
@@ -92,7 +95,7 @@ public sealed class Tooltip : IDisposable
         var service = _context.Get<PopupTooltipService>();
         var coordinates = _context.Get<IWindowCoordinates>();
         if (service == null || coordinates == null) return;
-        service.Show(this, text, coordinates.ToScreenPoints(CanvasRect.From(_target.Position)));
+        service.Show(this, text, coordinates.ToScreenPoints(CanvasRect.From(_anchor?.Invoke() ?? _target.Position)));
         _isShown = true;
     }
 
