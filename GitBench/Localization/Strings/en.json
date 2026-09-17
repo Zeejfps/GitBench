@@ -752,6 +752,10 @@
   "operations.reconcile_strategy_rebase": "Rebase (--rebase)",
   "operations.reconcile_strategy_ff_only": "Fast-forward only (--ff-only)",
   "operations.reconcile_note": "Merge or rebase may stop on conflicts — the Operation banner will offer Abort. Fast-forward only refuses unless your branch hasn't moved.",
+  "operations.push_rejected_title": "Push rejected",
+  "operations.push_rejected_desc": "The upstream of '{name}' has commits you don't have yet — someone pushed since your last fetch. Pull them in, then push again.",
+  "operations.push_rejected_action": "Pull and push",
+  "operations.push_rejected_note": "Rebase replays your commits on top of theirs; merge adds a merge commit. Either may stop on conflicts — the Operation banner will offer Abort, and you can push once they're resolved.",
 
   "submodules.add_title": "Add submodule",
   "submodules.add_path_label": "Path inside parent",

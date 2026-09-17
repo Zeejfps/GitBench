@@ -121,7 +121,7 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
         public string? GetRemoteUrl(Repo repo, string remoteName) => null;
         public GitOutcome AddRemote(Repo repo, string name, string url) => GitOutcome.Ok;
         public GitOutcome EditRemote(Repo repo, string oldName, string newName, string url) => GitOutcome.Ok;
-        public GitOutcome Push(Repo repo, bool force = false) => GitOutcome.Ok;
+        public PushOutcome Push(Repo repo, bool force = false) => PushOutcome.Ok;
         public PullOutcome Pull(Repo repo, PullStrategy? strategy = null) => PullOutcome.Ok;
         public GitOutcome Fetch(Repo repo) => GitOutcome.Ok;
     }

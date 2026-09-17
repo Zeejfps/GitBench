@@ -751,6 +751,10 @@
   "operations.reconcile_strategy_rebase": "变基 (--rebase)",
   "operations.reconcile_strategy_ff_only": "仅快进 (--ff-only)",
   "operations.reconcile_note": "合并或变基可能因冲突而停止 — 操作横幅将提供中止选项。除非您的分支未推进，否则仅快进会被拒绝。",
+  "operations.push_rejected_title": "推送被拒绝",
+  "operations.push_rejected_desc": "'{name}' 的上游有您尚未拥有的提交 — 自上次获取以来有人推送了。先拉取这些提交，然后再次推送。",
+  "operations.push_rejected_action": "拉取并推送",
+  "operations.push_rejected_note": "变基会将您的提交重放到对方提交之上；合并会添加一个合并提交。两者都可能因冲突而停止 — 操作横幅将提供中止选项，解决后即可推送。",
 
   "submodules.add_title": "添加子模块",
   "submodules.add_path_label": "父级内的路径",

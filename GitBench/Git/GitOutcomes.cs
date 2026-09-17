@@ -100,6 +100,32 @@ public abstract record PullOutcome : IOutcome<PullOutcome>
     public sealed record Failed(string Message) : PullOutcome;
 }
 
+public abstract record PushOutcome : IOutcome<PushOutcome>
+{
+    private PushOutcome() { }
+
+    public static readonly PushOutcome Ok = new Completed();
+
+    public static PushOutcome Fail(string message) => new Failed(message);
+
+    // Rejected is still a failure to anything that only asks pass/fail — the push did not land.
+    public string? FailureMessage => this switch
+    {
+        Failed failed => failed.Message,
+        Rejected rejected => rejected.Message,
+        _ => null,
+    };
+
+    public sealed record Completed : PushOutcome;
+
+    // The upstream has commits the local branch doesn't (non-fast-forward). Only a plain push
+    // reports this: the Push button turns it into the pull-then-push dialog, where a
+    // force-with-lease refusal is the lease doing its job and stays a plain failure.
+    public sealed record Rejected(string Message) : PushOutcome;
+
+    public sealed record Failed(string Message) : PushOutcome;
+}
+
 public abstract record AbortOutcome : IOutcome<AbortOutcome>
 {
     private AbortOutcome() { }

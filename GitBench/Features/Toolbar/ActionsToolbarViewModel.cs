@@ -110,6 +110,18 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
 
         _ops.PullDiverged += OnPullDiverged;
         Subscriptions.Add(() => _ops.PullDiverged -= OnPullDiverged);
+        _ops.PushRejected += OnPushRejected;
+        Subscriptions.Add(() => _ops.PushRejected -= OnPushRejected);
+    }
+
+    private void OnPushRejected(Repo repo)
+    {
+        if (_registry.Active.Value?.Id != repo.Id) return;
+        _bus.Broadcast(new ShowDialogMessage(onClose => new PushRejectedDialog
+        {
+            Repo = repo,
+            OnClose = onClose,
+        }));
     }
 
     private void OnPullDiverged(Repo repo)

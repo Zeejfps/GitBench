@@ -65,6 +65,11 @@ public interface IRepoOperationsStore
     // divergence goes to the unseen-error badge instead and never raises this.
     event Action<Repo>? PullDiverged;
 
+    // A plain push on the *active* repo was refused because the upstream has commits the local
+    // branch doesn't — recoverable by pulling first. The toolbar opens the pull-then-push dialog;
+    // a background repo's rejection goes to the unseen-error badge like any other failure.
+    event Action<Repo>? PushRejected;
+
     void Push(Repo repo, bool force = false);
     void Pull(Repo repo, PullStrategy? strategy = null);
     void Fetch(Repo repo);
@@ -111,6 +116,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
 
     public event Action<Repo>? PullDiverged;
 
+    public event Action<Repo>? PushRejected;
+
     public RepoOperationsStore(IRepoRegistry registry, IGitRemoteOperations git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
     {
         _registry = registry;
@@ -141,10 +148,16 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         if (s.Value.IsPushing) return;
         s.Value = s.Value with { IsPushing = true, PendingError = null };
         Run(repo, _loc.Strings.Value.ReposErrorPushFailed, _loc.Strings.Value.ToastPushed,
-            () => _git.Push(repo, force) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
+            () => _git.Push(repo, force) switch
+            {
+                PushOutcome.Failed f => (false, f.Message, false),
+                PushOutcome.Rejected r => (false, r.Message, true),
+                _ => (true, null, false),
+            },
             st => st with { IsPushing = false },
             // A successful push of the current branch leaves nothing left to send.
-            optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: 0, Behind: null));
+            optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: 0, Behind: null),
+            onRecoverable: r => PushRejected?.Invoke(r));
     }
 
     public void Pull(Repo repo, PullStrategy? strategy = null) => _ = PullAsync(repo, strategy);
@@ -168,6 +181,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
             st => st with { IsPulling = false },
             // A successful pull leaves the branch level with the upstream it pulled from.
             optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: null, Behind: 0),
+            onRecoverable: r => PullDiverged?.Invoke(r),
             completion: completion);
         return completion.Task;
     }
@@ -234,13 +248,16 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
     // completion lands on that repo's state no matter which repo is active when it finishes. No
     // generation guard: the in-flight flag already serializes same-type ops, and a late result is
     // never "stale" because it's applied to its own repo, not to whatever happens to be active.
+    // A Recoverable failure is one the user can fix in-app (diverged pull, rejected push);
+    // onRecoverable is what hands it to the UI when the repo is on screen.
     private void Run(
         Repo repo,
         string failureTitle,
         string successMessage,
-        Func<(bool Success, string? Error, bool Diverged)> work,
+        Func<(bool Success, string? Error, bool Recoverable)> work,
         Func<RepoOperations, RepoOperations> clearInFlight,
         RemoteSyncOptimisticMessage? optimisticSync = null,
+        Action<Repo>? onRecoverable = null,
         TaskCompletionSource<RemoteOpResult>? completion = null)
     {
         var dispatcher = _dispatcher;
@@ -248,10 +265,10 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         {
             bool success = false;
             string? error = null;
-            bool diverged = false;
-            try { (success, error, diverged) = work(); }
+            bool recoverable = false;
+            try { (success, error, recoverable) = work(); }
             catch (Exception ex) { error = ex.Message; }
-            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, optimisticSync, completion, success, error, diverged));
+            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, optimisticSync, onRecoverable, completion, success, error, recoverable));
         });
     }
 
@@ -261,10 +278,11 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         string successMessage,
         Func<RepoOperations, RepoOperations> clearInFlight,
         RemoteSyncOptimisticMessage? optimisticSync,
+        Action<Repo>? onRecoverable,
         TaskCompletionSource<RemoteOpResult>? completion,
         bool success,
         string? error,
-        bool diverged)
+        bool recoverable)
     {
         if (_disposed) return;
         if (completion != null) _outstanding.Remove(completion);
@@ -285,13 +303,13 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
 
         var message = error ?? _loc.Strings.Value.CommonUnknownError;
 
-        // A diverged pull on the repo you're looking at is recoverable in-app: hand it to the view
-        // model to open the reconcile dialog. For a background repo there's nothing to interact with,
-        // so it falls through to the badge path and the user re-pulls when they switch to it.
-        if (diverged && _registry.Active.Value?.Id == repo.Id)
+        // A diverged pull or rejected push on the repo you're looking at is recoverable in-app: hand
+        // it to the view model to open the recovery dialog. For a background repo there's nothing to
+        // interact with, so it falls through to the badge path and the user retries when they switch.
+        if (recoverable && _registry.Active.Value?.Id == repo.Id)
         {
             s.Value = next;
-            PullDiverged?.Invoke(repo);
+            onRecoverable?.Invoke(repo);
             completion?.TrySetResult(new RemoteOpResult.Diverged());
             return;
         }
@@ -310,7 +328,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
 
         // Which repo was on screen decides where the failure is shown, not what it was: a diverged
         // pull that only reached the badge is still a divergence to whoever asked for it.
-        completion?.TrySetResult(diverged ? new RemoteOpResult.Diverged() : new RemoteOpResult.Failed(message));
+        completion?.TrySetResult(recoverable ? new RemoteOpResult.Diverged() : new RemoteOpResult.Failed(message));
     }
 
     public void Dispose()

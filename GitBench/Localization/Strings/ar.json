@@ -875,6 +875,10 @@
   "operations.reconcile_strategy_rebase": "إعادة تأسيس (--rebase)",
   "operations.reconcile_strategy_ff_only": "تقديم سريع فقط (--ff-only)",
   "operations.reconcile_note": "قد يتوقف الدمج أو إعادة التأسيس عند التعارضات — سيوفّر شريط العملية خيار الإحباط. يرفض التقديم السريع فقط ما لم يكن فرعك قد تحرّك.",
+  "operations.push_rejected_title": "رُفض الدفع",
+  "operations.push_rejected_desc": "يحتوي المصدر الأعلى للفرع '{name}' على إيداعات ليست لديك بعد — دفع أحدهم منذ آخر جلب. اسحبها أولاً ثم ادفع مجدداً.",
+  "operations.push_rejected_action": "سحب ثم دفع",
+  "operations.push_rejected_note": "تعيد إعادة التأسيس تطبيق إيداعاتك فوق إيداعاتهم؛ ويضيف الدمج إيداع دمج. قد يتوقف أيّ منهما عند التعارضات — سيوفّر شريط العملية خيار الإحباط، ويمكنك الدفع بعد حلّها.",
 
   "submodules.add_title": "إضافة وحدة فرعية",
   "submodules.add_path_label": "المسار داخل الأصل",

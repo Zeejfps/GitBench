@@ -751,6 +751,10 @@
   "operations.reconcile_strategy_rebase": "리베이스 (--rebase)",
   "operations.reconcile_strategy_ff_only": "빨리 감기만 (--ff-only)",
   "operations.reconcile_note": "병합 또는 리베이스는 충돌 시 멈출 수 있습니다 — 작업 배너에 중단이 표시됩니다. 빨리 감기만은 브랜치가 이동하지 않은 경우를 제외하고 거부됩니다.",
+  "operations.push_rejected_title": "푸시가 거부됨",
+  "operations.push_rejected_desc": "'{name}'의 업스트림에 아직 없는 커밋이 있습니다 — 마지막 페치 이후 누군가 푸시했습니다. 먼저 가져온 다음 다시 푸시하세요.",
+  "operations.push_rejected_action": "풀 후 푸시",
+  "operations.push_rejected_note": "리베이스는 상대 커밋 위에 내 커밋을 다시 적용하고, 병합은 병합 커밋을 추가합니다. 둘 다 충돌 시 멈출 수 있습니다 — 작업 배너에 중단이 표시되며, 해결 후 푸시할 수 있습니다.",
 
   "submodules.add_title": "서브모듈 추가",
   "submodules.add_path_label": "상위 내 경로",

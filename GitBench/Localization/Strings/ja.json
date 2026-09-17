@@ -751,6 +751,10 @@
   "operations.reconcile_strategy_rebase": "リベース (--rebase)",
   "operations.reconcile_strategy_ff_only": "fast-forwardのみ (--ff-only)",
   "operations.reconcile_note": "マージまたはリベースはコンフリクトで停止することがあります — 操作バナーに中止が表示されます。fast-forwardのみは、ブランチが進んでいない場合を除き拒否されます。",
+  "operations.push_rejected_title": "プッシュが拒否されました",
+  "operations.push_rejected_desc": "'{name}' のアップストリームには、まだ手元にないコミットがあります — 前回のフェッチ以降に誰かがプッシュしました。取り込んでから、もう一度プッシュしてください。",
+  "operations.push_rejected_action": "プルしてプッシュ",
+  "operations.push_rejected_note": "リベースは相手のコミットの上に自分のコミットを積み直し、マージはマージコミットを追加します。どちらもコンフリクトで停止することがあります — 操作バナーに中止が表示され、解決後にプッシュできます。",
 
   "submodules.add_title": "サブモジュールを追加",
   "submodules.add_path_label": "親内のパス",
