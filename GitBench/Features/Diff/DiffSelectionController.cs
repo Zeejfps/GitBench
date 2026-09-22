@@ -108,6 +108,9 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
         _editor = editor;
     }
 
+    /// <summary>The editor font size's keys, answered whether the body is focused or only hovered.</summary>
+    public Features.Editor.EditorZoomKeys? Zoom { get; init; }
+
     /// <summary>The caret's keyboard on an editable body, or null where the body is a viewer.</summary>
     private Features.Editor.EditorController? EditorKeys =>
         _editor is { IsEditing: true } editor ? editor : null;
@@ -286,6 +289,12 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
         if (e.State != InputState.Pressed) return;
+
+        if (Zoom?.TryHandle(e.Key, e.Modifiers) == true)
+        {
+            e.Consume();
+            return;
+        }
 
         if (EditorKeys is { } editor)
         {

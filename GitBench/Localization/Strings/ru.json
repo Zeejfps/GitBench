@@ -227,6 +227,8 @@
   "shortcuts.command.navigate_forward": "Вперёд",
   "shortcuts.command.save_file": "Сохранить файл",
   "shortcuts.command.toggle_line_comment": "Переключить комментарий строки",
+  "shortcuts.command.editor_zoom_in": "Увеличить шрифт редактора",
+  "shortcuts.command.editor_zoom_out": "Уменьшить шрифт редактора",
   "shortcuts.command.terminal_copy": "Копировать",
   "shortcuts.command.terminal_paste": "Вставить",
   "shortcuts.command.terminal_select_all": "Выделить всё",

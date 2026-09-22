@@ -234,6 +234,8 @@
   "shortcuts.command.navigate_forward": "تقدّم",
   "shortcuts.command.save_file": "حفظ الملف",
   "shortcuts.command.toggle_line_comment": "تبديل تعليق السطر",
+  "shortcuts.command.editor_zoom_in": "تكبير خط المحرر",
+  "shortcuts.command.editor_zoom_out": "تصغير خط المحرر",
   "shortcuts.command.terminal_copy": "نسخ",
   "shortcuts.command.terminal_paste": "لصق",
   "shortcuts.command.terminal_select_all": "تحديد الكل",

@@ -192,6 +192,8 @@
   "shortcuts.command.navigate_forward": "進む",
   "shortcuts.command.save_file": "ファイルを保存",
   "shortcuts.command.toggle_line_comment": "行コメントを切り替え",
+  "shortcuts.command.editor_zoom_in": "エディターのフォントを大きく",
+  "shortcuts.command.editor_zoom_out": "エディターのフォントを小さく",
   "shortcuts.command.terminal_copy": "コピー",
   "shortcuts.command.terminal_paste": "貼り付け",
   "shortcuts.command.terminal_select_all": "すべて選択",

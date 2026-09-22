@@ -158,6 +158,14 @@ public sealed class KeyMap : IKeyMap
 
         KeyCommand.SaveFile => [KeyGesture.WithPrimary(KeyboardKey.S)],
         KeyCommand.ToggleLineComment => [KeyGesture.WithPrimary(KeyboardKey.Slash)],
+        KeyCommand.EditorZoomIn =>
+        [
+            KeyGesture.WithPrimary(KeyboardKey.Equals),
+            KeyGesture.WithPrimary(KeyboardKey.Equals, InputModifiers.Shift),
+            KeyGesture.WithPrimary(KeyboardKey.NumpadAdd),
+        ],
+        KeyCommand.EditorZoomOut =>
+            [KeyGesture.WithPrimary(KeyboardKey.Minus), KeyGesture.WithPrimary(KeyboardKey.NumpadSubtract)],
 
         // Cmd on macOS, Ctrl+Shift elsewhere: Ctrl+C is the shell's interrupt, and Shift is already
         // the modifier the pane takes back from the shell for the wheel and the page keys.

@@ -25,6 +25,18 @@ public readonly record struct EditorFontSize
 
     public string Label => $"{Points:0} px";
 
+    /// <summary>The next size up, or this one at the top of the ladder.</summary>
+    public EditorFontSize Larger => Step(+1);
+
+    /// <summary>The next size down, or this one at the bottom of the ladder.</summary>
+    public EditorFontSize Smaller => Step(-1);
+
+    private EditorFontSize Step(int direction)
+    {
+        var index = Array.IndexOf(Rungs, Points) + direction;
+        return index >= 0 && index < Rungs.Length ? new EditorFontSize(Rungs[index]) : this;
+    }
+
     private static float Snap(float points)
     {
         if (float.IsNaN(points)) return FontSize.Body;

@@ -79,7 +79,9 @@ public static class KeyCommandSections
             or KeyCommand.NavigateForward => KeyCommandSection.CodeNavigation,
 
         KeyCommand.SaveFile
-            or KeyCommand.ToggleLineComment => KeyCommandSection.Editor,
+            or KeyCommand.ToggleLineComment
+            or KeyCommand.EditorZoomIn
+            or KeyCommand.EditorZoomOut => KeyCommandSection.Editor,
 
         KeyCommand.TerminalCopy
             or KeyCommand.TerminalPaste

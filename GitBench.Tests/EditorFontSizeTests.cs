@@ -2,12 +2,14 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 using Xunit;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Testing;
+using ZGF.KeyboardModule;
 using ZGF.Observable;
 
 namespace GitBench.Tests;
@@ -77,8 +79,50 @@ public sealed class EditorFontSizeTests : IDisposable
     public void ADiffViewDrawsCodeAtTheChosenSizeAndFollowsAChange()
     {
         var size = new State<EditorFontSize>(new EditorFontSize(16f));
+        var (h, view) = Mount(size);
+        using var _ = h;
+
+        view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
+        h.Render();
+        Assert.Equal([16f], CodeFontSizes(h.Render()));
+
+        size.Value = new EditorFontSize(20f);
+
+        Assert.Equal([20f], CodeFontSizes(h.Render()));
+    }
+
+    [Fact]
+    public void SteppingMovesOneRungAndStopsAtTheEnds()
+    {
+        Assert.Equal(14f, EditorFontSize.Default.Larger.Points);
+        Assert.Equal(12f, EditorFontSize.Default.Smaller.Points);
+        Assert.Equal(24f, new EditorFontSize(24f).Larger.Points);
+        Assert.Equal(10f, new EditorFontSize(10f).Smaller.Points);
+    }
+
+    [Fact]
+    public void ZoomKeysOverAHoveredDiffStepTheSize()
+    {
+        var size = new State<EditorFontSize>(EditorFontSize.Default);
+        var (h, view) = Mount(size);
+        using var _ = h;
+        view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
+        h.Render();
+        h.MoveTo(400, 300);
+
+        h.PressKey(KeyboardKey.Equals, KeyGesture.Primary);
+        h.PressKey(KeyboardKey.NumpadAdd, KeyGesture.Primary);
+        Assert.Equal(15f, size.Value.Points);
+
+        h.PressKey(KeyboardKey.Minus, KeyGesture.Primary);
+        Assert.Equal(14f, size.Value.Points);
+        Assert.Equal([14f], CodeFontSizes(h.Render()));
+    }
+
+    private static (GuiTestHarness Harness, DiffContentView View) Mount(State<EditorFontSize> size)
+    {
         DiffContentView view = null!;
-        using var h = GuiTestHarness.Create(
+        var h = GuiTestHarness.Create(
             ctx =>
             {
                 view = new DiffContentView(ctx);
@@ -91,16 +135,9 @@ public sealed class EditorFontSizeTests : IDisposable
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
                 ctx.AddService<IClipboard>(new FakeClipboard());
-                ctx.AddService<IReadable<EditorFontSize>>(size);
+                ctx.AddService<IWritable<EditorFontSize>>(size);
             });
-
-        view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
-        h.Render();
-        Assert.Equal([16f], CodeFontSizes(h.Render()));
-
-        size.Value = new EditorFontSize(20f);
-
-        Assert.Equal([20f], CodeFontSizes(h.Render()));
+        return (h, view);
     }
 
     private static float[] CodeFontSizes(RecordingCanvas canvas) => canvas.Texts

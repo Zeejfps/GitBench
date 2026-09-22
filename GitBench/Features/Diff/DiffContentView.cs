@@ -211,7 +211,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _clipboard = ctx.Require<IClipboard>();
         _saves = Features.Editor.DocumentSaves.From(ctx);
         _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap());
-        _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController);
+        var editorFontSize = ctx.Get<IWritable<EditorFontSize>>();
+        _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController)
+        {
+            Zoom = editorFontSize is null ? null : new Features.Editor.EditorZoomKeys(ctx.KeyMap(), editorFontSize),
+        };
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
         if (ctx.Get<IFrameTicker>() is { } ticker) UseCaretBlink(ticker);
@@ -229,7 +233,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // new language on the next draw.
         this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
 
-        if (ctx.Get<IReadable<EditorFontSize>>() is { } editorFontSize)
+        if (editorFontSize != null)
             this.Bind(editorFontSize, size => { _painter.CodeFontSize = size.Points; SetDirty(); });
     }
 

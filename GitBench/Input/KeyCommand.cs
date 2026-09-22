@@ -62,6 +62,10 @@ public enum KeyCommand
     SaveFile,
     ToggleLineComment,
 
+    // Any file or diff body, editable or not: the code's own size, apart from the UI.
+    EditorZoomIn,
+    EditorZoomOut,
+
     // The terminal pane's own chords.
     TerminalCopy,
     TerminalPaste,

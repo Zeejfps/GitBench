@@ -2,10 +2,12 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review.Walkthrough;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -289,7 +291,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             ScrollHorizontalBy(dx);
             return true;
         }));
-        _selectionController = new DiffSelectionController(this, input, ctx.Require<IClipboard>());
+        var editorFontSize = ctx.Get<IWritable<EditorFontSize>>();
+        _selectionController = new DiffSelectionController(this, input, ctx.Require<IClipboard>())
+        {
+            Zoom = editorFontSize is null ? null : new EditorZoomKeys(ctx.KeyMap(), editorFontSize),
+        };
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
         this.BindThemed(ctx.Theme(), theme =>
@@ -323,7 +329,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // re-measured hunk-button labels).
         this.Bind(_vm.ActiveFile, _ => SetDirty());
         this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
-        if (ctx.Get<IReadable<EditorFontSize>>() is { } editorFontSize)
+        if (editorFontSize != null)
             this.Bind(editorFontSize, size =>
             {
                 _painter.CodeFontSize = size.Points;

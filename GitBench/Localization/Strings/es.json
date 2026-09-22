@@ -192,6 +192,8 @@
   "shortcuts.command.navigate_forward": "Ir adelante",
   "shortcuts.command.save_file": "Guardar archivo",
   "shortcuts.command.toggle_line_comment": "Alternar comentario de línea",
+  "shortcuts.command.editor_zoom_in": "Aumentar tamaño de fuente del editor",
+  "shortcuts.command.editor_zoom_out": "Reducir tamaño de fuente del editor",
   "shortcuts.command.terminal_copy": "Copiar",
   "shortcuts.command.terminal_paste": "Pegar",
   "shortcuts.command.terminal_select_all": "Seleccionar todo",

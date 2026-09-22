@@ -192,6 +192,8 @@
   "shortcuts.command.navigate_forward": "前进",
   "shortcuts.command.save_file": "保存文件",
   "shortcuts.command.toggle_line_comment": "切换行注释",
+  "shortcuts.command.editor_zoom_in": "增大编辑器字号",
+  "shortcuts.command.editor_zoom_out": "减小编辑器字号",
   "shortcuts.command.terminal_copy": "复制",
   "shortcuts.command.terminal_paste": "粘贴",
   "shortcuts.command.terminal_select_all": "全选",
