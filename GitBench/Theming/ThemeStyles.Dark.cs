@@ -91,6 +91,10 @@ public partial record ThemeStyles
             Operator: 0xFFD4D4D4u,
             Punctuation: 0xFF969A9Du,
             Constant: 0xFF4FC1FFu,
+            Struct: 0xFF86C691u,        // green, apart from a class's teal
+            Interface: 0xFFB8D7A3u,
+            Enum: 0xFFD7BA7Du,
+            TypeParameter: 0xFFB5A8F0u,
             Heading: 0xFF569CD6u,    // blue, like a keyword
             Emphasis: 0xFFC586C0u,   // purple — bold/italic stand apart from headings
             Link: 0xFF4FC1FFu,       // bright cyan

@@ -20,6 +20,8 @@ public sealed record ServerCapabilities(
 {
     public const string Utf16 = "utf-16";
 
+    public SemanticTokensSupport SemanticTokens { get; init; } = SemanticTokensSupport.Unsupported;
+
     public bool CountsPositionsAsWeDo =>
         string.Equals(PositionEncoding, Utf16, StringComparison.OrdinalIgnoreCase);
 
@@ -45,7 +47,10 @@ public sealed record ServerCapabilities(
                         : Utf16,
                 SupportsHover: Advertises(capabilities, "hoverProvider"),
                 SupportsDefinition: Advertises(capabilities, "definitionProvider"),
-                SupportsReferences: Advertises(capabilities, "referencesProvider"));
+                SupportsReferences: Advertises(capabilities, "referencesProvider"))
+            {
+                SemanticTokens = SemanticTokensSupport.Read(capabilities),
+            };
         }
 
         // A capability is announced either as true or as an options object; both mean yes.
@@ -91,6 +96,7 @@ public static class LspHandshake
             // that it registers for references dynamically, which this one does not.
             writer.WriteStartObject("references");
             writer.WriteEndObject();
+            WriteSemanticTokensCapability(writer);
             writer.WriteStartObject("publishDiagnostics");
             writer.WriteBoolean("versionSupport", true);
             writer.WriteEndObject();
@@ -124,6 +130,37 @@ public static class LspHandshake
         new(LspMethod.Shutdown, writer => writer.WriteNullValue(), Unit.Reader);
 
     public static LspNotice Exit() => new(LspMethod.Exit, writer => writer.WriteNullValue());
+
+    /// <summary>
+    /// Whole-document requests only, in the one encoding the protocol defines. The standard types
+    /// are listed because a server may leave out any type its client did not name; the modifiers
+    /// are left empty because nothing here is colored by them.
+    /// </summary>
+    private static void WriteSemanticTokensCapability(Utf8JsonWriter writer)
+    {
+        writer.WriteStartObject("semanticTokens");
+        writer.WriteStartObject("requests");
+        writer.WriteBoolean("full", true);
+        writer.WriteEndObject();
+        writer.WriteStartArray("tokenTypes");
+        foreach (var type in StandardTokenTypes) writer.WriteStringValue(type);
+        writer.WriteEndArray();
+        writer.WriteStartArray("tokenModifiers");
+        writer.WriteEndArray();
+        writer.WriteStartArray("formats");
+        writer.WriteStringValue("relative");
+        writer.WriteEndArray();
+        writer.WriteBoolean("overlappingTokenSupport", false);
+        writer.WriteBoolean("multilineTokenSupport", false);
+        writer.WriteEndObject();
+    }
+
+    private static readonly string[] StandardTokenTypes =
+    [
+        "namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter",
+        "variable", "property", "enumMember", "event", "function", "method", "macro", "keyword",
+        "modifier", "comment", "string", "number", "regexp", "operator", "decorator",
+    ];
 
     private static void WriteMarkdownCapability(Utf8JsonWriter writer, string name)
     {

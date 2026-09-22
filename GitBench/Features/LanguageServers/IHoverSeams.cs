@@ -67,3 +67,13 @@ internal interface IReferenceSource
     Task<ReferenceReply> ReferencesAsync(
         string absolutePath, FileLine line, RawColumn column, CancellationToken ct);
 }
+
+internal interface ISemanticTokenSource
+{
+    /// <summary>Whether asking is worth it. Optimistic while the server has yet to launch, like
+    /// <see cref="IReferenceSource.CanReference"/>: a wrong yes costs one request that answers
+    /// nothing, and the colors it would bring are an addition, never a row to reserve.</summary>
+    bool CanClassify(string absolutePath);
+
+    Task<SemanticTokensReply> SemanticTokensAsync(string absolutePath, CancellationToken ct);
+}

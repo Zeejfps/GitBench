@@ -265,6 +265,18 @@ public static class LspRequests
             more.WriteEndObject();
         }), Lsp.References.Reader);
 
+    /// <summary>What every name in a document is — a struct, an interface, a parameter — as the
+    /// server's own compiler sees it, read against the legend the server announced.</summary>
+    public static LspRequest<SemanticTokens> SemanticTokens(DocumentUri uri, SemanticTokensLegend legend) =>
+        new(LspMethod.SemanticTokensFull, writer =>
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("textDocument");
+            writer.WriteString("uri", uri.Value);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }, Lsp.SemanticTokens.ReaderFor(legend));
+
     private static void WriteTextDocumentPosition(
         Utf8JsonWriter writer, DocumentUri uri, LspPosition at, WriteJson? more = null)
     {

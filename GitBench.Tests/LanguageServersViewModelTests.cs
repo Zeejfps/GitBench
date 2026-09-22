@@ -216,6 +216,11 @@ public sealed class LanguageServersViewModelTests : IDisposable
             string absolutePath, FileLine line, RawColumn column, CancellationToken ct) =>
             Task.FromResult<ReferenceReply>(ReferenceReply.Unavailable.Instance);
 
+        public bool CanClassify(string absolutePath) => false;
+
+        public Task<SemanticTokensReply> SemanticTokensAsync(string absolutePath, CancellationToken ct) =>
+            Task.FromResult<SemanticTokensReply>(SemanticTokensReply.Unavailable.Instance);
+
         public void ReloadConfig() => Reloads++;
 
         public void RetryServer(LanguageId language) => Restarted.Add(language);

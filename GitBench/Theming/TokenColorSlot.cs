@@ -20,6 +20,12 @@ internal enum TokenColorSlot
     Operator,
     Punctuation,
     Constant,
+    // Kinds of type only a compiler can tell apart; a language server's classification is the one
+    // source of these, and anything it has not reached stays Type.
+    Struct,
+    Interface,
+    Enum,
+    TypeParameter,
     // Markup/prose intents (Markdown). Code-only files never resolve to these.
     Heading,
     Emphasis,   // bold and italic

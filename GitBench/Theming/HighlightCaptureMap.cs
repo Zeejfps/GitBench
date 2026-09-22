@@ -37,6 +37,9 @@ internal static class HighlightCaptureMap
         new("tag", TokenColorSlot.Keyword),
         // nvim's name for `const`, `static` and the like: a keyword modifying a type, not a type.
         new("type.qualifier", TokenColorSlot.Keyword),
+        // `int`, `u8`, `string`: keywords of the language, colored as such so a user-defined type
+        // beside them stands apart — and as the TextMate side already scopes them (keyword.type.*).
+        new("type.builtin", TokenColorSlot.Keyword),
 
         new("operator", TokenColorSlot.Operator),
         new("keyword.operator", TokenColorSlot.Operator),

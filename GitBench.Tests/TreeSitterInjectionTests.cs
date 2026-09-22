@@ -53,7 +53,7 @@ public class TreeSitterInjectionTests(CodeIntelFixture fixture)
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "const"));
         Assert.Equal(TokenColorSlot.Number, TreeSitterHighlightTests.SlotOf(source, spans, "42"));
         Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "let"));
-        Assert.Equal(TokenColorSlot.Type, TreeSitterHighlightTests.SlotOf(source, spans, "number"));
+        Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "number"));
     }
 
     [Fact]

@@ -110,6 +110,26 @@ public abstract record ReferenceReply
 }
 
 /// <summary>
+/// What a server's compiler says every name in the open file is, together with the text it said it
+/// about. The text travels with the answer because the reader may have typed since: the tokens'
+/// positions are only true of the text that was sent, and the caller decides which of its lines
+/// still read the same.
+/// </summary>
+public abstract record SemanticTokensReply
+{
+    private SemanticTokensReply() { }
+
+    /// <summary>No server for the file, one that does not classify, a file it was never shown, a
+    /// refusal — or a file that left the screen before the answer arrived.</summary>
+    public sealed record Unavailable : SemanticTokensReply
+    {
+        public static readonly Unavailable Instance = new();
+    }
+
+    public sealed record Answered(string Text, SemanticTokens Tokens) : SemanticTokensReply;
+}
+
+/// <summary>
 /// One open document at a time: the handle the Files pane holds for the file on screen. Previewing
 /// a file opens it, previewing another closes it first, and a file the preview truncated is never
 /// sent at all. Everything a server sends back is checked against the document that is open now,
@@ -125,7 +145,9 @@ public sealed class PreviewSession : IDisposable
     private readonly CancellationTokenSource _closing = new();
 
     private DocumentState _state = DocumentState.Idle;
-    private string _openText = string.Empty;
+    // Replaced whole, never mutated, so a reader on another thread sees a version and its text
+    // together or not at all.
+    private SentText? _sent;
     private DocumentVersion _nextVersion = new(1);
     private CancellationTokenSource? _requests;
 
@@ -157,7 +179,8 @@ public sealed class PreviewSession : IDisposable
         if (_state is DocumentState.Open open
             && open.Uri == file.Uri
             && file.Content is PreviewContent.Complete same
-            && same.Text == _openText)
+            && _sent is { } sent
+            && same.Text == sent.Text)
             return;
 
         CloseOpenDocument();
@@ -170,7 +193,7 @@ public sealed class PreviewSession : IDisposable
 
         var version = _nextVersion;
         _nextVersion = _nextVersion.Next();
-        _openText = complete.Text;
+        _sent = new SentText(version, complete.Text);
         _requests = new CancellationTokenSource();
         _ = _server.OpenAsync(file.Uri, _entry.Language, version, complete.Text, _closing.Token);
         Publish(new DocumentState.Open(file.Uri, version, DiagnosticsState.Pending));
@@ -233,6 +256,23 @@ public sealed class PreviewSession : IDisposable
             LspResponse<References>.Ok => new ReferenceReply.Answered([]),
             _ => ReferenceReply.Unavailable.Instance,
         };
+    }
+
+    /// <summary>
+    /// Every classified name in the open file. Only an Ok is an answer, for the same reason as
+    /// references: a refusal read as "no tokens" would strip the colors of a file that has them.
+    /// </summary>
+    public async Task<SemanticTokensReply> SemanticTokensAsync(SemanticTokensLegend legend)
+    {
+        if (Asking() is not (var uri, var version, var cancel)) return SemanticTokensReply.Unavailable.Instance;
+        if (_sent is not { } sent || sent.Version != version) return SemanticTokensReply.Unavailable.Instance;
+
+        var response = await AskAsync(LspRequests.SemanticTokens(uri, legend), cancel).ConfigureAwait(false);
+        if (!StillShowing(uri, version)) return SemanticTokensReply.Unavailable.Instance;
+
+        return response is LspResponse<SemanticTokens>.Ok(var tokens)
+            ? new SemanticTokensReply.Answered(sent.Text, tokens)
+            : SemanticTokensReply.Unavailable.Instance;
     }
 
     public void Dispose()
@@ -325,6 +365,8 @@ public sealed class PreviewSession : IDisposable
             requests.Dispose();
         }
         if (_state is DocumentState.Open open) _ = _server.CloseAsync(open.Uri, _closing.Token);
-        _openText = string.Empty;
+        _sent = null;
     }
+
+    private sealed record SentText(DocumentVersion Version, string Text);
 }

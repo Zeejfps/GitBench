@@ -130,6 +130,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private bool _focused;
     private DiffTextPos _lastCaret;
     private DiffDiagnosticOverlay _diagnostics = DiffDiagnosticOverlay.Empty;
+    private SemanticColorOverlay _semanticColors = SemanticColorOverlay.Empty;
+    // Rows recolored under the current overlay, so a line is merged once rather than every frame.
+    // Weak, because the rows are the document's: an edit replaces them and the old ones should go.
+    private System.Runtime.CompilerServices.ConditionalWeakTable<DiffRow.Line, DiffRow.Line> _recolored = new();
     private DiffSearchOverlay _search = DiffSearchOverlay.Empty;
     // Whether the hits in hand were found in the file currently rendered. Resolved when either of
     // those changes rather than per row, and it is the whole of what gates both the wash and the
@@ -616,7 +620,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 Link = LinkOnRow(rowIndex),
                 Search = SearchOnRow(rowIndex),
             };
-        _surface.DrawRow(c, rowRect, rowIndex, z, composing?.Line ?? rows[rowIndex], paint);
+        _surface.DrawRow(c, rowRect, rowIndex, z, composing?.Line ?? Recolored(rows[rowIndex]), paint);
 
         if (composing is { } preedit) DrawPreeditUnderlines(c, preedit, rowRect, z + 3);
 
@@ -643,6 +647,27 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     }
 
     public IReadOnlyList<Lsp.Diagnostic> DiagnosticsOn(FileLine line) => _diagnostics.On(line);
+
+    /// <summary>
+    /// Replaces what a language server says the file's types are. Not through
+    /// <see cref="SetRenderState"/>, for the reason <see cref="SetDiagnostics"/> is not: it arrives
+    /// after the file, again after each wave of analysis, and changes only colors.
+    /// </summary>
+    public void SetSemanticColors(SemanticColorOverlay colors)
+    {
+        if (ReferenceEquals(_semanticColors, colors)) return;
+        _semanticColors = colors;
+        _recolored = new();
+        SetDirty();
+    }
+
+    private DiffRow Recolored(DiffRow row)
+    {
+        if (row is not DiffRow.Line line || _semanticColors.IsEmpty) return row;
+        if (_renderState is not DiffRenderState.FullFile file || file.Path != _semanticColors.Path) return row;
+
+        return _recolored.GetValue(line, l => l with { Spans = _semanticColors.Recolor(l.Text, l.Spans) });
+    }
 
     /// <summary>
     /// Replaces what is known about the file's usages. Deliberately not through

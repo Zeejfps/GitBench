@@ -113,6 +113,19 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
 
     public bool AnswersReferences => _server.Capabilities is not { SupportsReferences: false };
 
+    public async Task<SemanticTokensReply> SemanticTokensAsync(string absolutePath, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return SemanticTokensReply.Unavailable.Instance;
+        if (_server.Capabilities?.SemanticTokens is not SemanticTokensSupport.WholeDocument(var legend))
+            return SemanticTokensReply.Unavailable.Instance;
+        if (!await EnsurePreviewedAsync(absolutePath, cancel).ConfigureAwait(false))
+            return SemanticTokensReply.Unavailable.Instance;
+
+        return await _session.SemanticTokensAsync(legend).ConfigureAwait(false);
+    }
+
+    public bool AnswersSemanticTokens => _server.Capabilities is not { SemanticTokens: SemanticTokensSupport.None };
+
     public async Task PrepareAsync(string absolutePath, CancellationToken cancel)
     {
         if (await Handshaked().ConfigureAwait(false) is not null) return;

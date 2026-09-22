@@ -21,7 +21,7 @@ internal enum StarterConfigOutcome
     NotWritten,
 }
 
-internal interface ILanguageServerStore : IHoverSource, IDefinitionSource, IReferenceSource
+internal interface ILanguageServerStore : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource
 {
     IReadable<LanguageServerSnapshot> Active { get; }
 
@@ -159,6 +159,23 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
             return ReferenceReply.Unavailable.Instance;
         return await connection.ReferencesAsync(absolutePath, line, column, cancel).ConfigureAwait(false);
+    }
+
+    public bool CanClassify(string absolutePath)
+    {
+        if (_disposed) return false;
+        if (_config.ServerFor(absolutePath) is not { } entry) return false;
+        if (_registry.Active.Value is not { } repo) return false;
+
+        return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language)
+            is not { } connection || connection.AnswersSemanticTokens;
+    }
+
+    public async Task<SemanticTokensReply> SemanticTokensAsync(string absolutePath, CancellationToken cancel)
+    {
+        if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
+            return SemanticTokensReply.Unavailable.Instance;
+        return await connection.SemanticTokensAsync(absolutePath, cancel).ConfigureAwait(false);
     }
 
     public void ReloadConfig()

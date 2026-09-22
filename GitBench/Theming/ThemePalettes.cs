@@ -88,6 +88,10 @@ public sealed record DiffSyntaxPalette(
     uint Operator,
     uint Punctuation,
     uint Constant,
+    uint Struct,
+    uint Interface,
+    uint Enum,
+    uint TypeParameter,
     // Markdown markup intents.
     uint Heading,
     uint Emphasis,

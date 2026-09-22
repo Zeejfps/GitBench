@@ -22,6 +22,9 @@ public class TreeSitterHighlightTests(CodeIntelFixture fixture)
              ("Run", TokenColorSlot.Function), ("Helper", TokenColorSlot.Function),
              ("1", TokenColorSlot.Number)]),
 
+        (CodeLanguage.CSharp, "void Move(int x, Vec by) { }",
+            [("int", TokenColorSlot.Keyword), ("Vec", TokenColorSlot.Type)]),
+
         (CodeLanguage.TypeScript, "function load(): Pair { return make(); }",
             [("function", TokenColorSlot.Keyword), ("load", TokenColorSlot.Function),
              ("Pair", TokenColorSlot.Type), ("make", TokenColorSlot.Function)]),
@@ -49,7 +52,7 @@ public class TreeSitterHighlightTests(CodeIntelFixture fixture)
 
         (CodeLanguage.Rust, "fn go() -> u32 { 1 }",
             [("fn", TokenColorSlot.Keyword), ("go", TokenColorSlot.Function),
-             ("u32", TokenColorSlot.Type), ("1", TokenColorSlot.Number)]),
+             ("u32", TokenColorSlot.Keyword), ("1", TokenColorSlot.Number)]),
 
         (CodeLanguage.Java, "class A { void go() { } }",
             [("class", TokenColorSlot.Keyword), ("A", TokenColorSlot.Type),
@@ -192,7 +195,7 @@ public class TreeSitterHighlightTests(CodeIntelFixture fixture)
         var spans = fixture.Highlighter.Highlight("class A {\n\tvoid Go() { }\n}", CodeLanguage.CSharp);
         Assert.NotNull(spans);
 
-        var onVoid = Assert.Single(spans[1].Where(s => s.Slot == TokenColorSlot.Type));
+        var onVoid = Assert.Single(spans[1].Where(s => s.Slot == TokenColorSlot.Keyword));
         Assert.Equal(DiffOptions.TabWidth, onVoid.Start);
     }
 

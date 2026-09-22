@@ -178,6 +178,7 @@ internal sealed record FileBrowserTextBody : Widget
             });
 
             KeepUsageCountsFilledIn(ctx, content, browser, definitions);
+            KeepTypesColoredByTheServer(ctx, content, browser, definitions);
         }
 
         // Both directions of the header's conversation with the body: a line to reveal on the way
@@ -255,6 +256,35 @@ internal sealed record FileBrowserTextBody : Widget
             subscriptions.Add(servers.Active.Subscribe(_ => counts.Recheck()));
             subscriptions.Add(servers.Diagnostics.Subscribe(_ => counts.Recheck()));
             subscriptions.Add(counts);
+            return subscriptions;
+        });
+
+    /// <summary>
+    /// Lays the server's word on what each type is over the parser's colors, for as long as this
+    /// body is mounted. Asked again on anything that means the server knows more, or that the text
+    /// it knows is out of date: a state change, a diagnostics wave, an edit.
+    /// </summary>
+    private static void KeepTypesColoredByTheServer(
+        Context ctx, DiffContentView content, FileBrowserViewModel browser, ILanguageServerStore servers) =>
+        content.Use(() =>
+        {
+            var colors = new SemanticColorCoordinator(
+                servers,
+                ctx.Require<IUiDispatcher>(),
+                () => (browser.Preview.Value as FilePreview.Text)?.Path,
+                content.SetSemanticColors);
+
+            var subscriptions = new SubscriptionGroup();
+            subscriptions.Add(browser.Preview.Subscribe(_ => colors.Refresh()));
+            subscriptions.Add(servers.Active.Subscribe(_ => colors.Refresh()));
+            subscriptions.Add(servers.Diagnostics.Subscribe(_ => colors.Refresh()));
+            var text = ctx.Require<IFileTextSource>();
+            var dispatcher = ctx.Require<IUiDispatcher>();
+            Action<string> edited = _ => dispatcher.Post(colors.Refresh);
+            text.Changed += edited;
+            subscriptions.Add(() => text.Changed -= edited);
+            subscriptions.Add(colors);
+            colors.Refresh();
             return subscriptions;
         });
 
