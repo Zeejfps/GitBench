@@ -192,6 +192,7 @@
   "shortcuts.command.navigate_forward": "Go forward",
   "shortcuts.command.save_file": "Save file",
   "shortcuts.command.toggle_line_comment": "Toggle line comment",
+  "shortcuts.command.show_completions": "Show completions",
   "shortcuts.command.editor_zoom_in": "Increase editor font size",
   "shortcuts.command.editor_zoom_out": "Decrease editor font size",
   "shortcuts.command.terminal_copy": "Copy",

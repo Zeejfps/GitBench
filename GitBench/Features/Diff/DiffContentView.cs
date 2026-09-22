@@ -11,6 +11,7 @@ using ZGF.Desktop;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -168,6 +169,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private readonly Features.Editor.EditorController _editorController;
     private readonly IClipboard _clipboard;
     private readonly Features.Editor.DocumentSaves? _saves;
+    private readonly Features.Editor.CompletionPopup? _completionPopup;
+    private readonly IUiDispatcher? _dispatcher;
+
+    // The list on screen and the word-start rect it was placed at, so a draw that finds the word
+    // somewhere else can have it re-read.
+    private Features.Editor.CompletionList? _completionList;
+    private RectF? _completionAnchor;
+    private bool _completionRefreshPosted;
 
     /// <summary>Whether a selection here offers the assistant's quick actions. Only the main
     /// window's diff sets it: the assistant overlay is a child of that window, so an answer asked
@@ -215,6 +224,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _clipboard = ctx.Require<IClipboard>();
         _saves = Features.Editor.DocumentSaves.From(ctx);
         _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap());
+        _dispatcher = ctx.Get<IUiDispatcher>();
+        if (ctx.Get<IPopupWindowFactory>() is { } popups && ctx.Get<IWindowCoordinates>() is { } coordinates)
+            _completionPopup = new Features.Editor.CompletionPopup(popups, coordinates);
         var editorFontSize = ctx.Get<IWritable<EditorFontSize>>();
         _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController)
         {
@@ -277,6 +289,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         }
 
         var (newPath, _) = DescribeState(state);
+        if (newPath != prevPath) _editorController.CloseCompletions();
         if (newPath != prevPath) _selection.Clear();
         else _selection.Remap(remap);
         if (newPath != prevPath) _pendingScrollLine = null;
@@ -547,6 +560,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         var pos = Position;
         var z = GetDrawZIndex();
+        TrackCompletionAnchor();
 
         c.DrawRect(new DrawRectInputs
         {
@@ -823,6 +837,39 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     void Features.Editor.IEditorSurface.RowsChanged() => ReconcileRows();
 
+    void Features.Editor.IEditorSurface.PresentCompletions(Features.Editor.CompletionList? list)
+    {
+        _completionList = list;
+        _completionAnchor = list is null ? null : WordStartRect(list);
+        if (_completionPopup is null) return;
+        if (_completionAnchor is { } anchor && list is not null) _completionPopup.Show(list, anchor);
+        else _completionPopup.Hide();
+    }
+
+    /// <summary>Where a caret standing at the start of the word being completed would be drawn.
+    /// Identifiers are one cell a character, so this is the caret's rect stepped back over what
+    /// has been typed of it.</summary>
+    private RectF? WordStartRect(Features.Editor.CompletionList list) =>
+        CaretRect() is { } caret
+            ? caret with { Left = caret.Left - list.Prefix.Length * _surface.MonoAdvance }
+            : null;
+
+    /// <summary>Has an open list re-read when the word it completes has moved on screen — a scroll,
+    /// a click — without a keystroke to say so. Posted, because a popup is a window and this runs
+    /// inside a draw.</summary>
+    private void TrackCompletionAnchor()
+    {
+        if (_completionList is not { } list || _completionRefreshPosted || _dispatcher is null) return;
+        if (WordStartRect(list) == _completionAnchor) return;
+
+        _completionRefreshPosted = true;
+        _dispatcher.Post(() =>
+        {
+            _completionRefreshPosted = false;
+            _editorController.RefreshCompletions();
+        });
+    }
+
     Features.Editor.ImeCaret Features.Editor.IEditorSurface.Caret =>
         HasCaret
             ? new Features.Editor.ImeCaret.At(_selection.Focus, CaretRect())
@@ -1074,6 +1121,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_focused == focused) return;
         _focused = focused;
         _caretPhase = 0f;
+        if (!focused) _editorController.CloseCompletions();
         _editorController.SyncIme();
         if (Document != null) SetDirty();
     }

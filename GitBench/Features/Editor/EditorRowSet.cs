@@ -67,6 +67,9 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
     /// is exact and costs nothing.</summary>
     public IReadOnlyList<DiffRow> Rows => _rows;
 
+    /// <summary>The declarations the last parse found, shifted along with the edits made since.</summary>
+    public FileOutline? Outline => _outline;
+
     /// <summary>The widest row in monospace cells.</summary>
     public int MaxRowCells
     {

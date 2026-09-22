@@ -158,6 +158,8 @@ public sealed class KeyMap : IKeyMap
 
         KeyCommand.SaveFile => [KeyGesture.WithPrimary(KeyboardKey.S)],
         KeyCommand.ToggleLineComment => [KeyGesture.WithPrimary(KeyboardKey.Slash)],
+        // Ctrl on macOS too: Cmd+Space is Spotlight.
+        KeyCommand.ShowCompletions => [new(KeyboardKey.Space, InputModifiers.Control)],
         KeyCommand.EditorZoomIn =>
         [
             KeyGesture.WithPrimary(KeyboardKey.Equals),

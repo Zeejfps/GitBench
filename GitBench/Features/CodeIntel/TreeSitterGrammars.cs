@@ -106,7 +106,7 @@ internal sealed class TreeSitterGrammars : IDisposable
         return reader.ReadToEnd();
     }
 
-    private static string? ReadEmbeddedHighlightQuery(CodeLanguage language) =>
+    internal static string? ReadEmbeddedHighlightQuery(CodeLanguage language) =>
         ReadEmbedded(language.HighlightQueryResourceName());
 
     private static string? ReadEmbeddedInjectionQuery(CodeLanguage language) =>

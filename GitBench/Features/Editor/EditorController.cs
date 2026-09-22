@@ -49,10 +49,14 @@ internal interface IEditorSurface
 
     /// <summary>Writes the open file back over itself.</summary>
     void RequestSave();
+
+    /// <summary>Shows the completion list under the word it completes, or hides it when
+    /// <paramref name="list"/> is null.</summary>
+    void PresentCompletions(CompletionList? list);
 }
 
 /// <summary>The keyboard over an editable diff body: motion, typing, deletion, indentation, the
-/// clipboard and undo. Every gesture is routed through <see cref="EditSession"/>.</summary>
+/// clipboard, undo and completion. Every gesture is routed through <see cref="EditSession"/>.</summary>
 internal sealed class EditorController
 {
     private static readonly bool IsMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
@@ -81,6 +85,7 @@ internal sealed class EditorController
     private readonly IEditorSurface _surface;
     private readonly IKeyMap _keys;
     private readonly ImeSession _ime;
+    private readonly CompletionSession _completion = new();
 
     private DiffTextPos _caret;
     private bool _hasCaret;
@@ -103,6 +108,31 @@ internal sealed class EditorController
     /// draw and from everything that can move or take away a caret without a keystroke.</summary>
     public void SyncIme() => _ime.Sync(_surface.Caret);
 
+    public bool CompletionsOpen => _completion.IsOpen;
+
+    /// <summary>Closes the completion list, for everything that takes the caret away without a
+    /// keystroke: focus leaving, another file opening.</summary>
+    public void CloseCompletions()
+    {
+        if (!_completion.IsOpen) return;
+        _completion.Close();
+        _surface.PresentCompletions(null);
+    }
+
+    /// <summary>Re-reads the open list against where the caret is now, after something other than a
+    /// key moved it or the text under it — a click, a scroll that moved the word on screen.</summary>
+    public void RefreshCompletions()
+    {
+        if (!_completion.IsOpen) return;
+        if (_surface.Editor is not { } editor || !_surface.Selection.IsActive)
+        {
+            CloseCompletions();
+            return;
+        }
+
+        FollowCompletions(editor, _surface.Selection);
+    }
+
     /// <summary>Offers a key to the caret. Handed every key the surface's focus holder receives,
     /// and leaves alone the ones it does not claim.</summary>
     public void OnKey(ref KeyboardKeyEvent e)
@@ -121,7 +151,16 @@ internal sealed class EditorController
 
         if (!_hasCaret || _caret != selection.Focus) editor.Session.ClearGoal();
 
-        switch (Handle(editor, selection, e.Key, e.Modifiers))
+        if (_completion.IsOpen && SteerCompletions(editor, selection, e.Key, e.Modifiers))
+        {
+            e.Consume();
+            return;
+        }
+
+        var claimed = Handle(editor, selection, e.Key, e.Modifiers);
+        if (claimed == Claimed.Command) FollowCompletions(editor, selection);
+
+        switch (claimed)
         {
             case Claimed.Text:
                 e.ConsumeAsText();
@@ -146,6 +185,7 @@ internal sealed class EditorController
 
         Edit(editor, selection, editor.Session.Type(editor.SelectionOf(selection), e.Rune.ToString()));
         e.Consume();
+        CompleteTyped(editor, selection);
     }
 
     /// <summary>Takes the composition the OS reports while a candidate is still being chosen. It is
@@ -178,6 +218,12 @@ internal sealed class EditorController
         if (_keys.Matches(KeyCommand.ToggleLineComment, key, modifiers))
         {
             Edit(editor, selection, editor.Session.ToggleLineComment(editor.SelectionOf(selection)));
+            return Claimed.Command;
+        }
+
+        if (_keys.Matches(KeyCommand.ShowCompletions, key, modifiers))
+        {
+            InvokeCompletions(editor, selection);
             return Claimed.Command;
         }
 
@@ -354,6 +400,113 @@ internal sealed class EditorController
             or KeyboardKey.NumpadDecimal or KeyboardKey.NumpadDivide or KeyboardKey.NumpadMultiply
             or KeyboardKey.NumpadSubtract or KeyboardKey.NumpadAdd or KeyboardKey.NumpadEquals;
     }
+
+    // ---- completion ----
+
+    /// <summary>The keys an open list takes before the editor sees them. Returns whether the key
+    /// was one of them.</summary>
+    private bool SteerCompletions(
+        EditorBuffer editor, DiffSelectionModel selection, KeyboardKey key, InputModifiers modifiers)
+    {
+        if (modifiers != InputModifiers.None) return false;
+
+        switch (key)
+        {
+            case KeyboardKey.UpArrow:
+                _completion.Move(-1);
+                break;
+            case KeyboardKey.DownArrow:
+                _completion.Move(1);
+                break;
+            case KeyboardKey.PageUp:
+                _completion.Page(-(CompletionSession.VisibleRows - 1));
+                break;
+            case KeyboardKey.PageDown:
+                _completion.Page(CompletionSession.VisibleRows - 1);
+                break;
+            case KeyboardKey.Enter or KeyboardKey.NumpadEnter:
+                AcceptCompletion(editor, selection, wholeWord: false);
+                return true;
+            case KeyboardKey.Tab:
+                AcceptCompletion(editor, selection, wholeWord: true);
+                return true;
+            case KeyboardKey.Escape:
+                CloseCompletions();
+                return true;
+            default:
+                return false;
+        }
+
+        _surface.PresentCompletions(_completion.Current);
+        return true;
+    }
+
+    private void InvokeCompletions(EditorBuffer editor, DiffSelectionModel selection)
+    {
+        var current = editor.SelectionOf(selection);
+        if (!current.IsEmpty) return;
+
+        if (!_completion.Invoke(editor.Document, current.Caret, () => Pool(editor, current.Caret)))
+        {
+            _surface.PresentCompletions(null);
+            return;
+        }
+
+        if (_completion.Current is { Items.Count: 1 })
+        {
+            AcceptCompletion(editor, selection, wholeWord: false);
+            return;
+        }
+
+        _surface.PresentCompletions(_completion.Current);
+    }
+
+    /// <summary>After a character lands: narrows an open list, or opens one on the first letter of
+    /// an identifier typed in code.</summary>
+    private void CompleteTyped(EditorBuffer editor, DiffSelectionModel selection)
+    {
+        var current = editor.SelectionOf(selection);
+        if (!current.IsEmpty)
+        {
+            CloseCompletions();
+            return;
+        }
+
+        var caret = current.Caret;
+        if (!_completion.IsOpen)
+        {
+            var line = editor.Document.Line(caret.Line);
+            var options = editor.Session.Options;
+            if (LineContext.At(line, caret.Column.Value, options.Typing, options.LineComment) is not LineContext.Code)
+                return;
+        }
+
+        _completion.Typed(editor.Document, caret, () => Pool(editor, caret));
+        _surface.PresentCompletions(_completion.Current);
+    }
+
+    private void FollowCompletions(EditorBuffer editor, DiffSelectionModel selection)
+    {
+        if (!_completion.IsOpen) return;
+        var current = editor.SelectionOf(selection);
+        if (current.IsEmpty) _completion.Follow(editor.Document, current.Caret);
+        else _completion.Close();
+        _surface.PresentCompletions(_completion.Current);
+    }
+
+    private void AcceptCompletion(EditorBuffer editor, DiffSelectionModel selection, bool wholeWord)
+    {
+        var current = editor.SelectionOf(selection);
+        var accepted = _completion.Accept(editor.Document, current.Caret, wholeWord);
+        _surface.PresentCompletions(null);
+        if (accepted is not { } edit) return;
+
+        Edit(editor, selection, editor.Session.Complete(current, edit.Range, edit.Text));
+    }
+
+    private static IReadOnlyList<CompletionItem> Pool(EditorBuffer editor, TextPosition caret) =>
+        LocalCompletions.Collect(
+            editor.Document, caret, editor.Rows.Outline, CompletionKeywords.For(editor.Path));
 
     private void Restore(EditorBuffer editor, DiffSelectionModel selection, SelectionRange? restored)
     {

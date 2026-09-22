@@ -176,6 +176,18 @@ internal sealed class EditSession
         return Commit(current, PlanToggleLineComment(current));
     }
 
+    /// <summary>Puts an accepted completion in place of the text it replaces, as its own undo step,
+    /// with the caret after it.</summary>
+    public SelectionRange Complete(SelectionRange selection, TextRange replaced, string text)
+    {
+        _goal = null;
+        var current = Clamp(selection);
+        var range = _document.Clamp(replaced);
+        var end = range.Start with { Column = new RawColumn(range.Start.Column.Value + text.Length) };
+        return Commit(current, new EditPlan(
+            EditKind.Boundary, new[] { new TextEdit(range, text) }, AnchorBias.After, SelectionRange.At(end)));
+    }
+
     /// <summary>Reverses the newest step, returning the selection it was made with, or null when
     /// there is nothing left to undo.</summary>
     public SelectionRange? Undo() => Restore(_journal.Undo());

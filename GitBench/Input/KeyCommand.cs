@@ -61,6 +61,7 @@ public enum KeyCommand
     // An editable file.
     SaveFile,
     ToggleLineComment,
+    ShowCompletions,
 
     // Any file or diff body, editable or not: the code's own size, apart from the UI.
     EditorZoomIn,

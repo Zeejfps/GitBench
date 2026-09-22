@@ -192,6 +192,7 @@
   "shortcuts.command.navigate_forward": "앞으로",
   "shortcuts.command.save_file": "파일 저장",
   "shortcuts.command.toggle_line_comment": "줄 주석 전환",
+  "shortcuts.command.show_completions": "자동 완성 표시",
   "shortcuts.command.editor_zoom_in": "편집기 글꼴 크게",
   "shortcuts.command.editor_zoom_out": "편집기 글꼴 작게",
   "shortcuts.command.terminal_copy": "복사",

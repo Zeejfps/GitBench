@@ -220,6 +220,7 @@ internal sealed class KeyboardShortcutsViewModel
 
         KeyCommand.SaveFile => s.ShortcutsCommandSaveFile,
         KeyCommand.ToggleLineComment => s.ShortcutsCommandToggleLineComment,
+        KeyCommand.ShowCompletions => s.ShortcutsCommandShowCompletions,
         KeyCommand.EditorZoomIn => s.ShortcutsCommandEditorZoomIn,
         KeyCommand.EditorZoomOut => s.ShortcutsCommandEditorZoomOut,
 
