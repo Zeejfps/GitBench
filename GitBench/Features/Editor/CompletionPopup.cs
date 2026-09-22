@@ -23,6 +23,8 @@ internal sealed class CompletionPopup : IDisposable
     private readonly IWindowCoordinates _coordinates;
 
     private IPopupWindow? _popup;
+    private CompletionListView? _view;
+    private ScreenRect _anchor;
 
     public CompletionPopup(IPopupWindowFactory factory, IWindowCoordinates coordinates)
     {
@@ -38,14 +40,20 @@ internal sealed class CompletionPopup : IDisposable
             wordStart.Left - CompletionListView.LabelInset, wordStart.Bottom, wordStart.Width, wordStart.Height);
         var anchor = _coordinates.ToScreenPoints(CanvasRect.From(shifted));
 
-        // Acquired before the old one is released, so the list never blinks out between keystrokes.
+        // A new window shows before it has painted, so a list that still fits the window it has —
+        // a moved selection, a narrowed list — is repainted in place rather than reopened.
+        if (_view is not null && anchor == _anchor && _view.TryShow(list)) return;
+
         var previous = _popup;
+        var minWidth = anchor == _anchor && _view is not null ? _view.SizedWidth : 0f;
+        _anchor = anchor;
         _popup = _factory.Acquire(new PopupRequest
         {
-            BuildRoot = ctx => Direction.Wrap(new Raw
+            BuildRoot = ctx =>
             {
-                View = new CompletionListView(ctx.Canvas, list, ctx.Theme().Styles.Value),
-            }).BuildView(ctx),
+                _view = new CompletionListView(ctx.Canvas, list, ctx.Theme().Styles.Value, minWidth);
+                return Direction.Wrap(new Raw { View = _view }).BuildView(ctx);
+            },
             Place = size =>
             {
                 var below = new ScreenRect(anchor.X, anchor.Y + anchor.Height + Gap, size.Width, size.Height);
@@ -62,6 +70,7 @@ internal sealed class CompletionPopup : IDisposable
         if (_popup is null) return;
         _factory.Release(_popup);
         _popup = null;
+        _view = null;
     }
 
     public void Dispose() => Hide();
@@ -85,10 +94,13 @@ internal sealed class CompletionListView : View
     /// its labels under the word they complete.</summary>
     public const float LabelInset = Pad + IconColumn + 1f;
 
-    private readonly CompletionList _list;
+    private readonly ICanvas _canvas;
     private readonly ThemeStyles _styles;
-    private readonly int _top;
-    private readonly int _count;
+    private CompletionList _list;
+    private int _top;
+    private int _count;
+    private readonly float _width;
+    private readonly float _height;
 
     private readonly TextStyle _icon = new()
     {
@@ -114,19 +126,57 @@ internal sealed class CompletionListView : View
         BaseDirection = BidiDirection.Ltr,
     };
 
-    public CompletionListView(ICanvas canvas, CompletionList list, ThemeStyles styles)
+    /// <param name="minWidth">The width of the list this one replaces, so narrowing a list as its
+    /// prefix grows does not narrow the popup with it.</param>
+    public CompletionListView(ICanvas canvas, CompletionList list, ThemeStyles styles, float minWidth)
     {
-        _list = list;
+        _canvas = canvas;
         _styles = styles;
-        _count = Math.Min(list.Items.Count, CompletionSession.VisibleRows);
-        _top = Math.Clamp(list.Selected - _count / 2, 0, list.Items.Count - _count);
+        _list = list;
+        _count = Rows(list);
+        _top = TopFor(list, _count, 0);
+        _width = MathF.Max(minWidth, WidthFor(list));
+        _height = HeightFor(_count);
+        Width = _width;
+        Height = _height;
+    }
 
+    /// <summary>Draws another list in this one's place, as long as it fits the window already
+    /// sized for this one. Returns false when it would not, and the popup has to be reopened.</summary>
+    public bool TryShow(CompletionList list)
+    {
+        var count = Rows(list);
+        if (HeightFor(count) != _height || WidthFor(list) > _width) return false;
+
+        _top = ReferenceEquals(list.Items, _list.Items) ? TopFor(list, count, _top) : TopFor(list, count, 0);
+        _list = list;
+        _count = count;
+        SetDirty();
+        return true;
+    }
+
+    /// <summary>The width this list was sized to, which a list replacing it keeps as a floor.</summary>
+    public float SizedWidth => _width;
+
+    private static int Rows(CompletionList list) => Math.Min(list.Items.Count, CompletionSession.VisibleRows);
+
+    /// <summary>The first row shown: unchanged while the selection stays in view, otherwise scrolled
+    /// just far enough to bring it back.</summary>
+    private static int TopFor(CompletionList list, int count, int top)
+    {
+        if (list.Selected < top) top = list.Selected;
+        else if (list.Selected >= top + count) top = list.Selected - count + 1;
+        return Math.Clamp(top, 0, list.Items.Count - count);
+    }
+
+    private static float HeightFor(int count) => count * RowHeight + Pad * 2;
+
+    private float WidthFor(CompletionList list)
+    {
         var widest = 0f;
         foreach (var ranked in list.Items)
-            widest = MathF.Max(widest, canvas.MeasureTextWidth(ranked.Item.Label, _plain));
-
-        Width = Math.Clamp(LabelInset + widest + Pad * 3, MinWidth, MaxWidth);
-        Height = _count * RowHeight + Pad * 2;
+            widest = MathF.Max(widest, _canvas.MeasureTextWidth(ranked.Item.Label, _plain));
+        return Math.Clamp(LabelInset + widest + Pad * 3, MinWidth, MaxWidth);
     }
 
     protected override void OnDrawSelf(ICanvas c)
