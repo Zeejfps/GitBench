@@ -12,7 +12,8 @@ internal sealed class EditSession
     /// <summary>What an operation decided to do, before any of it has been applied. Edits are
     /// ordered so that applying them front to back leaves each later one still describing the text
     /// it named.</summary>
-    private readonly record struct EditPlan(EditKind Kind, IReadOnlyList<TextEdit> Edits, AnchorBias Bias)
+    private readonly record struct EditPlan(
+        EditKind Kind, IReadOnlyList<TextEdit> Edits, AnchorBias Bias, SelectionRange? Landing = null)
     {
         /// <summary>An operation with nothing to do: no step recorded, no redo path spent, the
         /// selection left exactly as it was.</summary>
@@ -20,6 +21,10 @@ internal sealed class EditSession
 
         public static EditPlan Of(EditKind kind, TextEdit edit) =>
             new(kind, new[] { edit }, AnchorBias.After);
+
+        /// <summary>Changes no text, only where the caret sits — a closer typed over.</summary>
+        public static EditPlan MoveTo(SelectionRange landing) =>
+            new(EditKind.None, Array.Empty<TextEdit>(), AnchorBias.After, landing);
 
         public static EditPlan Lines(IReadOnlyList<TextEdit> edits) =>
             new(EditKind.Boundary, edits, AnchorBias.Before);
@@ -103,7 +108,9 @@ internal sealed class EditSession
     // ---- Edits ----
 
     /// <summary>Enters typed text at the caret, replacing whatever is selected. One rune typed into
-    /// a caret joins the run of typing before it; anything else stands as its own undo step.</summary>
+    /// a caret joins the run of typing before it; anything else stands as its own undo step. A
+    /// bracket or quote closes itself, wraps a selection, or steps over the closer already there, and
+    /// a closer typed on a blank line lines up with its opener.</summary>
     public SelectionRange Type(SelectionRange selection, string text)
     {
         _goal = null;
@@ -125,7 +132,7 @@ internal sealed class EditSession
     }
 
     /// <summary>Deletes one unit, or the selection when there is one. At the start of a line a
-    /// backward delete takes the line break instead.</summary>
+    /// backward delete takes the line break instead, and between an empty pair it takes both.</summary>
     public SelectionRange Delete(SelectionRange selection, TextUnit unit, MoveDirection direction)
     {
         _goal = null;
@@ -133,7 +140,9 @@ internal sealed class EditSession
         return Commit(current, PlanDelete(current, unit, direction));
     }
 
-    /// <summary>Breaks the line and carries down the indentation that precedes the caret.</summary>
+    /// <summary>Breaks the line and carries down the indentation that precedes the caret, one level
+    /// deeper after a line that opens a block, and puts a closer right of the caret on a line of its
+    /// own.</summary>
     public SelectionRange InsertNewline(SelectionRange selection)
     {
         _goal = null;
@@ -200,9 +209,10 @@ internal sealed class EditSession
     private static EditPlan PlanReplace(SelectionRange selection, string replacement, EditKind kind) =>
         EditPlan.Of(kind, new TextEdit(selection.Range, replacement));
 
-    private static EditPlan PlanType(SelectionRange selection, string text)
+    private EditPlan PlanType(SelectionRange selection, string text)
     {
         if (text.Length == 0) return EditPlan.None;
+        if (text.Length == 1 && PlanTypedPair(selection, text[0]) is { } paired) return paired;
 
         var kind = !IsSingleRune(text) ? EditKind.Boundary
             : selection.IsEmpty ? EditKind.Insert
@@ -214,6 +224,16 @@ internal sealed class EditSession
     {
         if (!selection.IsEmpty)
             return PlanReplace(selection, string.Empty, EditKind.Boundary);
+
+        if (unit == TextUnit.Cluster && direction == MoveDirection.Backward && EmptyPairAround(selection.Caret))
+        {
+            var caret = selection.Caret;
+            var column = caret.Column.Value;
+            return EditPlan.Of(EditKind.Delete, new TextEdit(
+                new TextRange(caret with { Column = new RawColumn(column - 1) },
+                    caret with { Column = new RawColumn(column + 1) }),
+                string.Empty));
+        }
 
         var to = Step(selection.Caret, unit, direction);
         if (to == selection.Caret) return EditPlan.None;
@@ -227,10 +247,139 @@ internal sealed class EditSession
 
     private EditPlan PlanNewline(SelectionRange selection)
     {
-        var start = selection.Range.Start;
-        var indent = LeadingIndent(_document.Line(start.Line), start.Column.Value);
-        return PlanReplace(selection, Options.EolText + indent, EditKind.Boundary);
+        var (start, end) = selection.Range;
+        var line = _document.Line(start.Line);
+        var indent = LeadingIndent(line, start.Column.Value);
+        if (OpenedBlock(line, start.Column.Value) is not { } opener)
+            return PlanReplace(selection, Options.EolText + indent, EditKind.Boundary);
+
+        var inner = indent + Options.IndentAt(CellAt(start with { Column = new RawColumn(indent.Length) }).Value);
+        var rest = _document.Line(end.Line);
+        var skip = IndentWidth(rest[end.Column.Value..]);
+        var replaced = new TextRange(start, end with { Column = new RawColumn(end.Column.Value + skip) });
+        var closes = end.Column.Value + skip < rest.Length
+            && Options.Typing.CloserOf(opener) == rest[end.Column.Value + skip];
+
+        var text = closes
+            ? Options.EolText + inner + Options.EolText + indent
+            : Options.EolText + inner;
+        var landing = SelectionRange.At(new TextPosition(
+            new FileLine(start.Line.Value + 1), new RawColumn(inner.Length)));
+        return new EditPlan(EditKind.Boundary, new[] { new TextEdit(replaced, text) }, AnchorBias.After, landing);
     }
+
+    /// <summary>The character that makes the text before <paramref name="column"/> open a block —
+    /// a bracket, or a colon in a language that indents after one — or null when it does not.</summary>
+    private char? OpenedBlock(string line, int column)
+    {
+        var rules = Options.Typing;
+        var last = Math.Min(column, line.Length) - 1;
+        while (last >= 0 && IsIndent(line[last])) last--;
+        if (last < 0) return null;
+
+        var c = line[last];
+        if (!rules.IsOpener(c) && !(rules.ColonOpensBlock && c == ':')) return null;
+        return LineContext.At(line, last, rules, Options.LineComment) is LineContext.Code ? c : null;
+    }
+
+    /// <summary>What typing one bracket or quote does beyond inserting it, or null when it is just a
+    /// character.</summary>
+    private EditPlan? PlanTypedPair(SelectionRange selection, char typed)
+    {
+        var rules = Options.Typing;
+        if (!selection.IsEmpty)
+            return rules.CloserOf(typed) is { } wrapper ? PlanWrap(selection, typed, wrapper) : null;
+
+        var caret = selection.Caret;
+        var line = _document.Line(caret.Line);
+        var column = caret.Column.Value;
+        char? next = column < line.Length ? line[column] : null;
+        var context = LineContext.At(line, column, rules, Options.LineComment);
+
+        if (next == typed)
+        {
+            var overtypes = context switch
+            {
+                LineContext.Code => rules.IsCloser(typed),
+                LineContext.InString(var quote) => quote == typed,
+                LineContext.InComment => false,
+                _ => throw new InvalidOperationException($"Unhandled line context {context}."),
+            };
+            if (overtypes)
+                return EditPlan.MoveTo(SelectionRange.At(caret with { Column = new RawColumn(column + 1) }));
+        }
+
+        if (context is not LineContext.Code) return null;
+
+        if (rules.CloserOf(typed) is { } closer && ClosesBefore(next))
+        {
+            char? prev = column > 0 ? line[column - 1] : null;
+            var pairs = rules.IsOpener(typed) || prev is not { } p || (!IsWordChar(p) && p != typed);
+            if (pairs)
+                return new EditPlan(
+                    EditKind.Insert,
+                    new[] { new TextEdit(selection.Range, string.Concat(typed, closer)) },
+                    AnchorBias.After,
+                    SelectionRange.At(caret with { Column = new RawColumn(column + 1) }));
+        }
+
+        return rules.IsCloser(typed) ? PlanAlignedCloser(caret, line, typed) : null;
+    }
+
+    /// <summary>Surrounds a selection with a pair, keeping the same text selected inside it.</summary>
+    private static EditPlan PlanWrap(SelectionRange selection, char opener, char closer)
+    {
+        var (start, end) = selection.Range;
+        var edits = new[]
+        {
+            new TextEdit(TextRange.Caret(end), closer.ToString()),
+            new TextEdit(TextRange.Caret(start), opener.ToString()),
+        };
+
+        TextPosition Shifted(TextPosition p) =>
+            p.Line == start.Line ? p with { Column = new RawColumn(p.Column.Value + 1) } : p;
+
+        var landing = new SelectionRange(Shifted(selection.Anchor), Shifted(selection.Caret));
+        return new EditPlan(EditKind.Boundary, edits, AnchorBias.After, landing);
+    }
+
+    /// <summary>Re-indents a blank line to its opener's indentation as its closer is typed onto it,
+    /// or null when the line is not blank before the caret, no opener is found, or it already
+    /// lines up.</summary>
+    private EditPlan? PlanAlignedCloser(TextPosition caret, string line, char closer)
+    {
+        var column = caret.Column.Value;
+        if (IndentWidth(line) < column) return null;
+
+        var openerLine = LineContext.OpenerLine(
+            number => _document.Line(new FileLine(number)),
+            caret.Line.Value, column, closer, Options.Typing, Options.LineComment);
+        if (openerLine is not { } found) return null;
+
+        var target = LeadingIndent(_document.Line(new FileLine(found)), int.MaxValue);
+        if (target == line[..column]) return null;
+
+        return EditPlan.Of(EditKind.Boundary, new TextEdit(
+            new TextRange(caret with { Column = new RawColumn(0) }, caret), target + closer));
+    }
+
+    private bool EmptyPairAround(TextPosition caret)
+    {
+        var line = _document.Line(caret.Line);
+        var column = caret.Column.Value;
+        if (column == 0 || column >= line.Length) return false;
+
+        var rules = Options.Typing;
+        return rules.CloserOf(line[column - 1]) == line[column]
+            && LineContext.At(line, column - 1, rules, Options.LineComment) is LineContext.Code;
+    }
+
+    /// <summary>Whether a pair may close itself in front of <paramref name="next"/>: only at the end
+    /// of a line or before space or punctuation, never glued onto the start of a word.</summary>
+    private static bool ClosesBefore(char? next) =>
+        next is not { } c || char.IsWhiteSpace(c) || ")]};,:.=>".Contains(c);
+
+    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     private EditPlan PlanIndent(SelectionRange selection)
     {
@@ -314,8 +463,8 @@ internal sealed class EditSession
     /// <summary>The one place text changes. Where the selection lands is the journal's answer.</summary>
     private SelectionRange Commit(SelectionRange before, EditPlan plan) =>
         plan.Edits.Count == 0
-            ? before
-            : _journal.Apply(new EditTransaction(plan.Kind, plan.Edits, before, plan.Bias));
+            ? plan.Landing ?? before
+            : _journal.Apply(new EditTransaction(plan.Kind, plan.Edits, before, plan.Bias, plan.Landing));
 
     private SelectionRange? Restore(TextRange? restored)
     {

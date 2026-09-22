@@ -19,11 +19,15 @@ internal enum EditKind
 
 /// <summary>One undoable change, however many edits it is made of, together with the selection it
 /// was made with. Edits apply in the order given, each against the document the one before it left.</summary>
+/// <param name="Landing">Where the selection ends up, for a change that knows better than carrying
+/// the old one across its edits — a pair typed around the caret, a block opened under it. Null
+/// carries it.</param>
 internal readonly record struct EditTransaction(
     EditKind Kind,
     IReadOnlyList<TextEdit> Edits,
     SelectionRange Selection,
-    AnchorBias Bias);
+    AnchorBias Bias,
+    SelectionRange? Landing = null);
 
 /// <summary>Undo and redo for one document. Steps hold the edits that reverse them, not copies of
 /// the text; a run of same-kind, contiguous, unselected edits coalesces into one step.</summary>
@@ -89,7 +93,7 @@ internal sealed class EditJournal
         var revision = _document.Revision;
         var reversal = ApplyAll(transaction.Edits, transaction.Bias, ref carried);
 
-        var after = Clamp(carried);
+        var after = Clamp(transaction.Landing ?? carried);
         if (_document.Revision == revision) return after;
 
         if (coalesce)

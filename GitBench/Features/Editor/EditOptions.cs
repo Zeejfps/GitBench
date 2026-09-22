@@ -11,14 +11,14 @@ internal enum IndentStyle
     Spaces,
 }
 
-/// <summary>The per-document typing settings: what an indent is made of, what ends a line, and what
-/// starts a comment.</summary>
+/// <summary>The per-document typing settings: what an indent is made of, what ends a line, what
+/// starts a comment, and what types in pairs.</summary>
 internal sealed class EditOptions
 {
     /// <summary>What the app assumes about a file it has been told nothing about.</summary>
     public static readonly EditOptions Default = new(IndentStyle.Spaces, LineEnding.Lf, null);
 
-    public EditOptions(IndentStyle indent, LineEnding eol, string? lineComment)
+    public EditOptions(IndentStyle indent, LineEnding eol, string? lineComment, TypingRules? typing = null)
     {
         if (lineComment is { Length: 0 })
             throw new ArgumentException("A line comment token is absent or it is text; it is never empty.", nameof(lineComment));
@@ -26,6 +26,7 @@ internal sealed class EditOptions
         Indent = indent;
         Eol = eol;
         LineComment = lineComment;
+        Typing = typing ?? TypingRules.None;
     }
 
     public IndentStyle Indent { get; }
@@ -35,6 +36,8 @@ internal sealed class EditOptions
     /// <summary>What starts a comment that runs to the end of the line, or null for a language that
     /// has none.</summary>
     public string? LineComment { get; }
+
+    public TypingRules Typing { get; }
 
     public string EolText => Eol.Text();
 
@@ -46,8 +49,11 @@ internal sealed class EditOptions
             : new string(' ', DiffOptions.TabWidth - Math.Max(cell, 0) % DiffOptions.TabWidth);
 
     /// <summary>The settings a file is typed through, read off the file's own name and lines.</summary>
-    public static EditOptions For(string path, LineEnding eol, IReadOnlyList<string> lines) =>
-        new(IndentOf(lines), eol, LineCommentOf(path));
+    public static EditOptions For(string path, LineEnding eol, IReadOnlyList<string> lines)
+    {
+        var id = LanguageIdOf(path);
+        return new(IndentOf(lines), eol, LineCommentOf(id), TypingRules.For(id));
+    }
 
     private static IndentStyle IndentOf(IReadOnlyList<string> lines)
     {
@@ -62,17 +68,17 @@ internal sealed class EditOptions
         return tabs > spaces ? IndentStyle.Tabs : IndentStyle.Spaces;
     }
 
-    private static string? LineCommentOf(string path)
-    {
-        var id = FileLanguage.Detect(path) switch
+    private static string? LanguageIdOf(string path) =>
+        FileLanguage.Detect(path) switch
         {
             FileLanguage.TreeSitter(var language) => language.TextMateId(),
             FileLanguage.TextMate(var textMate) => textMate,
             FileLanguage.None => null,
             var other => throw new ArgumentOutOfRangeException(nameof(path), other, null),
         };
-        return id is not null && LineComments.TryGetValue(id, out var token) ? token : null;
-    }
+
+    private static string? LineCommentOf(string? id) =>
+        id is not null && LineComments.TryGetValue(id, out var token) ? token : null;
 
     private static readonly Dictionary<string, string> LineComments = new()
     {
