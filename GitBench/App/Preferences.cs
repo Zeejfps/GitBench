@@ -15,6 +15,9 @@ public sealed record Preferences
     /// scale is never stored: it is a property of the display, not of the user.</summary>
     public UiScale UiScale { get; init; } = UiScale.Default;
 
+    /// <summary>The size code is drawn at, independent of the rest of the UI.</summary>
+    public EditorFontSize EditorFontSize { get; init; } = EditorFontSize.Default;
+
     // A zero size is what a minimized or not-yet-shown window reports; it never replaces a real one.
     public int WindowWidth { get => _windowWidth; init => _windowWidth = value > 0 ? value : _windowWidth; }
     public int WindowHeight { get => _windowHeight; init => _windowHeight = value > 0 ? value : _windowHeight; }

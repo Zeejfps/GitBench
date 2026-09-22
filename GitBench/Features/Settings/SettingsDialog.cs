@@ -19,6 +19,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public const string ThemePickerId = SettingsSections.ThemePickerId;
     public const string LanguagePickerId = SettingsSections.LanguagePickerId;
     public const string UiScalePickerId = SettingsSections.UiScalePickerId;
+    public const string EditorFontSizePickerId = SettingsSections.EditorFontSizePickerId;
     public const string UntrackedCacheId = SettingsSections.UntrackedCacheId;
     public const string LanguageServersId = SettingsSections.LanguageServersId;
     public const string GeneralTabId = "settings-tab-general";

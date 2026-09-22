@@ -20,6 +20,7 @@ internal sealed record SettingsSections : Widget
     public const string ThemePickerId = "settings-theme";
     public const string LanguagePickerId = "settings-language";
     public const string UiScalePickerId = "settings-ui-scale";
+    public const string EditorFontSizePickerId = "settings-editor-font-size";
     public const string UntrackedCacheId = "settings-untracked-cache";
     public const string LanguageServersId = "settings-language-servers";
 
@@ -33,6 +34,7 @@ internal sealed record SettingsSections : Widget
         var themeMode = ctx.Require<State<ThemeMode>>();
         var locale = ctx.Require<State<Locale>>();
         var uiScale = ctx.Require<State<UiScale>>();
+        var editorFontSize = ctx.Require<State<EditorFontSize>>();
         var untrackedCache = ctx.Require<State<bool>>();
         var loc = ctx.Localization();
 
@@ -82,6 +84,19 @@ internal sealed record SettingsSections : Widget
                         Height = Sizes.ControlHeight,
                         Selected = Prop.Bind<string?>(() => uiScale.Value.Label),
                         Options = () => UiScaleMenu(uiScale),
+                    },
+                },
+                new SettingsRow
+                {
+                    Label = L.T(s => s.SettingsEditorFontSize),
+                    Description = L.T(s => s.SettingsEditorFontSizeDesc),
+                    Control = new SettingsDropdown
+                    {
+                        Id = EditorFontSizePickerId,
+                        Width = ControlWidth,
+                        Height = Sizes.ControlHeight,
+                        Selected = Prop.Bind<string?>(() => editorFontSize.Value.Label),
+                        Options = () => EditorFontSizeMenu(editorFontSize),
                     },
                 },
                 new SettingsSectionHeader { Value = L.T(s => s.SettingsRepository) },
@@ -149,6 +164,22 @@ internal sealed record SettingsSections : Widget
             items.Add(new RepoBarContextMenu.Item(
                 target.Label,
                 () => uiScale.Value = target,
+                Checked: active == target));
+        }
+
+        return items;
+    }
+
+    private static IReadOnlyList<RepoBarContextMenu.Item> EditorFontSizeMenu(State<EditorFontSize> editorFontSize)
+    {
+        var active = editorFontSize.Value;
+        var items = new List<RepoBarContextMenu.Item>(EditorFontSize.All.Count);
+        foreach (var option in EditorFontSize.All)
+        {
+            var target = option;
+            items.Add(new RepoBarContextMenu.Item(
+                target.Label,
+                () => editorFontSize.Value = target,
                 Checked: active == target));
         }
 

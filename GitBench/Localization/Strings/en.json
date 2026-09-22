@@ -117,6 +117,8 @@
   "settings.language_desc": "The language the app's own text is shown in.",
   "settings.ui_scale": "UI scale",
   "settings.ui_scale_desc": "How large the app's text and controls are drawn.",
+  "settings.editor_font_size": "Editor font size",
+  "settings.editor_font_size_desc": "How large code is drawn in file previews, editors and diffs, apart from the rest of the UI.",
   "settings.repository": "Repository",
   "settings.untracked_cache": "Untracked cache",
   "settings.untracked_cache_desc": "Speeds up scanning for new files in large repositories.",

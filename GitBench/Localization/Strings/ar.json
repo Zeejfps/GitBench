@@ -159,6 +159,8 @@
   "settings.language_desc": "اللغة التي يُعرض بها نص التطبيق.",
   "settings.ui_scale": "مقياس الواجهة",
   "settings.ui_scale_desc": "حجم عرض نص التطبيق وعناصر التحكم فيه.",
+  "settings.editor_font_size": "حجم خط المحرر",
+  "settings.editor_font_size_desc": "حجم عرض الشيفرة في معاينات الملفات والمحررات والفروقات، بشكل مستقل عن بقية الواجهة.",
   "settings.repository": "المستودع",
   "settings.untracked_cache": "ذاكرة الملفات غير المتتبَّعة",
   "settings.untracked_cache_desc": "يسرّع فحص الملفات الجديدة في المستودعات الكبيرة.",

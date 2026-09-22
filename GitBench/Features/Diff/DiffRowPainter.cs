@@ -69,26 +69,26 @@ internal sealed class DiffRowPainter
     private const float TearAmplitude = 4.5f;
     private const float TearThickness = 1.25f;
 
-    // Shared style instances. TextStyle is a class so DrawTextInputs holds a reference; the few
-    // that need per-row recoloring are mutated on the UI thread between draw calls, so there's no
-    // aliasing concern — including across painter consumers, which all draw on the same thread.
+    // Per-painter style instances, sized to the painter's CodeFontSize. TextStyle is a class so
+    // DrawTextInputs holds a reference; the few that need per-row recoloring are mutated on the UI
+    // thread between draw calls, so there's no aliasing concern.
     // The code grid is pinned LTR (BaseDirection.Ltr): source lines and the line-number gutter are
     // a fixed left-origin monospace grid, so they must not follow the UI direction or right-align /
     // bidi-reorder when the locale is RTL — only the surrounding chrome mirrors.
-    public static readonly TextStyle MonoMetricsStyle = new()
+    public TextStyle MonoMetricsStyle { get; } = new()
     {
         FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
         BaseDirection = BidiDirection.Ltr,
     };
-    private static readonly TextStyle MonoStartStyle = new()
+    private readonly TextStyle _monoStartStyle = new()
     {
         FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
         VerticalAlignment = TextAlignment.Center,
         BaseDirection = BidiDirection.Ltr,
     };
-    private static readonly TextStyle MonoEndStyle = new()
+    private readonly TextStyle _monoEndStyle = new()
     {
         FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
@@ -96,7 +96,7 @@ internal sealed class DiffRowPainter
         VerticalAlignment = TextAlignment.Center,
         BaseDirection = BidiDirection.Ltr,
     };
-    private static readonly TextStyle MonoCenterStyle = new()
+    private readonly TextStyle _monoCenterStyle = new()
     {
         FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
@@ -106,12 +106,12 @@ internal sealed class DiffRowPainter
     };
     // Smaller than the code it annotates and proportional rather than monospace, so a usages row
     // reads as a note about the declaration below it instead of as another line of the file.
-    private static readonly TextStyle LensStyle = new()
+    private readonly TextStyle _lensStyle = new()
     {
         FontSize = FontSize.Body * DiffRowMetrics.LensHeightRatio,
         VerticalAlignment = TextAlignment.Center,
     };
-    private static readonly TextStyle ExpanderIconStyle = new()
+    private readonly TextStyle _expanderIconStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
         FontSize = FontSize.Body,
@@ -126,6 +126,28 @@ internal sealed class DiffRowPainter
     public DiffContentStyles Styles { get; set; } = ThemeStyles.Dark.DiffContent;
     public float LineHeight { get; set; }
     public float MonoAdvance { get; set; }
+
+    /// <summary>The size code is drawn at. Changing it clears the measured metrics, so the owner
+    /// re-resolves them and re-measures its rows on the next draw.</summary>
+    public float CodeFontSize
+    {
+        get => _codeFontSize;
+        set
+        {
+            if (_codeFontSize == value) return;
+            _codeFontSize = value;
+            MonoMetricsStyle.FontSize = value;
+            _monoStartStyle.FontSize = value;
+            _monoEndStyle.FontSize = value;
+            _monoCenterStyle.FontSize = value;
+            _lensStyle.FontSize = value * DiffRowMetrics.LensHeightRatio;
+            _expanderIconStyle.FontSize = value;
+            _lensWidths.Clear();
+            LineHeight = 0f;
+            MonoAdvance = 0f;
+        }
+    }
+    private float _codeFontSize = FontSize.Body;
 
     public void DrawRow(ICanvas c, DiffRow row, in DiffRowPaint p)
     {
@@ -298,14 +320,14 @@ internal sealed class DiffRowPainter
     private float DrawExpanderIcons(ICanvas c, GapBar gap, float left, float bottom, int z)
     {
         var x = left + ExpanderPadLeft;
-        ExpanderIconStyle.TextColor = Styles.ExpanderIcon;
+        _expanderIconStyle.TextColor = Styles.ExpanderIcon;
         foreach (var dir in ExpanderIconsFor(gap))
         {
             c.DrawText(new DrawTextInputs
             {
                 Position = new RectF(x, bottom, ExpanderCellWidth - ExpanderChipGap, LineHeight),
                 Text = ExpanderGlyph(dir),
-                Style = ExpanderIconStyle,
+                Style = _expanderIconStyle,
                 ZIndex = z + 2,
             });
             x += ExpanderCellWidth;
@@ -440,12 +462,12 @@ internal sealed class DiffRowPainter
         var label = LensLabel(usages);
         var (x, width) = LensBounds(lens, MeasureLens(c, label), TextOriginOf(p));
 
-        LensStyle.TextColor = p.LensHovered ? Styles.UsageLensHoverText : Styles.UsageLensText;
+        _lensStyle.TextColor = p.LensHovered ? Styles.UsageLensHoverText : Styles.UsageLensText;
         c.DrawText(new DrawTextInputs
         {
             Position = new RectF(x, p.Bottom, width, height),
             Text = label,
-            Style = LensStyle,
+            Style = _lensStyle,
             ZIndex = p.Z + 1,
         });
 
@@ -486,7 +508,7 @@ internal sealed class DiffRowPainter
     private float MeasureLens(ICanvas c, string label)
     {
         if (_lensWidths.TryGetValue(label, out var width)) return width;
-        return _lensWidths[label] = c.MeasureTextWidth(label, LensStyle);
+        return _lensWidths[label] = c.MeasureTextWidth(label, _lensStyle);
     }
 
     /// <summary>Where a lens's text sits on its row: at the declaration's own indent, and only as
@@ -794,8 +816,8 @@ internal sealed class DiffRowPainter
             var start = Math.Clamp(rng.Start, col, len);
             var end = Math.Clamp(rng.Start + rng.Length, start, len);
             if (start > col)
-                cx += c.MeasureTextWidth(text.Substring(col, start - col), MonoStartStyle);
-            var w = c.MeasureTextWidth(text.Substring(start, end - start), MonoStartStyle);
+                cx += c.MeasureTextWidth(text.Substring(col, start - col), _monoStartStyle);
+            var w = c.MeasureTextWidth(text.Substring(start, end - start), _monoStartStyle);
             c.DrawRect(new DrawRectInputs
             {
                 Position = new RectF(cx, bottom, w, LineHeight),
@@ -846,7 +868,7 @@ internal sealed class DiffRowPainter
     {
         if (to <= from) return x;
         var run = text.Substring(from, to - from);
-        var w = c.MeasureTextWidth(run, MonoStartStyle);
+        var w = c.MeasureTextWidth(run, _monoStartStyle);
         if (x < maxRight)
             DrawMonoText(c, run, x, bottom, Math.Max(0f, maxRight - x), color, TextAlignment.Start, z);
         return x + w;
@@ -859,9 +881,9 @@ internal sealed class DiffRowPainter
         if (width <= 0 || string.IsNullOrEmpty(text)) return;
         var style = alignment switch
         {
-            TextAlignment.End => MonoEndStyle,
-            TextAlignment.Center => MonoCenterStyle,
-            _ => MonoStartStyle,
+            TextAlignment.End => _monoEndStyle,
+            TextAlignment.Center => _monoCenterStyle,
+            _ => _monoStartStyle,
         };
         style.TextColor = color;
         c.DrawText(new DrawTextInputs

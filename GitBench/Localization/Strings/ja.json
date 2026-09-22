@@ -117,6 +117,8 @@
   "settings.language_desc": "アプリの表示に使用する言語です。",
   "settings.ui_scale": "UI の拡大率",
   "settings.ui_scale_desc": "アプリのテキストとコントロールを描画する大きさです。",
+  "settings.editor_font_size": "エディターのフォントサイズ",
+  "settings.editor_font_size_desc": "ファイルプレビュー、エディター、差分でのコードの表示サイズ。UI の他の部分とは独立しています。",
   "settings.repository": "リポジトリ",
   "settings.untracked_cache": "追跡外ファイルのキャッシュ",
   "settings.untracked_cache_desc": "大きなリポジトリで新しいファイルの検出を高速化します。",

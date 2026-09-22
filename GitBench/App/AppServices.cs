@@ -70,6 +70,10 @@ internal static class AppServices
 
         var uiScale = context.Bind(preferences, p => p.UiScale, (p, v) => p with { UiScale = v });
         context.AddService<IUiScale>(new PreferredUiScale(uiScale));
+        // Also published read-only: code views that may be mounted without it probe with Get, which
+        // would otherwise try to construct a State it cannot seed.
+        var editorFontSize = context.Bind(preferences, p => p.EditorFontSize, (p, v) => p with { EditorFontSize = v });
+        context.AddService<IReadable<EditorFontSize>>(editorFontSize);
 
         context.Bind(preferences, p => p.Language, (p, v) => p with { Language = v });
         context.AddSingleton<ILocalizationService, LocalizationService>();

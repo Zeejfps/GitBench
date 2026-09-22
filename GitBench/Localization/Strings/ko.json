@@ -117,6 +117,8 @@
   "settings.language_desc": "앱 텍스트를 표시할 언어입니다.",
   "settings.ui_scale": "UI 배율",
   "settings.ui_scale_desc": "앱의 텍스트와 컨트롤이 그려지는 크기입니다.",
+  "settings.editor_font_size": "편집기 글꼴 크기",
+  "settings.editor_font_size_desc": "파일 미리보기, 편집기, 차이 보기에서 코드가 표시되는 크기입니다. 나머지 UI와 별개로 적용됩니다.",
   "settings.repository": "저장소",
   "settings.untracked_cache": "추적되지 않은 파일 캐시",
   "settings.untracked_cache_desc": "큰 저장소에서 새 파일 검사 속도를 높입니다.",

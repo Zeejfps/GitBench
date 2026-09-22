@@ -28,6 +28,7 @@ public static class PreferencesStore
         // than a named rung on purpose: an enum converter throws on a value it doesn't recognize, and
         // that throw is caught below and discards every other preference along with it.
         public float? UiScale { get; set; } = 1f;
+        public float? EditorFontSize { get; set; }
         public int? WindowWidth { get; set; } = 1400;
         public int? WindowHeight { get; set; } = 900;
 
@@ -127,6 +128,7 @@ public static class PreferencesStore
                 Theme = file.Theme ?? defaults.Theme,
                 Language = ParseLocale(file.Language) ?? defaults.Language,
                 UiScale = file.UiScale is { } uiScale ? new UiScale(uiScale) : defaults.UiScale,
+                EditorFontSize = file.EditorFontSize is { } editorFontSize ? new EditorFontSize(editorFontSize) : defaults.EditorFontSize,
                 WindowWidth = file.WindowWidth is > 0 ? file.WindowWidth.Value : defaults.WindowWidth,
                 WindowHeight = file.WindowHeight is > 0 ? file.WindowHeight.Value : defaults.WindowHeight,
                 WindowX = file.WindowX,
@@ -174,6 +176,7 @@ public static class PreferencesStore
             Theme = preferences.Theme,
             Language = preferences.Language.ToString(),
             UiScale = preferences.UiScale.Factor,
+            EditorFontSize = preferences.EditorFontSize.Points,
             WindowWidth = preferences.WindowWidth,
             WindowHeight = preferences.WindowHeight,
             WindowX = preferences.WindowX,

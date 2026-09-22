@@ -1,4 +1,5 @@
 using System.Text;
+using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Localization;
@@ -325,7 +326,7 @@ public sealed class DiffUsageLensTests(CodeIntelFixture fixture)
     private static string? LensTextOn(RecordingCanvas canvas)
     {
         var texts = canvas.Texts
-            .Where(t => t.Inputs.Style.FontFamily != DiffRowPainter.MonoMetricsStyle.FontFamily)
+            .Where(t => t.Inputs.Style.FontFamily != MonoFonts.Regular)
             .Select(t => t.Inputs.Text)
             .Distinct()
             .ToList();

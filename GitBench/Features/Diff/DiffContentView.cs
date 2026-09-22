@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Repos;
@@ -13,6 +14,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
+using ZGF.Observable;
 
 namespace GitBench.Features.Diff;
 
@@ -226,6 +228,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // Hunk-button labels are measured and cached; drop the cache so they re-measure in the
         // new language on the next draw.
         this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
+
+        if (ctx.Get<IReadable<EditorFontSize>>() is { } editorFontSize)
+            this.Bind(editorFontSize, size => { _painter.CodeFontSize = size.Points; SetDirty(); });
     }
 
     // The VM's per-hunk index states for the WorkingTree view (see

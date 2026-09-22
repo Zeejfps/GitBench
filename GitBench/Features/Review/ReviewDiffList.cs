@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
@@ -322,6 +323,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // re-measured hunk-button labels).
         this.Bind(_vm.ActiveFile, _ => SetDirty());
         this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
+        if (ctx.Get<IReadable<EditorFontSize>>() is { } editorFontSize)
+            this.Bind(editorFontSize, size =>
+            {
+                _painter.CodeFontSize = size.Points;
+                _metricsResolved = false;
+                SetDirty();
+            });
 
         // Navigation (tree click, j/k, mark-viewed advance) scrolls the file's section here.
         this.Use(() =>

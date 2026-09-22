@@ -29,6 +29,7 @@ public sealed class SettingsDialogTests : IDisposable
     private readonly State<ThemeMode> _theme = new(ThemeMode.Dark);
     private readonly State<Locale> _locale = new(Locale.En);
     private readonly State<UiScale> _scale = new(UiScale.Default);
+    private readonly State<EditorFontSize> _editorFontSize = new(EditorFontSize.Default);
     private readonly State<bool> _cache = new(false);
     private readonly State<AgentConnectionSettings> _connections = new(new(false, 5577, null));
     private readonly State<AgentConnectionState> _connectionState = new(new AgentConnectionState.Off());
@@ -63,6 +64,7 @@ public sealed class SettingsDialogTests : IDisposable
         ctx.AddService(_theme);
         ctx.AddService(_locale);
         ctx.AddService(_scale);
+        ctx.AddService(_editorFontSize);
         ctx.AddService(_cache);
         ctx.AddService(_connections);
         ctx.AddService(_connectionState);
@@ -79,6 +81,7 @@ public sealed class SettingsDialogTests : IDisposable
     {
         using var h = Mount();
         Assert.NotNull(h.Root.FindById(SettingsDialog.ThemePickerId));
+        Assert.NotNull(h.Root.FindById(SettingsDialog.EditorFontSizePickerId));
         Assert.Null(h.Root.FindById(AssistantSettingsCard.KeyInputId));
 
         h.ClickOn(SettingsDialog.AgentTabId);
@@ -475,6 +478,7 @@ public sealed class SettingsDialogTests : IDisposable
         _theme.Dispose();
         _locale.Dispose();
         _scale.Dispose();
+        _editorFontSize.Dispose();
         _cache.Dispose();
         _connections.Dispose();
         _connectionState.Dispose();

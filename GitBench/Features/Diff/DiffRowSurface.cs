@@ -18,7 +18,6 @@ namespace GitBench.Features.Diff;
 /// </summary>
 internal sealed class DiffRowSurface
 {
-    private const float AssumedFontSize = FontSize.Body;
     private const float FallbackMonoAdvanceRatio = 0.6f;
     private const float GutterPadding = 8f;
     private const float HunkOutlineThickness = 1f;
@@ -81,16 +80,16 @@ internal sealed class DiffRowSurface
     public static void ResolveMetrics(DiffRowPainter painter, ICanvas c)
     {
         if (painter.LineHeight > 0) return;
-        painter.LineHeight = c.MeasureTextLineHeight(DiffRowPainter.MonoMetricsStyle);
-        var measured = c.MeasureTextWidth("0", DiffRowPainter.MonoMetricsStyle);
-        painter.MonoAdvance = measured > 0 ? measured : AssumedFontSize * FallbackMonoAdvanceRatio;
+        painter.LineHeight = c.MeasureTextLineHeight(painter.MonoMetricsStyle);
+        var measured = c.MeasureTextWidth("0", painter.MonoMetricsStyle);
+        painter.MonoAdvance = measured > 0 ? measured : painter.CodeFontSize * FallbackMonoAdvanceRatio;
     }
 
     public float LineHeight => _painter.LineHeight;
 
     public float MonoAdvance => _painter.MonoAdvance;
 
-    private float Advance => MonoAdvance > 0 ? MonoAdvance : AssumedFontSize * FallbackMonoAdvanceRatio;
+    private float Advance => MonoAdvance > 0 ? MonoAdvance : _painter.CodeFontSize * FallbackMonoAdvanceRatio;
 
     public float GutterWidth => Rows.GutterDigits * Advance + GutterPadding;
 
