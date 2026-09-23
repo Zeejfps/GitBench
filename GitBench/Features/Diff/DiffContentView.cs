@@ -614,7 +614,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public void SetHints(Features.Editor.EditorHints? hints)
     {
         _hints = hints;
-        _surface.AcceptSuggestion = hints?.Accept;
+        _surface.SuggestionActions = hints?.Actions;
+        _surface.SuggestionHead = hints is null ? null : SuggestionHeadRow;
         (_ghostFrom, _ghostAnchor) = hints?.Ghost.Place switch
         {
             null => (null, null),
@@ -659,10 +660,20 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         Features.Editor.SelectionRange range;
         string text;
-        if (_ghostFrom is { } from)
+        if (_ghostFrom is { } from && ghost.Lines.Count == 0)
         {
-            var start = editor.Document.Clamp(Features.Editor.TextPosition.At(from.Value, 0));
-            var last = new FileLine(Math.Max(from.Value, anchor.Value));
+            var deleted = editor.Session.Delete(
+                LinesWithTheirBreak(editor.Document, from, anchor), Features.Editor.TextUnit.Cluster, Features.Editor.MoveDirection.Backward);
+            editor.Write(_selection, deleted, null);
+            ReconcileRows();
+            ((Features.Editor.IEditorSurface)this).RevealCaret();
+            return true;
+        }
+
+        if (_ghostFrom is { } replacedFrom)
+        {
+            var start = editor.Document.Clamp(Features.Editor.TextPosition.At(replacedFrom.Value, 0));
+            var last = new FileLine(Math.Max(replacedFrom.Value, anchor.Value));
             var end = editor.Document.Clamp(new Features.Editor.TextPosition(last, new RawColumn(editor.Document.Line(last).Length)));
             range = new Features.Editor.SelectionRange(start, end);
             text = string.Join("\n", ghost.Lines);
@@ -680,6 +691,32 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         ReconcileRows();
         ((Features.Editor.IEditorSurface)this).RevealCaret();
         return true;
+    }
+
+    // Whole lines, so none is left behind blank: with the break after them, or at the end of the
+    // file the one before them.
+    private static Features.Editor.SelectionRange LinesWithTheirBreak(Features.Editor.TextDocument document, FileLine from, FileLine to)
+    {
+        var first = Math.Clamp(from.Value, 1, document.LineCount);
+        var last = Math.Clamp(Math.Max(first, to.Value), first, document.LineCount);
+        if (last < document.LineCount)
+            return new Features.Editor.SelectionRange(
+                Features.Editor.TextPosition.At(first, 0), Features.Editor.TextPosition.At(last + 1, 0));
+        var end = Features.Editor.TextPosition.At(last, document.Line(new FileLine(last)).Length);
+        return first > 1
+            ? new Features.Editor.SelectionRange(
+                Features.Editor.TextPosition.At(first - 1, document.Line(new FileLine(first - 1)).Length), end)
+            : new Features.Editor.SelectionRange(Features.Editor.TextPosition.At(1, 0), end);
+    }
+
+    /// <summary>The row a suggestion's pills sit on: its first suggested line, or for one that only
+    /// takes lines out, the first line it takes out.</summary>
+    private int? SuggestionHeadRow()
+    {
+        if (_hints is not { } hints || Document is not { } editor || !IsHinted(editor.Path, hints.Path)) return null;
+        if (editor.Rows.Ghost is { Lines.Count: > 0 } ghost)
+            return editor.Rows.RowForNewLine(ghost.After) is { } own ? own.Value + 1 : null;
+        return _ghostFrom is { } from && hints.Ghost.Lines.Count == 0 && editor.Rows.RowForNewLine(from) is { } row ? row.Value : null;
     }
 
     private static bool IsHinted(string documentPath, string hintedPath) =>

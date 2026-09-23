@@ -57,7 +57,13 @@ internal static class PairingTools
         {
             case PairingAction.Done done:
                 writer.WriteString("diff", done.Diff.Length == 0 ? "(no changes)" : done.Diff);
-                if (done.Accepted) writer.WriteBoolean("accepted", true);
+                writer.WriteString("draft", done.Draft switch
+                {
+                    DraftOutcome.NotAccepted => "not_accepted",
+                    DraftOutcome.AcceptedAsIs => "accepted_as_is",
+                    DraftOutcome.AcceptedThenEdited => "accepted_then_edited",
+                    _ => throw new ArgumentOutOfRangeException(nameof(action), done.Draft, "Unknown draft outcome."),
+                });
                 if (done.Test is { } test) WriteTest(writer, test);
                 if (done.Forced) writer.WriteBoolean("closed_red", true);
                 if (done.Problems.Count > 0)
@@ -357,7 +363,9 @@ internal sealed class PairingWaitTool(PairingTarget target) : IAssistantTool
     public string Description =>
         $"Waits for the user, for at most {(int)PairingStore.WaitTimeout.TotalSeconds} seconds. Returns "
         + "{action:\"done\", stop, diff, test?} when they finish a stop — diff is exactly what they "
-        + "changed since the stop was shown, and accepted: true when they took your code as it was; "
+        + "changed since the stop was shown, and draft says what they did with your code: "
+        + "accepted_as_is, accepted_then_edited (read how they changed it: that is how they want it), "
+        + "or not_accepted (they wrote it themselves); "
         + "read it, with what they told you in the conversation, before deciding what's next. "
         + "{action:\"message\", text, caret?} when they say something — a "
         + "question, or what they did instead of what you suggested: answer with pairing_say, keep it "

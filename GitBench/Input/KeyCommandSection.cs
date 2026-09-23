@@ -12,6 +12,7 @@ public enum KeyCommandSection
     Commits,
     Review,
     Walkthrough,
+    Pairing,
     CodeNavigation,
     Editor,
     Terminal,
@@ -73,6 +74,10 @@ public static class KeyCommandSections
         KeyCommand.WalkthroughNext
             or KeyCommand.WalkthroughBack
             or KeyCommand.WalkthroughAsk => KeyCommandSection.Walkthrough,
+
+        KeyCommand.PairingAccept
+            or KeyCommand.PairingAcceptAndNext
+            or KeyCommand.PairingNext => KeyCommandSection.Pairing,
 
         KeyCommand.GoToDefinition
             or KeyCommand.FindUsages

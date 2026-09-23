@@ -74,6 +74,42 @@ public sealed class EditorGhostTakeTests
     }
 
     [Fact]
+    public void ADeletion_TakesTheLinesOut_LineBreaksAndAll()
+    {
+        var (_, view, buffer) = Show("a", "b", "c", "d");
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Replace(new FileLine(2), new FileLine(3)), [])));
+
+        Assert.True(view.TakeGhost(Path));
+
+        Assert.Equal(["a", "d"], Lines(buffer));
+    }
+
+    [Fact]
+    public void ADeletion_AtTheEndOfTheFile_TakesTheLineBreakBeforeIt()
+    {
+        var (_, view, buffer) = Show("a", "b", "c");
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Replace(new FileLine(2), new FileLine(3)), [])));
+
+        Assert.True(view.TakeGhost(Path));
+
+        Assert.Equal(["a"], Lines(buffer));
+    }
+
+    [Fact]
+    public void ADeletion_CarriesItsPills_OnTheFirstLineItTakesOut()
+    {
+        var (harness, view, _) = Show("a", "b", "c", "d");
+        var ran = new List<string>();
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Replace(new FileLine(2), new FileLine(3)), []),
+            new SuggestionActions(() => ran.Add("accept"), () => ran.Add("accept and next"))));
+
+        var accept = Assert.Single(harness.Render().Texts, t => t.Inputs.Text == "Accept").Inputs.Position;
+        harness.Click(accept.Center.X, accept.Center.Y);
+
+        Assert.Equal(["accept"], ran);
+    }
+
+    [Fact]
     public void AnInsertion_GoesInAfterTheLineItHangsFrom()
     {
         var (_, view, buffer) = Show("a", "b", "c");
@@ -95,16 +131,20 @@ public sealed class EditorGhostTakeTests
     }
 
     [Fact]
-    public void TheSuggestionsAcceptPill_OnItsFirstRow_RunsItsAccept()
+    public void TheSuggestionsPills_OnItsFirstRow_RunTheirActions()
     {
         var (harness, view, _) = Show("a", "b", "c");
-        var accepted = 0;
-        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Insert(new FileLine(2)), ["X", "Y"]), () => accepted++));
+        var ran = new List<string>();
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Insert(new FileLine(2)), ["X", "Y"]),
+            new SuggestionActions(() => ran.Add("accept"), () => ran.Add("accept and next"))));
 
-        var pill = Assert.Single(harness.Render().Texts, t => t.Inputs.Text == "Accept").Inputs.Position;
-        harness.Click(pill.Center.X, pill.Center.Y);
+        var texts = harness.Render().Texts;
+        var accept = Assert.Single(texts, t => t.Inputs.Text == "Accept").Inputs.Position;
+        var next = Assert.Single(texts, t => t.Inputs.Text == "Accept & next").Inputs.Position;
+        harness.Click(accept.Center.X, accept.Center.Y);
+        harness.Click(next.Center.X, next.Center.Y);
 
-        Assert.Equal(1, accepted);
+        Assert.Equal(["accept", "accept and next"], ran);
     }
 
     [Fact]

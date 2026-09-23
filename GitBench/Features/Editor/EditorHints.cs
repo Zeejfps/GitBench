@@ -10,7 +10,10 @@ internal readonly record struct LineSpan(int From, int To)
 
 /// <summary>Suggested code a guide has laid over one file in the editor, and what taking it from
 /// the editor does — null where it can only be taken elsewhere.</summary>
-internal sealed record EditorHints(string Path, EditorGhost Ghost, Action? Accept = null);
+internal sealed record EditorHints(string Path, EditorGhost Ghost, SuggestionActions? Actions = null);
+
+/// <summary>What the pills on a suggestion do: put it in, or put it in and move on.</summary>
+internal sealed record SuggestionActions(Action Accept, Action AcceptAndNext);
 
 /// <summary>Suggested code, and where in the file it goes.</summary>
 internal sealed record EditorGhost(GhostPlace Place, IReadOnlyList<string> Lines);

@@ -13,9 +13,13 @@ internal interface IPairingPresentation
     /// Moves nothing.</summary>
     Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct);
 
-    /// <summary>Draws the agent's code for the stop into its file where it goes, with an Accept on
-    /// it that runs <paramref name="accept"/>.</summary>
-    void ShowDraft(StopLocation location, StopDraft draft, Action accept);
+    /// <summary>Draws the agent's code for the stop into its file where it goes, with Accept and
+    /// Accept &amp; next on it.</summary>
+    void ShowDraft(StopLocation location, StopDraft draft, SuggestionActions actions);
+
+    /// <summary>The stop's file as the user has it now, unsaved edits included; null when it can't
+    /// be read.</summary>
+    Task<string?> ReadTextAsync(StopLocation location);
 
     /// <summary>Takes the agent's code off the editor.</summary>
     void ClearDraft();
@@ -334,10 +338,10 @@ internal sealed class PairingStore : IDisposable
 
         if (_stop.Value?.CreatedFile is { } previous && previous != created) TakeBack(previous);
         var stop = new PairingStop(++_stopsSent, target, title, reason, kind);
-        var opened = new OpenStop(stop, location, baseline, Test: null, draft, DraftTaken: false, created);
+        var opened = new OpenStop(stop, location, baseline, Test: null, draft, new DraftState.Offered(), created);
         _stop.Value = opened;
         _presentation.RevealDraft(location, draft);
-        _presentation.ShowDraft(location, draft, () => _ = AcceptAsync());
+        _presentation.ShowDraft(location, draft, new SuggestionActions(() => _ = AcceptAsync(), () => _ = AcceptAndNextAsync()));
         CloseNarration();
         return new StopOpening.Opened(opened);
     }
@@ -491,39 +495,43 @@ internal sealed class PairingStore : IDisposable
         await CloseAsync(open.Stop.Number, red.Run, forced: true);
     }
 
-    /// <summary>Puts the agent's code for the open stop into the file and finishes the stop, as Done
-    /// would: the code is the user's to accept. A test stop still has to go green.</summary>
-    public async Task AcceptAsync()
+    /// <summary>Puts the agent's code for the open stop into the file as one undo step, and stays on
+    /// the stop: the user may still change it before Next. On a test stop, only once the test is red.
+    /// Answers whether the code is in.</summary>
+    public async Task<bool> AcceptAsync()
     {
-        if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return;
+        if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return false;
+        if (open.DraftState is DraftState.Taken) return true;
         if (!CanFinish(open))
         {
             AddNotice("Run the test and see it fail first; then the code can go in.", NoticeTone.Info);
-            return;
-        }
-
-        if (open.DraftTaken)
-        {
-            await DoneAsync();
-            return;
+            return false;
         }
 
         _activity.Value = StopActivity.Accepting;
         _presentation.RevealDraft(open.Location, open.Draft);
         var taken = await _presentation.TakeDraftAsync(open.Location);
         await OnUi();
+        var text = taken ? await _presentation.ReadTextAsync(open.Location) : null;
+        await OnUi();
 
         _activity.Value = StopActivity.Idle;
-        if (!StillOn(open.Stop.Number)) return;
+        if (!StillOn(open.Stop.Number)) return false;
         if (!taken)
         {
             AddNotice($"The agent's code could not be put into {open.Stop.Target.Path}. Open the file and accept again.", NoticeTone.Error);
-            return;
+            return false;
         }
 
-        _stop.Value = _stop.Value! with { DraftTaken = true };
+        _stop.Value = _stop.Value! with { DraftState = new DraftState.Taken(text) };
         _presentation.ClearDraft();
-        await DoneAsync();
+        return true;
+    }
+
+    /// <summary>Accepts the agent's code and goes straight on, as Next does.</summary>
+    public async Task AcceptAndNextAsync()
+    {
+        if (await AcceptAsync()) await DoneAsync();
     }
 
     /// <summary>Whether Done can close the stop now: an edit stop any time, a test stop once its
@@ -575,12 +583,29 @@ internal sealed class PairingStore : IDisposable
                 throw new InvalidOperationException("Unhandled snapshot result.");
         }
 
-        var accepted = _stop.Value!.DraftTaken;
+        var outcome = await OutcomeAsync(_stop.Value!);
+        await OnUi();
+        if (!StillOn(number))
+        {
+            _activity.Value = StopActivity.Idle;
+            return;
+        }
+
         _activity.Value = StopActivity.Idle;
         _stop.Value = null;
         _presentation.ClearDraft();
         ClearConversation();
-        Deliver(new PairingAction.Done(number, diff, accepted, test, forced, problems));
+        Deliver(new PairingAction.Done(number, diff, outcome, test, forced, problems));
+    }
+
+    // Accepted code the user changed afterwards is worth the agent's attention: the diff shows how
+    // they would rather it read.
+    private async Task<DraftOutcome> OutcomeAsync(OpenStop open)
+    {
+        if (open.DraftState is not DraftState.Taken taken) return DraftOutcome.NotAccepted;
+        if (taken.FileText is null) return DraftOutcome.AcceptedAsIs;
+        var now = await _presentation.ReadTextAsync(open.Location);
+        return now is null || now == taken.FileText ? DraftOutcome.AcceptedAsIs : DraftOutcome.AcceptedThenEdited;
     }
 
     // ── test stops ───────────────────────────────────────────────────────────────────────────

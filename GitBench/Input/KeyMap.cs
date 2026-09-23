@@ -152,6 +152,10 @@ public sealed class KeyMap : IKeyMap
         KeyCommand.WalkthroughBack => [new(KeyboardKey.P)],
         KeyCommand.WalkthroughAsk => [new(KeyboardKey.Slash)],
 
+        KeyCommand.PairingAccept => PrimaryEnter(InputModifiers.Shift),
+        KeyCommand.PairingAcceptAndNext => PrimaryEnter(InputModifiers.None),
+        KeyCommand.PairingNext => PrimaryEnter(InputModifiers.Alt),
+
         KeyCommand.GoToDefinition => [new(KeyboardKey.F12)],
         KeyCommand.FindUsages => [new(KeyboardKey.F12, InputModifiers.Shift)],
         KeyCommand.NavigateBack => [KeyGesture.WithPrimary(KeyboardKey.LeftBracket)],
@@ -195,6 +199,10 @@ public sealed class KeyMap : IKeyMap
 
     private static KeyGesture[] RepoHotkey(KeyboardKey digit, KeyboardKey numpad) =>
         [KeyGesture.WithPrimary(digit), KeyGesture.WithPrimary(numpad)];
+
+    // Cmd/Ctrl+Enter chords: the editor keeps a plain, Shift- or Alt-Enter for a new line.
+    private static KeyGesture[] PrimaryEnter(InputModifiers also) =>
+        [KeyGesture.WithPrimary(KeyboardKey.Enter, also), KeyGesture.WithPrimary(KeyboardKey.NumpadEnter, also)];
 
     private static KeyGesture TerminalChord(KeyboardKey key) => OperatingSystem.IsMacOS()
         ? new KeyGesture(key, InputModifiers.Super)

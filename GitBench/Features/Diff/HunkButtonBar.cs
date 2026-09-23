@@ -8,6 +8,14 @@ using ZGF.Gui;
 
 namespace GitBench.Features.Diff;
 
+/// <summary>Which pill on a suggestion's first row, if any.</summary>
+internal enum SuggestionPill
+{
+    None,
+    Accept,
+    AcceptAndNext,
+}
+
 /// <summary>
 /// The right-aligned per-hunk action pills (Stage/Unstage/Discard) drawn over a hovered hunk,
 /// shared by the single-file diff pane and the stacked review surface so their geometry and
@@ -35,6 +43,7 @@ internal sealed class HunkButtonBar
     private float _unstageWidth;
     private float _discardWidth;
     private float _acceptWidth;
+    private float _acceptAndNextWidth;
     private bool _metricsResolved;
 
     public HunkButtonBar(ILocalizationService loc) => _loc = loc;
@@ -81,6 +90,7 @@ internal sealed class HunkButtonBar
         _unstageWidth = c.MeasureTextWidth(s.DiffHunkUnstage, LabelStyle);
         _discardWidth = c.MeasureTextWidth(s.DiffHunkDiscard, LabelStyle);
         _acceptWidth = c.MeasureTextWidth(s.DiffAcceptSuggestion, LabelStyle);
+        _acceptAndNextWidth = c.MeasureTextWidth(s.DiffAcceptSuggestionAndNext, LabelStyle);
         _metricsResolved = _stageWidth > 0;
     }
 
@@ -130,12 +140,43 @@ internal sealed class HunkButtonBar
         }
     }
 
-    /// <summary>The Accept pill on the first row of a suggestion, right-aligned inside the row
-    /// rather than hanging above it: the row before is the file's, not the suggestion's.</summary>
-    public void DrawAccept(ICanvas c, float rightEdge, RectF rowRect, bool hovered, DiffHunkButtonStyles styles, int z)
+    /// <summary>The Accept and Accept &amp; next pills on the first row of a suggestion,
+    /// right-aligned inside the row rather than hanging above it: the row before is the file's,
+    /// not the suggestion's.</summary>
+    public void DrawSuggestion(ICanvas c, float rightEdge, RectF rowRect, SuggestionPill hovered, DiffHunkButtonStyles styles, int z)
     {
         if (!_metricsResolved) return;
-        var rect = AcceptRect(rightEdge, rowRect);
+        var s = _loc.Strings.Value;
+        DrawPill(c, SuggestionRect(rightEdge, rowRect, SuggestionPill.Accept), s.DiffAcceptSuggestion, hovered == SuggestionPill.Accept, styles, z);
+        DrawPill(c, SuggestionRect(rightEdge, rowRect, SuggestionPill.AcceptAndNext), s.DiffAcceptSuggestionAndNext,
+            hovered == SuggestionPill.AcceptAndNext, styles, z);
+    }
+
+    public SuggestionPill HitSuggestion(PointF point, float rightEdge, RectF rowRect)
+    {
+        if (!_metricsResolved) return SuggestionPill.None;
+        if (SuggestionRect(rightEdge, rowRect, SuggestionPill.Accept).ContainsPoint(point)) return SuggestionPill.Accept;
+        if (SuggestionRect(rightEdge, rowRect, SuggestionPill.AcceptAndNext).ContainsPoint(point)) return SuggestionPill.AcceptAndNext;
+        return SuggestionPill.None;
+    }
+
+    // Accept & next at the right edge, Accept to its left.
+    private RectF SuggestionRect(float rightEdge, RectF rowRect, SuggestionPill pill)
+    {
+        var height = Math.Min(ButtonHeight, Math.Max(0f, rowRect.Height - 2f));
+        var bottom = rowRect.Bottom + (rowRect.Height - height) / 2f;
+        var nextWidth = _acceptAndNextWidth + PaddingX * 2;
+        var nextLeft = rightEdge - MarginRight - nextWidth;
+        return pill switch
+        {
+            SuggestionPill.AcceptAndNext => new RectF(nextLeft, bottom, nextWidth, height),
+            SuggestionPill.Accept => new RectF(nextLeft - ButtonGap - (_acceptWidth + PaddingX * 2), bottom, _acceptWidth + PaddingX * 2, height),
+            _ => throw new ArgumentOutOfRangeException(nameof(pill), pill, "No rect for this pill."),
+        };
+    }
+
+    private static void DrawPill(ICanvas c, RectF rect, string label, bool hovered, DiffHunkButtonStyles styles, int z)
+    {
         c.DrawRect(new DrawRectInputs
         {
             Position = rect,
@@ -153,20 +194,10 @@ internal sealed class HunkButtonBar
         c.DrawText(new DrawTextInputs
         {
             Position = rect,
-            Text = _loc.Strings.Value.DiffAcceptSuggestion,
+            Text = label,
             Style = LabelStyle,
             ZIndex = z + 1,
         });
-    }
-
-    public bool HitAccept(PointF point, float rightEdge, RectF rowRect) =>
-        _metricsResolved && AcceptRect(rightEdge, rowRect).ContainsPoint(point);
-
-    private RectF AcceptRect(float rightEdge, RectF rowRect)
-    {
-        var height = Math.Min(ButtonHeight, Math.Max(0f, rowRect.Height - 2f));
-        var width = _acceptWidth + PaddingX * 2;
-        return new RectF(rightEdge - MarginRight - width, rowRect.Bottom + (rowRect.Height - height) / 2f, width, height);
     }
 
     public HunkAction HitTest(PointF point, float rightEdge, float rowTop, HunkAction[] actions)

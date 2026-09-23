@@ -337,7 +337,14 @@ level before the useful thing — the code — showed up. Now:
   the Accept pill like any other block, and members come at later stops. A file the stop created is
   deleted again if the user skips or ends while it is still empty; an empty file that was already
   there is left alone.
-- Accept is also a pill on the first line of the suggestion in the editor, like hunk Stage.
+- **Accept only puts the code in; Next moves on.** Accept inserts it as one undo step and the stop
+  stays open for the user to change it. Next (was Done) finishes with the file as it is, and Accept
+  & next does both. The editor carries Accept and Accept & next pills on the suggestion's first
+  line, like hunk Stage; the card shows Accept & next and Next, and only Next once the code is in.
+  Shortcuts: Ctrl/Cmd+Enter Accept & next, +Shift Accept, +Alt Next (`PairingKeybindController`
+  at the root, on the way back out, so the editor's own Enter keys are untouched).
+- `done` says what happened to the agent's code: `draft: accepted_as_is | accepted_then_edited |
+  not_accepted`, the middle one from the file's text right after Accept against its text at Next.
 - Replaced lines are drawn as removed and the suggestion as added, with changed characters
   emphasised; lines the agent sent back unchanged at either end are left out of the replacement.
 - A draft line counts as typed when a line reading the same (trimmed) is in the run the user has

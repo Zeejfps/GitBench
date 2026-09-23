@@ -43,8 +43,16 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
 
     public List<StopDraft> Drafts { get; } = new();
 
-    public void ShowDraft(StopLocation location, StopDraft draft, Action accept)
+    /// <summary>The stop's file as the fake editor has it.</summary>
+    public string? FileText { get; set; } = "file";
+
+    public Task<string?> ReadTextAsync(StopLocation location) => Task.FromResult(FileText);
+
+    public SuggestionActions? Actions { get; private set; }
+
+    public void ShowDraft(StopLocation location, StopDraft draft, SuggestionActions actions)
     {
+        Actions = actions;
         Calls.Add("show draft");
         Drafts.Add(draft);
     }

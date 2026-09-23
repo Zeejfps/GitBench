@@ -33,7 +33,7 @@ internal sealed class DiffRowSurface
     private int _hoveredExpanderRow = -1;
     private int _hoveredFoldRow = -1;
     private int _hoveredLensRow = -1;
-    private bool _acceptHovered;
+    private SuggestionPill _hoveredPill = SuggestionPill.None;
 
     public DiffRowSurface(
         VirtualRowListView list, DiffRowPainter painter, HunkButtonBar buttonBar, DiffListScroll scroll,
@@ -78,9 +78,12 @@ internal sealed class DiffRowSurface
     public Action<string>? ToggleFold { get; set; }
     public Action<UsageLensTarget, PointF>? ActivateLens { get; set; }
 
-    /// <summary>Takes the suggestion drawn among the rows into the file; null when it can't be
-    /// taken from here, and then its first row carries no Accept pill.</summary>
-    public Action? AcceptSuggestion { get; set; }
+    /// <summary>What the pills on the suggestion drawn among the rows do; null when it can't be
+    /// taken from here, and then its first row carries none.</summary>
+    public Features.Editor.SuggestionActions? SuggestionActions { get; set; }
+
+    /// <summary>The row the suggestion's pills sit on, asked afresh as edits move it.</summary>
+    public Func<int?>? SuggestionHead { get; set; }
 
     public static void ResolveMetrics(DiffRowPainter painter, ICanvas c)
     {
@@ -218,17 +221,17 @@ internal sealed class DiffRowSurface
 
     public bool IsInteractiveAt(PointF point) =>
         ExpanderAt(point) != null || FoldAt(point) != null || LensAt(point) != null || HunkButtonAt(point) != null
-        || AcceptAt(point);
+        || PillAt(point) != SuggestionPill.None;
 
-    private bool IsFirstSuggestionRow(int row) =>
-        row >= 0 && row < Rows.Rows.Count && Rows.Rows[row] is DiffRow.Ghost
-        && (row == 0 || Rows.Rows[row - 1] is not DiffRow.Ghost);
+    private bool IsSuggestionHead(int row) => row >= 0 && SuggestionHead?.Invoke() == row;
 
-    public bool AcceptAt(PointF point)
+    public SuggestionPill PillAt(PointF point)
     {
-        if (AcceptSuggestion is null) return false;
+        if (SuggestionActions is null) return SuggestionPill.None;
         var row = RowAt(point);
-        return IsFirstSuggestionRow(row) && TryGetRowRect(row, out var rect) && _buttonBar.HitAccept(point, Frame.Right, rect);
+        return IsSuggestionHead(row) && TryGetRowRect(row, out var rect)
+            ? _buttonBar.HitSuggestion(point, Frame.Right, rect)
+            : SuggestionPill.None;
     }
 
     public MouseCursor CursorAt(PointF point)
@@ -242,7 +245,7 @@ internal sealed class DiffRowSurface
         SetHover(ref _hoveredExpanderRow, ExpanderAt(point)?.Row ?? -1);
         SetHover(ref _hoveredFoldRow, FoldAt(point)?.Row ?? -1);
         SetHover(ref _hoveredLensRow, LensAt(point)?.Row ?? -1);
-        SetAcceptHover(AcceptAt(point));
+        SetPillHover(PillAt(point));
 
         var hunk = -1;
         var button = HunkAction.None;
@@ -259,14 +262,14 @@ internal sealed class DiffRowSurface
         SetHover(ref _hoveredExpanderRow, -1);
         SetHover(ref _hoveredFoldRow, -1);
         SetHover(ref _hoveredLensRow, -1);
-        SetAcceptHover(false);
+        SetPillHover(SuggestionPill.None);
         SetHunkHover(-1, HunkAction.None);
     }
 
-    private void SetAcceptHover(bool hovered)
+    private void SetPillHover(SuggestionPill pill)
     {
-        if (_acceptHovered == hovered) return;
-        _acceptHovered = hovered;
+        if (_hoveredPill == pill) return;
+        _hoveredPill = pill;
         _redraw();
     }
 
@@ -286,13 +289,24 @@ internal sealed class DiffRowSurface
     }
 
     public bool Click(PointF point, InputModifiers modifiers) =>
-        ClickAccept(point) || ClickLens(point) || ClickFold(point) || ClickHunkButton(point) || ClickExpander(point, modifiers);
+        ClickSuggestion(point) || ClickLens(point) || ClickFold(point) || ClickHunkButton(point) || ClickExpander(point, modifiers);
 
-    public bool ClickAccept(PointF point)
+    public bool ClickSuggestion(PointF point)
     {
-        if (!AcceptAt(point)) return false;
-        AcceptSuggestion?.Invoke();
-        return true;
+        if (SuggestionActions is not { } actions) return false;
+        switch (PillAt(point))
+        {
+            case SuggestionPill.None:
+                return false;
+            case SuggestionPill.Accept:
+                actions.Accept();
+                return true;
+            case SuggestionPill.AcceptAndNext:
+                actions.AcceptAndNext();
+                return true;
+            default:
+                throw new InvalidOperationException("Unknown suggestion pill.");
+        }
     }
 
     public bool ClickLens(PointF point)
@@ -360,10 +374,10 @@ internal sealed class DiffRowSurface
     public void DrawRow(ICanvas c, RectF rowRect, int row, int z, DiffRow drawn, in DiffRowPaint paint)
     {
         _painter.DrawRow(c, drawn, paint);
-        if (AcceptSuggestion is not null && IsFirstSuggestionRow(row))
+        if (SuggestionActions is not null && IsSuggestionHead(row))
         {
             _buttonBar.EnsureMetrics(c);
-            _buttonBar.DrawAccept(c, Frame.Right, rowRect, _acceptHovered, ButtonStyles, z + 7);
+            _buttonBar.DrawSuggestion(c, Frame.Right, rowRect, _hoveredPill, ButtonStyles, z + 7);
         }
 
         var hunk = HunkIndexOf(row);

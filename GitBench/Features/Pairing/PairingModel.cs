@@ -128,11 +128,29 @@ internal abstract record DraftPlace
 /// or types it themselves.</summary>
 internal sealed record StopDraft(string Code, DraftPlace Place);
 
-/// <summary>The stop the user is on, and what it has come to. <paramref name="DraftTaken"/>: the
-/// user accepted the agent's code into the file. <paramref name="CreatedFile"/>: the empty file the
-/// stop created, taken back out if the user moves on without writing anything into it.</summary>
+/// <summary>Where the agent's code for the open stop stands.</summary>
+internal abstract record DraftState
+{
+    /// <summary>Shown in the editor, not taken.</summary>
+    public sealed record Offered : DraftState;
+
+    /// <summary>Taken into the file, which read <paramref name="FileText"/> right after — null
+    /// where it could not be read.</summary>
+    public sealed record Taken(string? FileText) : DraftState;
+}
+
+/// <summary>What the user did with the agent's code by the time they moved on.</summary>
+internal enum DraftOutcome
+{
+    NotAccepted,
+    AcceptedAsIs,
+    AcceptedThenEdited,
+}
+
+/// <summary>The stop the user is on, and what it has come to. <paramref name="CreatedFile"/>: the
+/// empty file the stop created, taken back out if the user moves on without writing anything into it.</summary>
 internal sealed record OpenStop(
-    PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test, StopDraft Draft, bool DraftTaken, string? CreatedFile);
+    PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test, StopDraft Draft, DraftState DraftState, string? CreatedFile);
 
 /// <summary>A test stop's test: the file the agent wrote, how to put it back, the test to run,
 /// and where it stands.</summary>
@@ -172,10 +190,10 @@ internal enum StopActivity
 /// about, or 0 when none was open.</summary>
 internal abstract record PairingAction(int Stop)
 {
-    /// <summary>The user finished the stop: their diff since it was shown, whether they accepted the
-    /// agent's code into it, and for a test stop the run that closed it. Anything they wanted to say
-    /// about it they said in the conversation.</summary>
-    public sealed record Done(int Stop, string Diff, bool Accepted, TestRun? Test, bool Forced, IReadOnlyList<string> Problems)
+    /// <summary>The user finished the stop: their diff since it was shown, what they did with the
+    /// agent's code, and for a test stop the run that closed it. Anything they wanted to say about it
+    /// they said in the conversation.</summary>
+    public sealed record Done(int Stop, string Diff, DraftOutcome Draft, TestRun? Test, bool Forced, IReadOnlyList<string> Problems)
         : PairingAction(Stop);
 
     /// <summary>The user said something to the agent — a question, or what they did instead — with

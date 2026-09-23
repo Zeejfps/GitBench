@@ -117,7 +117,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         return true;
     }
 
-    public void ShowDraft(StopLocation location, StopDraft draft, Action accept)
+    public void ShowDraft(StopLocation location, StopDraft draft, SuggestionActions actions)
     {
         GhostPlace place = draft.Place switch
         {
@@ -128,7 +128,15 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         if (PathOf(location) is not { } path || Browser() is not { } browser) return;
         ClearDraft();
         _hinted = browser;
-        browser.ShowHints(new EditorHints(path, new EditorGhost(place, CodeLines(draft.Code)), accept));
+        browser.ShowHints(new EditorHints(path, new EditorGhost(place, CodeLines(draft.Code)), actions));
+    }
+
+    public async Task<string?> ReadTextAsync(StopLocation location)
+    {
+        if (PathOf(location) is not { } path) return null;
+        return await _texts.ReadAsync(path, CancellationToken.None).ConfigureAwait(false) is CurrentText.Complete complete
+            ? complete.Text.Replace("\r\n", "\n")
+            : null;
     }
 
     public void ClearDraft()

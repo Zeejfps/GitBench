@@ -33,6 +33,11 @@ public enum KeyCommand
     ListDelete,
     ListViewInDiff,
 
+    // The open pairing stop, from anywhere in the main window.
+    PairingAccept,
+    PairingAcceptAndNext,
+    PairingNext,
+
     // A diff surface, whether beside a file list or in its own window.
     ToggleFullFile,
 

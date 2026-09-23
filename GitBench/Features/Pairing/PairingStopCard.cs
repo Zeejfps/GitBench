@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Markdown.Rendering;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -132,7 +133,7 @@ internal sealed record PairingStopCard : Widget
                                         Case = test => new PairingTestSection { Store = store, Test = test },
                                     }
                                     : Empty.Widget,
-                                new PairingDraftNote { Draft = open.Draft },
+                                new PairingDraftNote { Store = store, Draft = open.Draft },
                             ],
                         },
                     ],
@@ -159,14 +160,15 @@ internal sealed record PairingStopCard : Widget
 }
 
 /// <summary>
-/// The open stop's controls, pinned under what the panel scrolls: what they are busy with, Accept —
-/// which puts the agent's code into the file and finishes the stop — Done, which finishes it with
-/// what the user typed, and Skip. Anything to tell the agent goes in the conversation below.
+/// The open stop's controls, pinned under what the panel scrolls: what they are busy with, Accept &amp;
+/// next — which puts the agent's code into the file and moves on — Next, which moves on with the
+/// file as it is, and Skip. Once the code is in, Next is the one to press. Anything to tell the
+/// agent goes in the conversation below.
 /// </summary>
 internal sealed record PairingStopActions : Widget
 {
-    public const string AcceptId = "pairing-accept";
-    public const string DoneId = "pairing-done";
+    public const string AcceptAndNextId = "pairing-accept-next";
+    public const string NextId = "pairing-next";
     public const string SkipId = "pairing-skip";
     public const string ShowChangeId = "pairing-show-change";
 
@@ -177,12 +179,27 @@ internal sealed record PairingStopActions : Widget
     {
         var store = Store;
         var loc = ctx.Localization();
+        var keys = ctx.KeyMap();
 
         var idle = new Derived<bool>(() => store.Activity.Value == StopActivity.Idle);
         var canFinish = new Derived<bool>(() => idle.Value && store.Stop.Value is { } open && PairingStore.CanFinish(open));
+        var accepted = new Derived<bool>(() => store.Stop.Value?.DraftState is DraftState.Taken);
 
-        void Accept() => _ = store.AcceptAsync();
-        void Done() => _ = store.DoneAsync();
+        void AcceptAndNext() => _ = store.AcceptAndNextAsync();
+        void Next() => _ = store.DoneAsync();
+
+        Prop<string?> Tooltip(Func<Strings, string> text, KeyCommand command) =>
+            Prop.Bind<string?>(() => $"{text(loc.Strings.Value)} ({keys.Display(command)})");
+
+        IWidget NextButton(bool primary) => new ButtonWidget
+        {
+            Id = NextId,
+            Style = primary ? ButtonStyle.Filled(static s => s.Palette.Accent) : ButtonStyle.Outline(static s => s.Palette.TextBody),
+            Command = new Command(Next, canFinish),
+            Children = [new ButtonLabel { Value = L.T(s => s.PairingNext) }],
+        }
+        .WithTooltip(Tooltip(s => s.PairingNextTooltip, KeyCommand.PairingNext))
+        .WithController<KbmController>();
 
         IWidget bar = new Box
         {
@@ -221,24 +238,30 @@ internal sealed record PairingStopActions : Widget
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
-                                        new ButtonWidget
+                                        new Switch<bool>
                                         {
-                                            Id = AcceptId,
-                                            Style = ButtonStyle.Filled(static s => s.Palette.Accent),
-                                            Command = new Command(Accept, canFinish),
-                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingAccept) }],
-                                        }
-                                        .WithTooltip(L.T(s => s.PairingAcceptTooltip))
-                                        .WithController<KbmController>(),
-                                        new ButtonWidget
-                                        {
-                                            Id = DoneId,
-                                            Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                            Command = new Command(Done, canFinish),
-                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingDone) }],
-                                        }
-                                        .WithTooltip(L.T(s => s.PairingDoneTooltip))
-                                        .WithController<KbmController>(),
+                                            Value = accepted,
+                                            Case = isIn => isIn
+                                                ? NextButton(primary: true)
+                                                : new Row
+                                                {
+                                                    Gap = Spacing.Sm,
+                                                    CrossAxis = CrossAxisAlignment.Center,
+                                                    Children =
+                                                    [
+                                                        new ButtonWidget
+                                                        {
+                                                            Id = AcceptAndNextId,
+                                                            Style = ButtonStyle.Filled(static s => s.Palette.Accent),
+                                                            Command = new Command(AcceptAndNext, canFinish),
+                                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingAcceptAndNext) }],
+                                                        }
+                                                        .WithTooltip(Tooltip(s => s.PairingAcceptAndNextTooltip, KeyCommand.PairingAcceptAndNext))
+                                                        .WithController<KbmController>(),
+                                                        NextButton(primary: false),
+                                                    ],
+                                                },
+                                        },
                                         new ButtonWidget
                                         {
                                             Id = SkipId,
@@ -270,6 +293,7 @@ internal sealed record PairingStopActions : Widget
             var gates = new SubscriptionGroup();
             gates.Add(idle);
             gates.Add(canFinish);
+            gates.Add(accepted);
             return gates;
         });
     }

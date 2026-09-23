@@ -232,7 +232,21 @@ public sealed class PairingStoreTests : IDisposable
     }
 
     [Fact]
-    public void Accept_PutsTheAgentsCodeIn_AndFinishesTheStopAsDone()
+    public void Accept_PutsTheAgentsCodeIn_AndStaysOnTheStop()
+    {
+        Open();
+        var wait = _store.WaitAsync(CancellationToken.None);
+
+        Assert.True(Await(_store.AcceptAsync(), "Accept"));
+
+        Assert.False(wait.IsCompleted);
+        Assert.IsType<DraftState.Taken>(_store.Stop.Value!.DraftState);
+        Assert.Contains("take draft", _presentation.Calls);
+        Assert.Contains("clear draft", _presentation.Calls);
+    }
+
+    [Fact]
+    public void AcceptAndNext_PutsTheCodeIn_AndMovesOn_AsAccepted()
     {
         _workspace.Current = "before";
         Open();
@@ -240,14 +254,40 @@ public sealed class PairingStoreTests : IDisposable
         var wait = _store.WaitAsync(CancellationToken.None);
 
         _workspace.Current = "after";
-        var accept = _store.AcceptAsync();
-        Pump.WaitFor(_dispatcher, () => accept.IsCompleted && wait.IsCompleted, "Accept to reach the agent");
+        var go = _store.AcceptAndNextAsync();
+        Pump.WaitFor(_dispatcher, () => go.IsCompleted && wait.IsCompleted, "Accept & next to reach the agent");
 
         var done = Assert.IsType<PairingAction.Done>(wait.Result);
-        Assert.True(done.Accepted);
+        Assert.Equal(DraftOutcome.AcceptedAsIs, done.Draft);
         Assert.Equal("diff before..after", done.Diff);
         Assert.True(_presentation.Calls.IndexOf("take draft") < _presentation.Calls.IndexOf("save"));
         Assert.Null(_store.Stop.Value);
+    }
+
+    [Fact]
+    public void AcceptedCodeChangedBeforeNext_ReachesTheAgentAsEdited()
+    {
+        Open();
+        Await(_store.AcceptAsync(), "Accept");
+        _presentation.FileText = "file, changed by hand";
+        var wait = _store.WaitAsync(CancellationToken.None);
+
+        var next = _store.DoneAsync();
+        Pump.WaitFor(_dispatcher, () => next.IsCompleted && wait.IsCompleted, "Next to reach the agent");
+
+        Assert.Equal(DraftOutcome.AcceptedThenEdited, Assert.IsType<PairingAction.Done>(wait.Result).Draft);
+    }
+
+    [Fact]
+    public void TheEditorsPills_AcceptOrAcceptAndMoveOn()
+    {
+        Open();
+        var wait = _store.WaitAsync(CancellationToken.None);
+
+        _presentation.Actions!.AcceptAndNext();
+        Pump.WaitFor(_dispatcher, () => wait.IsCompleted, "the pill to reach the agent");
+
+        Assert.Equal(DraftOutcome.AcceptedAsIs, Assert.IsType<PairingAction.Done>(wait.Result).Draft);
     }
 
     [Fact]
@@ -309,7 +349,7 @@ public sealed class PairingStoreTests : IDisposable
         var done = _store.DoneAsync();
         Pump.WaitFor(_dispatcher, () => done.IsCompleted && wait.IsCompleted, "Done to reach the agent");
 
-        Assert.False(Assert.IsType<PairingAction.Done>(wait.Result).Accepted);
+        Assert.Equal(DraftOutcome.NotAccepted, Assert.IsType<PairingAction.Done>(wait.Result).Draft);
         Assert.Contains("clear draft", _presentation.Calls);
     }
 

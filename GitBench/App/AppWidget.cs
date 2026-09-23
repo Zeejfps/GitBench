@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Assistant;
 using GitBench.Features.Diff;
+using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Settings;
@@ -31,7 +32,8 @@ internal sealed record AppWidget : Widget
                 new RepoIconWindowHost(),
             ],
         }
-        .WithController<AppKeybindController>(ctx);
+        .WithController<AppKeybindController>(ctx)
+        .WithController<PairingKeybindController>(ctx);
 
         // Establish the UI writing direction for the whole tree from the active locale, so RTL
         // locales (Arabic) mirror Row/Column and swap the BorderLayout sidebar to the right.

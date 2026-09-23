@@ -169,6 +169,7 @@ internal sealed class KeyboardShortcutsViewModel
         KeyCommandSection.Commits => s.ShortcutsSectionCommits,
         KeyCommandSection.Review => s.ShortcutsSectionReview,
         KeyCommandSection.Walkthrough => s.ShortcutsSectionWalkthrough,
+        KeyCommandSection.Pairing => s.ShortcutsSectionPairing,
         KeyCommandSection.CodeNavigation => s.ShortcutsSectionCodeNavigation,
         KeyCommandSection.Editor => s.ShortcutsSectionEditor,
         KeyCommandSection.Terminal => s.ShortcutsSectionTerminal,
@@ -213,6 +214,10 @@ internal sealed class KeyboardShortcutsViewModel
         KeyCommand.WalkthroughNext => s.ShortcutsCommandWalkthroughNext,
         KeyCommand.WalkthroughBack => s.ShortcutsCommandWalkthroughBack,
         KeyCommand.WalkthroughAsk => s.ShortcutsCommandWalkthroughAsk,
+
+        KeyCommand.PairingAccept => s.ShortcutsCommandPairingAccept,
+        KeyCommand.PairingAcceptAndNext => s.ShortcutsCommandPairingAcceptAndNext,
+        KeyCommand.PairingNext => s.ShortcutsCommandPairingNext,
 
         KeyCommand.GoToDefinition => s.ShortcutsCommandGoToDefinition,
         KeyCommand.FindUsages => s.ShortcutsCommandFindUsages,
