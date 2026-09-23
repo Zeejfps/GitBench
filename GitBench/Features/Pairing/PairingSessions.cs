@@ -88,12 +88,12 @@ internal abstract record AgentPairingStart
 internal sealed class PairingSessions : IPairingSessions, IDisposable
 {
     private readonly IRepoRegistry _repos;
-    private readonly Func<Repo, PairingHarness, string, AgentConversation> _create;
+    private readonly Func<Repo, PairingHarness, AgentOpening, AgentConversation> _create;
     private readonly Dictionary<Guid, AgentConversation> _conversations = new();
     private readonly State<AgentConversation?> _active = new(null);
     private readonly IDisposable _following;
 
-    public PairingSessions(IRepoRegistry repos, Func<Repo, PairingHarness, string, AgentConversation> create)
+    public PairingSessions(IRepoRegistry repos, Func<Repo, PairingHarness, AgentOpening, AgentConversation> create)
     {
         _repos = repos;
         _create = create;
@@ -114,23 +114,36 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
     /// there, which keeps the agent it has, or in a new one with <paramref name="harness"/>.</summary>
     public PairingStart Start(Repo repo, string goal, PairingHarness harness)
     {
-        if (_conversations.TryGetValue(repo.Id, out var existing))
+        if (LiveConversation(repo.Id) is { } existing)
         {
-            if (!existing.IsGone)
-            {
-                if (existing.IsPairing) return new PairingStart.AlreadyRunning(existing);
-                existing.BeginSession(goal.Trim());
-                return new PairingStart.Started(existing);
-            }
-
-            _conversations.Remove(repo.Id);
-            _ = existing.DisposeAsync().AsTask();
+            if (existing.IsPairing) return new PairingStart.AlreadyRunning(existing);
+            existing.BeginSession(goal.Trim());
+            return new PairingStart.Started(existing);
         }
 
-        var conversation = _create(repo, harness, goal.Trim());
+        return new PairingStart.Started(Open(repo, harness, new AgentOpening.Pairing(goal.Trim())));
+    }
+
+    /// <summary>The user asks the agent something, with code they sent along: in the repository's
+    /// conversation while its agent is there, or in a new one with <paramref name="harness"/>.</summary>
+    public AgentConversation Ask(Repo repo, string text, CodeQuote? quote, PairingHarness harness)
+    {
+        if (LiveConversation(repo.Id) is { } existing)
+        {
+            existing.Say(text, quote);
+            return existing;
+        }
+
+        return Open(repo, harness, new AgentOpening.Chat(text.Trim(), quote));
+    }
+
+    private AgentConversation Open(Repo repo, PairingHarness harness, AgentOpening opening)
+    {
+        if (_conversations.Remove(repo.Id, out var gone)) _ = gone.DisposeAsync().AsTask();
+        var conversation = _create(repo, harness, opening);
         _conversations[repo.Id] = conversation;
         Refresh();
-        return new PairingStart.Started(conversation);
+        return conversation;
     }
 
     public AgentPairingStart StartByAgent(Guid repoId, string goal)
@@ -164,7 +177,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
 
     /// <summary>The factory the app runs conversations with: the Files pane as the surface of their
     /// sessions, git for the snapshots, and the harness's own driver, opened on the first goal.</summary>
-    public static Func<Repo, PairingHarness, string, AgentConversation> Factory(
+    public static Func<Repo, PairingHarness, AgentOpening, AgentConversation> Factory(
         IRepoRegistry repos,
         IFileBrowserStore browsers,
         IFileTextSource texts,
@@ -178,7 +191,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         IContentNavigator navigator,
         IUiDispatcher dispatcher,
         TimeProvider clock) =>
-        (repo, harness, goal) =>
+        (repo, harness, opening) =>
         {
             var conversation = new AgentConversation(repo, harness, (sessionGoal, transcript) =>
             {
@@ -187,13 +200,26 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
                     sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
                 return new PairingSession(repo, store, presentation);
             }, dispatcher);
-            conversation.StartSession(goal);
-            var opening = PairingInstructions.Opening(goal, repo.Path);
+            AgentPrompt first;
+            switch (opening)
+            {
+                case AgentOpening.Pairing pairing:
+                    conversation.StartSession(pairing.Goal);
+                    first = new AgentPrompt(PairingInstructions.Opening(pairing.Goal, repo.Path));
+                    break;
+                case AgentOpening.Chat chat:
+                    conversation.Transcript.AddFromUser(chat.Text, chat.Quote);
+                    first = new AgentPrompt(PairingInstructions.ChatOpening(repo.Path) + "\n\n" + chat.Text, chat.Quote);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(opening), opening, "Unknown opening.");
+            }
+
             IAgentDriver driver = harness switch
             {
-                PairingHarness.Acp acp => AcpPairingDriver.Start(conversation, opening, acp.Harness, endpoints, environment, dispatcher),
+                PairingHarness.Acp acp => AcpPairingDriver.Start(conversation, first, acp.Harness, endpoints, environment, dispatcher),
                 PairingHarness.Terminal terminal => TerminalPairingDriver.Start(
-                    conversation, opening, terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
+                    conversation, first, terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
                 _ => throw new ArgumentOutOfRangeException(nameof(harness), harness, "Unknown harness."),
             };
             conversation.Attach(driver);

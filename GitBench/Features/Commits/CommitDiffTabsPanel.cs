@@ -181,7 +181,11 @@ internal sealed class CommitDiffTabsPanelView : ContainerView
         {
             Value = tab.Diff,
             // The main window's diff, and the only one with the assistant overlay above it.
-            Child = new DiffView { AssistantActions = true },
+            Child = new DiffView
+            {
+                AssistantActions = true,
+                SendToAgent = quote => Features.Pairing.SendToAgentDialog.Show(_ctx.Require<Messages.IMessageBus>(), quote),
+            },
         }.BuildView(_ctx);
         var header = new Provide<DiffViewModel>
         {

@@ -1,4 +1,5 @@
 using GitBench.Features.Assistant;
+using GitBench.Features.Editor;
 using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;
@@ -45,7 +46,7 @@ internal sealed class AgentTranscript
         Add(new PairingMessage.Narration(new State<string>(markdown.Trim())));
     }
 
-    public void AddFromUser(string text) => Add(new PairingMessage.FromUser(text));
+    public void AddFromUser(string text, CodeQuote? quote = null) => Add(new PairingMessage.FromUser(text, quote));
 
     public void AddNotice(string text, NoticeTone tone) => Add(new PairingMessage.Notice(text, tone));
 

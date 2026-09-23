@@ -1,3 +1,4 @@
+using GitBench.Features.Editor;
 using GitBench.Git;
 using ZGF.Observable;
 
@@ -16,12 +17,39 @@ internal abstract record AgentPhase
     public sealed record Gone(string Reason) : AgentPhase;
 }
 
+/// <summary>A turn for the agent: prose, and code the user sent along with it.</summary>
+internal sealed record AgentPrompt(string Text, CodeQuote? Quote = null)
+{
+    /// <summary>The whole turn as markdown, for an agent that takes prose alone.</summary>
+    public string ToMarkdown(string repoPath) =>
+        Quote is { } quote ? Text + "\n\n" + quote.ToMarkdown(path => RepoRelative(repoPath, path)) : Text;
+
+    /// <summary>A path as the agent is told it: relative to the repository, or as it is outside it.</summary>
+    public static string RepoRelative(string repoPath, string absolutePath)
+    {
+        var relative = Path.GetRelativePath(repoPath, absolutePath);
+        return relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)
+            ? absolutePath
+            : relative.Replace('\\', '/');
+    }
+}
+
+/// <summary>What a new conversation opens with.</summary>
+internal abstract record AgentOpening
+{
+    /// <summary>A pairing session on this goal.</summary>
+    public sealed record Pairing(string Goal) : AgentOpening;
+
+    /// <summary>Something the user asked, with code they sent along.</summary>
+    public sealed record Chat(string Text, CodeQuote? Quote) : AgentOpening;
+}
+
 /// <summary>Runs a conversation's agent.</summary>
 internal interface IAgentDriver : IAsyncDisposable
 {
     /// <summary>Gives the agent a turn: something the user said, or that a session began. Queued
     /// behind a turn already in flight. UI thread.</summary>
-    void Tell(string prompt);
+    void Tell(AgentPrompt prompt);
 }
 
 /// <summary>
@@ -99,7 +127,7 @@ internal sealed class AgentConversation : IAsyncDisposable
     public PairingSession BeginSession(string goal)
     {
         var session = StartSession(goal);
-        _driver?.Tell(PairingInstructions.Resumed(goal, Repo.Path));
+        _driver?.Tell(new AgentPrompt(PairingInstructions.Resumed(goal, Repo.Path)));
         return session;
     }
 
@@ -113,20 +141,21 @@ internal sealed class AgentConversation : IAsyncDisposable
         session.Dispose();
     }
 
-    /// <summary>Something the user said in the panel: to the session's loop while one runs, else
-    /// straight to the agent.</summary>
-    public void Say(string text)
+    /// <summary>Something the user said, with code they sent along: to the session's loop while one
+    /// runs, else straight to the agent.</summary>
+    public void Say(string text, CodeQuote? quote = null)
     {
-        if (_disposed || string.IsNullOrWhiteSpace(text) || !_takesChat.Value) return;
+        // Not gated on TakesChat: an agent in a terminal takes what is sent from the editor too.
+        if (_disposed || string.IsNullOrWhiteSpace(text) || IsGone) return;
         if (_session.Value is { Store.IsLive: true } session)
         {
-            session.Store.Say(text);
+            session.Store.Say(text, quote);
             return;
         }
 
         var said = text.Trim();
-        Transcript.AddFromUser(said);
-        _driver?.Tell(said);
+        Transcript.AddFromUser(said, quote);
+        _driver?.Tell(new AgentPrompt(said, quote));
     }
 
     // ── the driver's side ────────────────────────────────────────────────────────────────────

@@ -2,6 +2,15 @@ using System.Text.Json.Nodes;
 
 namespace GitBench.Features.AgentConnections.Acp;
 
+/// <summary>One block of a user turn.</summary>
+internal abstract record AcpContent
+{
+    public sealed record Prose(string Value) : AcpContent;
+
+    /// <summary>A file's text attached as context; <paramref name="Uri"/> may name lines in its fragment.</summary>
+    public sealed record Resource(Uri Uri, string Text) : AcpContent;
+}
+
 /// <summary>What a <c>session/update</c> notification says, in the cases the app shows.</summary>
 internal abstract record AcpSessionUpdate
 {

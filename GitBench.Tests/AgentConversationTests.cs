@@ -1,4 +1,6 @@
 using GitBench.Features.AgentConnections.Acp;
+using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.Pairing;
 using GitBench.Git;
 using Xunit;
@@ -75,7 +77,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
 
         conversation.Say("  commit what we did ");
 
-        Assert.Equal(["commit what we did"], _driver.Told);
+        Assert.Equal([new AgentPrompt("commit what we did")], _driver.Told);
         Assert.IsType<PairingMessage.FromUser>(Assert.Single(conversation.Transcript.Messages));
     }
 
@@ -103,7 +105,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
 
         Assert.True(session.Store.IsLive);
         Assert.IsType<PairingPhase.Running>(session.Store.Phase.Value);
-        Assert.Contains("Rename the client", Assert.Single(_driver.Told));
+        Assert.Contains("Rename the client", Assert.Single(_driver.Told).Text);
         Assert.Equal(new PairingMessage.SessionStarted("Rename the client"), conversation.Transcript.Messages[^1]);
     }
 
@@ -144,7 +146,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void ATerminalAgent_IsTalkedToInItsTerminal_BetweenSessions()
+    public void ATerminalAgent_IsTalkedToInItsTerminal_BetweenSessions_ButStillTakesWhatTheEditorSends()
     {
         var conversation = Create(new PairingHarness.Terminal("Terminal agent", "claude {prompt}"));
         conversation.StartSession("Add a retry");
@@ -155,8 +157,39 @@ public sealed class AgentConversationTests : IAsyncDisposable
         _dispatcher.Drain();
 
         Assert.False(conversation.TakesChat.Value);
-        conversation.Say("commit");
-        Assert.Empty(_driver.Told);
+        conversation.Say("What does this do?", Quote);
+        Assert.Equal([new AgentPrompt("What does this do?", Quote)], _driver.Told);
+    }
+
+    private static readonly CodeQuote Quote = new CodeQuote.InFile("C:/repo/src/Client.cs", new FileLine(10), new FileLine(12), "void Fetch()\n{\n}");
+
+    [Fact]
+    public void CodeSentBetweenSessions_GoesToTheAgentWithItsQuote_AndShowsInTheTranscript()
+    {
+        var conversation = Create();
+        conversation.MarkRunning();
+
+        conversation.Say("Why is this sync?", Quote);
+
+        var told = Assert.Single(_driver.Told);
+        Assert.Same(Quote, told.Quote);
+        Assert.Contains("`src/Client.cs`, lines 10-12", told.ToMarkdown("C:/repo"));
+        Assert.Same(Quote, Assert.IsType<PairingMessage.FromUser>(Assert.Single(conversation.Transcript.Messages)).Quote);
+    }
+
+    [Fact]
+    public void CodeSentDuringASession_ReachesTheLoopAsPartOfTheMessage()
+    {
+        var conversation = Create();
+        conversation.StartSession("Add a retry");
+        conversation.MarkRunning();
+
+        conversation.Say("Should this retry too?", Quote);
+
+        var said = Assert.IsType<PairingAction.Message>(conversation.Session.Value!.Store.WaitAsync(CancellationToken.None).Result);
+        Assert.StartsWith("Should this retry too?", said.Text);
+        Assert.Contains("void Fetch()", said.Text);
+        Assert.Contains("`src/Client.cs`, lines 10-12", said.Text);
     }
 
     [Fact]
@@ -170,9 +203,9 @@ public sealed class AgentConversationTests : IAsyncDisposable
 
     private sealed class RecordingDriver : IAgentDriver
     {
-        public List<string> Told { get; } = new();
+        public List<AgentPrompt> Told { get; } = new();
 
-        public void Tell(string prompt) => Told.Add(prompt);
+        public void Tell(AgentPrompt prompt) => Told.Add(prompt);
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

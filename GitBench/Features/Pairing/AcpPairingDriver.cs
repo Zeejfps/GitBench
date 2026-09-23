@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using GitBench.Features.Editor;
 using GitBench.Features.AgentConnections;
 using GitBench.Features.AgentConnections.Acp;
 using GitBench.Git;
@@ -23,20 +24,20 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private const string ServerName = "diffdino";
 
     private readonly AgentConversation _conversation;
-    private readonly string _opening;
+    private readonly AgentPrompt _opening;
     private readonly AcpHarness _harness;
     private readonly AgentEndpoints _endpoints;
     private readonly IServerEnvironment _environment;
     private readonly IUiDispatcher _dispatcher;
     private readonly CancellationTokenSource _stop = new();
     private readonly HashSet<string> _toolCalls = new();
-    private readonly Channel<string> _inbox = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<AgentPrompt> _inbox = Channel.CreateUnbounded<AgentPrompt>(new UnboundedChannelOptions { SingleReader = true });
     private AcpAgentConnection? _connection;
     private Task _run = Task.CompletedTask;
     private int _refusedThisTurn;
 
     private AcpPairingDriver(
-        AgentConversation conversation, string opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
+        AgentConversation conversation, AgentPrompt opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
         IUiDispatcher dispatcher)
     {
         _conversation = conversation;
@@ -50,7 +51,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     /// <summary>Starts the agent for a conversation, with <paramref name="opening"/> as its first
     /// turn. UI thread.</summary>
     public static AcpPairingDriver Start(
-        AgentConversation conversation, string opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
+        AgentConversation conversation, AgentPrompt opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
         IUiDispatcher dispatcher)
     {
         var driver = new AcpPairingDriver(conversation, opening, harness, endpoints, environment, dispatcher);
@@ -58,7 +59,22 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         return driver;
     }
 
-    public void Tell(string prompt) => _inbox.Writer.TryWrite(prompt);
+    public void Tell(AgentPrompt prompt) => _inbox.Writer.TryWrite(prompt);
+
+    // A quote goes as the file's text attached to the turn where the agent takes that, and as
+    // markdown in the prose where it doesn't.
+    private IReadOnlyList<AcpContent> Content(AcpAgentConnection connection, AgentPrompt prompt)
+    {
+        var repoPath = _conversation.Repo.Path;
+        // Only a file's lines can be attached: a diff's may be ones the change removed.
+        if (prompt.Quote is not CodeQuote.InFile file || !connection.EmbedsContext) return [new AcpContent.Prose(prompt.ToMarkdown(repoPath))];
+        var path = AgentPrompt.RepoRelative(repoPath, file.AbsolutePath);
+        return
+        [
+            new AcpContent.Prose(prompt.Text + $"\n\n(Attached: what I selected in `{path}`, {file.Lines}.)"),
+            new AcpContent.Resource(file.Uri, file.Text),
+        ];
+    }
 
     private async Task RunAsync()
     {
@@ -122,7 +138,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
             var before = ToolCallCount;
             Interlocked.Exchange(ref _refusedThisTurn, 0);
             Post(_conversation.BeginTurn);
-            var reason = await connection.PromptAsync(prompt, _stop.Token).ConfigureAwait(false);
+            var reason = await connection.PromptAsync(Content(connection, prompt), _stop.Token).ConfigureAwait(false);
             Post(_conversation.EndTurn);
             if (_stop.IsCancellationRequested) return;
 
@@ -148,9 +164,9 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
                 idle = ToolCallCount == before ? idle + 1 : 0;
                 if (idle < IdleTurnLimit)
                 {
-                    prompt = Volatile.Read(ref _refusedThisTurn) > 0
+                    prompt = new AgentPrompt(Volatile.Read(ref _refusedThisTurn) > 0
                         ? "Writing files is refused: the user writes the code. " + PairingInstructions.Continue
-                        : PairingInstructions.Continue;
+                        : PairingInstructions.Continue);
                     continue;
                 }
 

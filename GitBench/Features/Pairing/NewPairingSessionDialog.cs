@@ -153,7 +153,7 @@ internal sealed record NewPairingSessionDialog : Widget
         };
     }
 
-    private static AcpHarness HarnessOf(PairingAgentChoice choice) => choice switch
+    public static AcpHarness HarnessOf(PairingAgentChoice choice) => choice switch
     {
         PairingAgentChoice.ClaudeCode => AcpHarness.ClaudeCode,
         PairingAgentChoice.Codex => AcpHarness.Codex,

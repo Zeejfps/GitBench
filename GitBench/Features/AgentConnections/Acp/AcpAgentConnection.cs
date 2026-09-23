@@ -33,6 +33,10 @@ internal abstract record AcpStart
 /// </summary>
 internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
 {
+    /// <summary>Whether the agent takes a file's text attached to a turn as context, rather than
+    /// only prose.</summary>
+    public bool EmbedsContext { get; private set; }
+
     private const int StderrLines = 40;
     private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(90);
 
@@ -153,7 +157,7 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
         timeout.CancelAfter(HandshakeTimeout);
         try
         {
-            await _rpc.RequestAsync("initialize", new JsonObject
+            var initialized = await _rpc.RequestAsync("initialize", new JsonObject
             {
                 ["protocolVersion"] = 1,
                 ["clientCapabilities"] = new JsonObject
@@ -163,6 +167,8 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
                 },
                 ["clientInfo"] = new JsonObject { ["name"] = "DiffDino", ["version"] = "1" },
             }, timeout.Token).ConfigureAwait(false);
+            EmbedsContext = initialized?["agentCapabilities"]?["promptCapabilities"]?["embeddedContext"] is JsonValue embeds
+                            && embeds.TryGetValue<bool>(out var embedded) && embedded;
 
             var session = await _rpc.RequestAsync("session/new", new JsonObject
             {
@@ -214,14 +220,18 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
     }
 
     /// <summary>Sends one user turn and completes when the agent ends it.</summary>
-    public async Task<AcpStopReason> PromptAsync(string text, CancellationToken ct)
+    public Task<AcpStopReason> PromptAsync(string text, CancellationToken ct) => PromptAsync([new AcpContent.Prose(text)], ct);
+
+    /// <summary>Sends one user turn made of <paramref name="content"/> and completes when the agent
+    /// ends it. Attach a <see cref="AcpContent.Resource"/> only where <see cref="EmbedsContext"/>.</summary>
+    public async Task<AcpStopReason> PromptAsync(IReadOnlyList<AcpContent> content, CancellationToken ct)
     {
         var sessionId = _sessionId ?? throw new InvalidOperationException("The session is not open.");
         using var cancel = ct.Register(() => _ = CancelTurnAsync());
         var result = await _rpc.RequestAsync("session/prompt", new JsonObject
         {
             ["sessionId"] = sessionId,
-            ["prompt"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }),
+            ["prompt"] = new JsonArray([.. content.Select(ToJson)]),
         }, CancellationToken.None).ConfigureAwait(false);
 
         return (result?["stopReason"] as JsonValue)?.TryGetValue<string>(out var reason) == true
@@ -235,6 +245,22 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
             }
             : AcpStopReason.EndTurn;
     }
+
+    private static JsonNode ToJson(AcpContent content) => content switch
+    {
+        AcpContent.Prose text => new JsonObject { ["type"] = "text", ["text"] = text.Value },
+        AcpContent.Resource resource => new JsonObject
+        {
+            ["type"] = "resource",
+            ["resource"] = new JsonObject
+            {
+                ["uri"] = resource.Uri.ToString(),
+                ["mimeType"] = "text/plain",
+                ["text"] = resource.Text,
+            },
+        },
+        _ => throw new ArgumentOutOfRangeException(nameof(content), content, "Unknown content."),
+    };
 
     /// <summary>Asks the agent to stop the turn in progress; the turn then ends <c>cancelled</c>.</summary>
     public async Task CancelTurnAsync()

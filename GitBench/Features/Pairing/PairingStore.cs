@@ -492,15 +492,16 @@ internal sealed class PairingStore : IDisposable
         Deliver(new PairingAction.Skipped(open.Stop.Number));
     }
 
-    /// <summary>Says something to the agent. It joins the conversation the agent keeps for the
-    /// session, so "I went with an event instead" said here is in its mind when it reads the diff
-    /// Done hands it next.</summary>
-    public void Say(string text)
+    /// <summary>Says something to the agent, with code the user sent along. It joins the
+    /// conversation the agent keeps for the session, so "I went with an event instead" said here is
+    /// in its mind when it reads the diff Done hands it next.</summary>
+    public void Say(string text, CodeQuote? quote = null)
     {
         if (_disposed || !IsLive || string.IsNullOrWhiteSpace(text)) return;
         var said = text.Trim();
-        _transcript.AddFromUser(said);
-        Deliver(new PairingAction.Message(StopNumber, said, _presentation.Caret.Value));
+        _transcript.AddFromUser(said, quote);
+        var told = quote is null ? said : said + "\n\n" + quote.ToMarkdown(path => Relative(path) ?? path);
+        Deliver(new PairingAction.Message(StopNumber, told, _presentation.Caret.Value));
     }
 
     /// <summary>The user ends the session. The agent's wait answers <c>ended</c>.</summary>

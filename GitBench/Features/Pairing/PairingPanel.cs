@@ -411,7 +411,7 @@ internal sealed record PairingConversation : Widget
                 new Each<PairingMessage>
                 {
                     Items = conversation.Transcript.Messages,
-                    Template = new PairingMessageRow { Speaker = conversation.Harness.Label },
+                    Template = new PairingMessageRow { Speaker = conversation.Harness.Label, RepoPath = conversation.Repo.Path },
                     Gap = Spacing.Lg,
                     CrossAxis = CrossAxisAlignment.Stretch,
                 },
@@ -473,6 +473,9 @@ internal sealed record PairingMessageRow : Widget
     /// <summary>The agent's name, over its prose.</summary>
     public required string Speaker { get; init; }
 
+    /// <summary>The repository, whose paths quotes are shown relative to.</summary>
+    public required string RepoPath { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var message = ctx.Require<PairingMessage>();
@@ -489,11 +492,26 @@ internal sealed record PairingMessageRow : Widget
                 Color = Theme.Color(s => s.Palette.TextSecondary),
             },
             PairingMessage.SessionOver over => new PairingOutcome { Outcome = over.Outcome },
-            PairingMessage.FromUser said => new TranscriptMessageRow
+            PairingMessage.FromUser { Quote: null } said => new TranscriptMessageRow
             {
                 Text = new State<string>(said.Text),
                 Label = L.T(s => s.AssistantYou),
                 LabelColor = static s => s.Palette.TextSecondary,
+            },
+            PairingMessage.FromUser { Quote: { } quote } said => new Column
+            {
+                Gap = Spacing.Sm,
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children =
+                [
+                    new TranscriptMessageRow
+                    {
+                        Text = new State<string>(said.Text),
+                        Label = L.T(s => s.AssistantYou),
+                        LabelColor = static s => s.Palette.TextSecondary,
+                    },
+                    new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(RepoPath, path)) },
+                ],
             },
             PairingMessage.Narration narration => new TranscriptReplyRow { Text = narration.Text, Speaker = Speaker },
             PairingMessage.Notice notice => new TranscriptNoticeRow

@@ -176,8 +176,8 @@ internal abstract record PairingMessage
     /// <summary>A pairing session finished, and how.</summary>
     public sealed record SessionOver(PairingPhase Outcome) : PairingMessage;
 
-    /// <summary>What the user said.</summary>
-    public sealed record FromUser(string Text) : PairingMessage;
+    /// <summary>What the user said, with the code they sent along, if any.</summary>
+    public sealed record FromUser(string Text, CodeQuote? Quote = null) : PairingMessage;
 
     /// <summary>The agent's prose, growing as it streams.</summary>
     public sealed record Narration(IReadable<string> Text) : PairingMessage;

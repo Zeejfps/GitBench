@@ -77,6 +77,18 @@ internal static class PairingInstructions
         + BetweenSessions + "\n\n"
         + Begin;
 
+    /// <summary>The first turn of an agent the app started for a question rather than a session;
+    /// the question follows it.</summary>
+    public static string ChatOpening(string repoPath) =>
+        $"We are working together in DiffDino, a git client, on the repository at \"{repoPath}\". I talk to you "
+        + "from its side panel and send you code I select in its editor. Answer in plain replies. Pass "
+        + $"repo: \"{repoPath}\" on every DiffDino call.\n"
+        + "Your file edits are refused: I write the code. When the code needs changing, offer to pair on "
+        + "it, and once I agree call pairing_start with the goal: DiffDino then shows me each place to "
+        + "change and your code for it. Read the code, run git and the tests with your own tools; a "
+        + "push is put to me before it runs.\n\n"
+        + "My first message:";
+
     /// <summary>The turn that tells the agent the user started a new session in the conversation.</summary>
     public static string Resumed(string goal, string repoPath) =>
         $"I started a new pairing session in DiffDino for repo \"{repoPath}\". The goal:\n{goal}\n\n"

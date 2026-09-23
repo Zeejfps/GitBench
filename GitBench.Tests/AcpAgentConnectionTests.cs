@@ -45,6 +45,32 @@ public sealed class AcpAgentConnectionTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AnAgentThatEmbedsContext_GetsTheSelectionAsAnAttachedResource()
+    {
+        _agent.Capabilities = """{"promptCapabilities":{"embeddedContext":true}}""";
+        Assert.Null(await _connection.OpenAsync("C:/repo", Server, "default", null, CancellationToken.None).WaitAsync(Deadline));
+        Assert.True(_connection.EmbedsContext);
+
+        await _connection.PromptAsync(
+            [new AcpContent.Prose("Why?"), new AcpContent.Resource(new Uri("file:///C:/repo/a.cs#L3:5"), "line 3")],
+            CancellationToken.None).WaitAsync(Deadline);
+
+        var prompt = _agent.Params("session/prompt")!["prompt"]!.AsArray();
+        Assert.Equal("text", prompt[0]!["type"]!.GetValue<string>());
+        Assert.Equal("resource", prompt[1]!["type"]!.GetValue<string>());
+        Assert.Equal("file:///C:/repo/a.cs#L3:5", prompt[1]!["resource"]!["uri"]!.GetValue<string>());
+        Assert.Equal("line 3", prompt[1]!["resource"]!["text"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task AnAgentThatSaysNothingAboutContext_IsNotSentResources()
+    {
+        Assert.Null(await _connection.OpenAsync("C:/repo", Server, "default", null, CancellationToken.None).WaitAsync(Deadline));
+
+        Assert.False(_connection.EmbedsContext);
+    }
+
+    [Fact]
     public async Task Open_WithoutTheAskingMode_Fails()
     {
         var failure = await _connection.OpenAsync("C:/repo", Server, "read-only", null, CancellationToken.None).WaitAsync(Deadline);
@@ -191,6 +217,9 @@ public sealed class AcpAgentConnectionTests : IAsyncDisposable
             return await reply.Task;
         }
 
+        /// <summary>The <c>agentCapabilities</c> initialize answers with.</summary>
+        public string Capabilities { get; set; } = "{}";
+
         public void Exit() => _toClient.Dispose();
 
         private async Task Loop()
@@ -226,7 +255,7 @@ public sealed class AcpAgentConnectionTests : IAsyncDisposable
         {
             JsonNode? result = method switch
             {
-                "initialize" => JsonNode.Parse("""{"protocolVersion":1,"agentCapabilities":{},"authMethods":[]}"""),
+                "initialize" => JsonNode.Parse($$"""{"protocolVersion":1,"agentCapabilities":{{Capabilities}},"authMethods":[]}"""),
                 "session/new" => JsonNode.Parse("""{"sessionId":"s1","modes":{"currentModeId":"auto","availableModes":[{"id":"default","name":"Manual"},{"id":"auto","name":"Auto"}]}}"""),
                 "session/set_mode" => new JsonObject(),
                 "session/prompt" => new JsonObject { ["stopReason"] = OnPrompt is { } run ? await run(this) : "end_turn" },

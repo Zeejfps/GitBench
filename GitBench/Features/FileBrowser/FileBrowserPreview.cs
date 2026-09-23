@@ -8,6 +8,7 @@ using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -94,6 +95,8 @@ internal sealed record FileBrowserTextBody : Widget
     {
         var browser = Model;
         var content = new DiffContentView(ctx);
+        var bus = ctx.Require<IMessageBus>();
+        content.SendToAgent = quote => Pairing.SendToAgentDialog.Show(bus, quote);
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);
         hScrollBar.IsRtl = false;

@@ -70,7 +70,7 @@ internal static class TerminalAgentCommand
 internal sealed class TerminalPairingDriver : IAgentDriver
 {
     private readonly AgentConversation _conversation;
-    private readonly string _opening;
+    private readonly AgentPrompt _opening;
     private readonly Repo _repo;
     private readonly string _label;
     private readonly string _template;
@@ -86,7 +86,7 @@ internal sealed class TerminalPairingDriver : IAgentDriver
     private int _told;
 
     private TerminalPairingDriver(
-        AgentConversation conversation, string opening, string label, string template, AgentEndpoints endpoints,
+        AgentConversation conversation, AgentPrompt opening, string label, string template, AgentEndpoints endpoints,
         ITerminalSessionStore terminals, CommandLaunchFactory launches, IContentNavigator navigator, IUiDispatcher dispatcher)
     {
         _conversation = conversation;
@@ -104,7 +104,7 @@ internal sealed class TerminalPairingDriver : IAgentDriver
     /// <summary>Starts the agent's terminal for a conversation, with <paramref name="opening"/> as
     /// its first prompt. UI thread.</summary>
     public static TerminalPairingDriver Start(
-        AgentConversation conversation, string opening, string label, string template, AgentEndpoints endpoints,
+        AgentConversation conversation, AgentPrompt opening, string label, string template, AgentEndpoints endpoints,
         ITerminalSessionStore terminals, CommandLaunchFactory launches, IContentNavigator navigator, IUiDispatcher dispatcher)
     {
         var driver = new TerminalPairingDriver(conversation, opening, label, template, endpoints, terminals, launches, navigator, dispatcher);
@@ -114,13 +114,13 @@ internal sealed class TerminalPairingDriver : IAgentDriver
 
     // The prompt goes in a file and the terminal is handed one line naming it: typed into a CLI
     // mid-conversation, a many-line prompt would be sent line by line.
-    public void Tell(string prompt)
+    public void Tell(AgentPrompt prompt)
     {
         if (_terminal is not { } terminal || _stop.IsCancellationRequested) return;
         var file = Path.Combine(_scratch, $"prompt-{++_told}.md");
         try
         {
-            File.WriteAllText(file, prompt);
+            File.WriteAllText(file, prompt.ToMarkdown(_repo.Path));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -157,7 +157,7 @@ internal sealed class TerminalPairingDriver : IAgentDriver
             return;
         }
 
-        var prompt = _opening;
+        var prompt = _opening.ToMarkdown(_repo.Path);
         var promptFile = Path.Combine(_scratch, "prompt.md");
         var configFile = Path.Combine(_scratch, "mcp.json");
         try

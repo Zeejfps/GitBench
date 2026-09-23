@@ -29,6 +29,10 @@ internal sealed record DiffView : Widget
     /// window's diff pane only — see <see cref="DiffContentView.AssistantActions"/>.</summary>
     public bool AssistantActions { get; init; }
 
+    /// <summary>Where a selection goes when the user sends it to the agent; see
+    /// <see cref="DiffContentView.SendToAgent"/>.</summary>
+    public Action<Features.Editor.CodeQuote>? SendToAgent { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<DiffViewModel>();
@@ -36,6 +40,7 @@ internal sealed record DiffView : Widget
         var content = new DiffContentView(ctx)
         {
             AssistantActions = AssistantActions,
+            SendToAgent = SendToAgent,
             OnStageHunk = vm.StageHunk,
             OnUnstageHunk = vm.UnstageHunk,
             OnDiscardHunk = vm.RequestDiscardHunk,

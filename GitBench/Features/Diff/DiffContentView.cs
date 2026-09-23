@@ -199,6 +199,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// for from a pop-out would arrive somewhere the reader is not looking.</summary>
     public bool AssistantActions { get; set; }
 
+    /// <summary>Where a selection goes when the user sends it to the agent; null where this view
+    /// offers no such thing.</summary>
+    public Action<Features.Editor.CodeQuote>? SendToAgent { get; set; }
+
     private FileLine? _pendingScrollLine;
     private (string Path, Features.Editor.TextPosition At)? _pendingCaret;
 
@@ -820,6 +824,17 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 range = new Features.Editor.TextRange(range.Start, Features.Editor.TextPosition.At(range.Start.Line.Value + SelectedTextLines, 0));
             return editor.Document.Slice(range);
         }
+    }
+
+    private RepoBarContextMenu.Item SendItem(Action send) =>
+        new(_loc.Strings.Value.AgentSendToAgent, send, LucideIcons.SquareTerminal);
+
+    // Read from the document rather than the rows, so folded lines come with it.
+    private Features.Editor.CodeQuote.InFile? SelectedQuote()
+    {
+        if (Document is not { } editor || !_selection.IsActive || DescribeState(_renderState).Path is not { } path) return null;
+        var range = editor.Document.Clamp(editor.SelectionOf(_selection).Range);
+        return Features.Editor.CodeQuote.Of(path, range, editor.Document.Slice);
     }
 
     private void ApplyPendingScrollLine()
@@ -1530,14 +1545,19 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     bool IDiffSelectionSurface.ShowSelectionMenu(PointF point)
     {
-        if (!AssistantActions) return false;
+        if (!AssistantActions)
+            return SendToAgent is { } sendFile && SelectedQuote() is { } selected
+                && RepoBarContextMenu.Show(_ctx, point, [SendItem(() => sendFile(selected))]) != null;
         if (DescribeState(_renderState).Path is not { } path) return false;
         if (DiffSelectionQuote.Build(
                 RowSource.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
             return false;
 
         var assistant = _ctx.Require<AssistantViewModel>();
-        return RepoBarContextMenu.Show(_ctx, point, DiffAssistantMenu.Items(_loc.Strings.Value, quote, assistant.AskAboutSelection)) != null;
+        var items = DiffAssistantMenu.Items(_loc.Strings.Value, quote, assistant.AskAboutSelection);
+        if (SendToAgent is { } sendDiff)
+            items = [.. items, RepoBarContextMenu.Separator, SendItem(() => sendDiff(new Features.Editor.CodeQuote.InDiff(quote)))];
+        return RepoBarContextMenu.Show(_ctx, point, items) != null;
     }
 
     private static DiffAnnotations? AnnotationsOf(DiffRenderState state) => state switch
