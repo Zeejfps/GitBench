@@ -288,6 +288,10 @@ public static class LspRequests
             more.WriteEndObject();
         }), LspCompletions.Reader);
 
+    /// <summary>One completion's documentation and detail, asked for by handing the item back whole.</summary>
+    public static LspRequest<CompletionItemDocs> ResolveCompletion(CompletionItemHandle item) =>
+        new(LspMethod.ResolveCompletion, writer => item.Item.WriteTo(writer), CompletionItemDocs.Reader);
+
     /// <summary>The overloads of the call around a position, and which parameter it is in.</summary>
     public static LspRequest<SignatureHelp> SignatureHelp(DocumentUri uri, LspPosition at, SignatureAsk ask) =>
         new(LspMethod.SignatureHelp, writer => WriteTextDocumentPosition(writer, uri, at, more =>

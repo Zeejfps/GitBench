@@ -14,7 +14,7 @@ internal static class AppVersion
     public static string Display { get; } = Resolve();
 
     private static string Resolve()
-    {
+    { 
         var info = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         if (!string.IsNullOrWhiteSpace(info))

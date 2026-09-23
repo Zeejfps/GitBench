@@ -223,6 +223,10 @@ public sealed class LanguageServersViewModelTests : IDisposable
 
         public bool CanComplete(string absolutePath) => false;
 
+        public Task<CompletionItemDocs?> ResolveCompletionAsync(
+            string absolutePath, CompletionItemHandle item, CancellationToken ct) =>
+            Task.FromResult<CompletionItemDocs?>(null);
+
         public bool CanHelpWithSignatures(string absolutePath) => false;
 
         public SignatureHelpSupport SignatureTriggers(string absolutePath) => SignatureHelpSupport.Unsupported;

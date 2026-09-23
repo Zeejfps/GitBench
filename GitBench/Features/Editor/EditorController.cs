@@ -54,6 +54,9 @@ internal interface IEditorSurface
     /// <summary>Shows the completion list under the word it completes, or hides it when
     /// <paramref name="list"/> is null.</summary>
     void PresentCompletions(CompletionList? list);
+
+    /// <summary>Shows documentation beside the completion list, as markdown, or hides it for null.</summary>
+    void PresentCompletionDocs(string? markdown);
 }
 
 /// <summary>The keyboard over an editable diff body: motion, typing, deletion, indentation, the
@@ -90,6 +93,10 @@ internal sealed class EditorController
     private readonly CompletionFeed? _feed;
     private readonly ParameterHints? _hints;
 
+    // The item the docs panel is about, and what has already been fetched for this list's items.
+    private CompletionItem? _docsFor;
+    private readonly Dictionary<CompletionItem, string?> _docs = new(ReferenceEqualityComparer.Instance);
+
     private DiffTextPos _caret;
     private bool _hasCaret;
 
@@ -125,7 +132,7 @@ internal sealed class EditorController
         _feed?.Cancel();
         if (!_completion.IsOpen) return;
         _completion.Close();
-        _surface.PresentCompletions(null);
+        PresentList();
     }
 
     /// <summary>Re-reads the open list against where the caret is now, after something other than a
@@ -482,7 +489,7 @@ internal sealed class EditorController
                 return false;
         }
 
-        _surface.PresentCompletions(_completion.Current);
+        PresentList();
         return true;
     }
 
@@ -494,7 +501,7 @@ internal sealed class EditorController
         var serves = _feed?.Serves(editor.Path) == true;
         if (!_completion.Invoke(editor.Document, current.Caret, () => Pool(editor, current.Caret), serves))
         {
-            _surface.PresentCompletions(null);
+            PresentList();
             return;
         }
 
@@ -506,7 +513,7 @@ internal sealed class EditorController
         }
 
         if (serves) AskServer(editor, CompletionAsk.Invoked);
-        _surface.PresentCompletions(_completion.Current);
+        PresentList();
     }
 
     /// <summary>After a character lands: narrows an open list, asking the server again where its
@@ -544,7 +551,7 @@ internal sealed class EditorController
             }
         }
 
-        _surface.PresentCompletions(_completion.Current);
+        PresentList();
     }
 
     /// <summary>Asks the server about the open list, and takes its answer into that list if it is
@@ -566,7 +573,58 @@ internal sealed class EditorController
             if (_completion.Current is { Server: ServerCompletionState.AnsweredIncomplete } narrowed
                 && narrowed.Prefix != prefix)
                 AskServer(editor, CompletionAsk.Narrowing);
-            _surface.PresentCompletions(_completion.Current);
+            PresentList();
+        });
+    }
+
+    /// <summary>Shows the list as it now stands, and the documentation of whichever item is selected
+    /// in it.</summary>
+    private void PresentList()
+    {
+        var list = _completion.Current;
+        _surface.PresentCompletions(list);
+        ShowDocsFor(list?.SelectedItem?.Item);
+    }
+
+    /// <summary>
+    /// Keeps the docs panel on the selected item. What the list carried shows at once; what has to be
+    /// fetched replaces the panel when it arrives, and until then the previous item's panel stays up
+    /// rather than blinking out between two rows.
+    /// </summary>
+    private void ShowDocsFor(CompletionItem? selected)
+    {
+        if (selected is null || _surface.Editor is not { } editor)
+        {
+            _docsFor = null;
+            _docs.Clear();
+            _surface.PresentCompletionDocs(null);
+            return;
+        }
+
+        if (ReferenceEquals(selected, _docsFor)) return;
+        _docsFor = selected;
+
+        if (_docs.TryGetValue(selected, out var known))
+        {
+            _surface.PresentCompletionDocs(known);
+            return;
+        }
+
+        var carried = CompletionFeed.DocsMarkdown(editor.Path, selected.Detail, selected.Documentation);
+        if (selected.Resolve is not { } handle || _feed is null)
+        {
+            _docs[selected] = carried;
+            _surface.PresentCompletionDocs(carried);
+            return;
+        }
+
+        if (carried is not null) _surface.PresentCompletionDocs(carried);
+        _feed.Resolve(editor.Path, handle, docs =>
+        {
+            var markdown = CompletionFeed.DocsMarkdown(
+                editor.Path, docs?.Detail ?? selected.Detail, docs?.Documentation ?? selected.Documentation);
+            _docs[selected] = markdown;
+            if (ReferenceEquals(_docsFor, selected) && _completion.IsOpen) _surface.PresentCompletionDocs(markdown);
         });
     }
 
@@ -592,7 +650,7 @@ internal sealed class EditorController
         var current = editor.SelectionOf(selection);
         if (current.IsEmpty) _completion.Follow(editor.Document, current.Caret);
         else _completion.Close();
-        _surface.PresentCompletions(_completion.Current);
+        PresentList();
     }
 
     private void AcceptCompletion(EditorBuffer editor, DiffSelectionModel selection, bool wholeWord)
@@ -600,7 +658,7 @@ internal sealed class EditorController
         var current = editor.SelectionOf(selection);
         var accepted = _completion.Accept(editor.Document, current.Caret, wholeWord);
         _feed?.Cancel();
-        _surface.PresentCompletions(null);
+        PresentList();
         if (accepted is not { } edit) return;
 
         Edit(editor, selection, editor.Session.Complete(current, edit.Range, edit.Text, edit.Additional));

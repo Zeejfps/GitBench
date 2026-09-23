@@ -919,6 +919,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         else _completionPopup.Hide();
     }
 
+    void Features.Editor.IEditorSurface.PresentCompletionDocs(string? markdown) =>
+        _completionPopup?.ShowDocs(markdown);
+
     /// <summary>Where a caret standing at the start of the word being completed would be drawn.
     /// Identifiers are one cell a character, so this is the caret's rect stepped back over what
     /// has been typed of it.</summary>

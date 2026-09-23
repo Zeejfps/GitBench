@@ -21,13 +21,18 @@ internal sealed record ServerCompletions(IReadOnlyList<CompletionItem>? Items, b
 /// </summary>
 internal sealed class CompletionFeed : IDisposable
 {
+    // Long enough that arrowing down a list asks about the row it stops on, not every row it passes.
+    private static readonly TimeSpan ResolveDwell = TimeSpan.FromMilliseconds(80);
+
     private readonly ICompletionSource _source;
     private readonly ProbeSlot _slot;
+    private readonly ProbeSlot _resolving;
 
     public CompletionFeed(ICompletionSource source, IUiDispatcher dispatcher)
     {
         _source = source;
         _slot = new ProbeSlot(dispatcher);
+        _resolving = new ProbeSlot(dispatcher);
     }
 
     public bool Serves(string path) => _source.CanComplete(path);
@@ -42,9 +47,38 @@ internal sealed class CompletionFeed : IDisposable
                 await _source.CompletionsAsync(path, caret.Line, caret.Column, ask, cancel).ConfigureAwait(false)),
             then);
 
-    public void Cancel() => _slot.Cancel();
+    /// <summary>Asks for one item's documentation and detail, replacing any question still out.</summary>
+    public void Resolve(string path, CompletionItemHandle item, Action<CompletionItemDocs?> then) =>
+        _resolving.Ask(ResolveDwell, cancel => _source.ResolveCompletionAsync(path, item, cancel), then);
 
-    public void Dispose() => _slot.Dispose();
+    public void Cancel()
+    {
+        _slot.Cancel();
+        _resolving.Cancel();
+    }
+
+    public void Dispose()
+    {
+        _slot.Dispose();
+        _resolving.Dispose();
+    }
+
+    /// <summary>
+    /// What the docs panel shows for an item: its signature as a code block in the file's own
+    /// language, then its documentation. Null when there is neither.
+    /// </summary>
+    public static string? DocsMarkdown(string path, string? detail, string? documentation)
+    {
+        var hasDetail = !string.IsNullOrWhiteSpace(detail);
+        var hasDocs = !string.IsNullOrWhiteSpace(documentation);
+        if (!hasDetail && !hasDocs) return null;
+
+        var fence = FileLanguage.Detect(path) is FileLanguage.TreeSitter(var language) ? language.GrammarName() : "";
+        var parts = new List<string>(2);
+        if (hasDetail) parts.Add($"```{fence}\n{detail!.Trim()}\n```");
+        if (hasDocs) parts.Add(documentation!.Trim());
+        return string.Join("\n\n", parts);
+    }
 
     /// <summary>Off the UI thread: a server can offer thousands of items.</summary>
     internal static ServerCompletions Translate(CompletionReply reply) => reply switch
@@ -61,6 +95,8 @@ internal sealed class CompletionFeed : IDisposable
             Detail = item.Detail,
             SortText = item.SortText,
             FilterText = item.FilterText,
+            Documentation = item.Documentation,
+            Resolve = item.Handle,
             Insert = new CompletionInsert.ServerEdit(
                 item.InsertText,
                 item.InsertRange?.Start is { } start ? PositionOf(start) : null,

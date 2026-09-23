@@ -80,6 +80,10 @@ internal interface ICompletionSource
 
     Task<CompletionReply> CompletionsAsync(
         string absolutePath, FileLine line, RawColumn column, CompletionAsk ask, CancellationToken ct);
+
+    /// <summary>One completion's documentation and detail, or null when there is nobody to ask or
+    /// its server does not resolve.</summary>
+    Task<CompletionItemDocs?> ResolveCompletionAsync(string absolutePath, CompletionItemHandle item, CancellationToken ct);
 }
 
 internal interface ISignatureHelpSource

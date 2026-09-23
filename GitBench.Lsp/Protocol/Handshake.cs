@@ -206,6 +206,16 @@ public static class LspHandshake
         writer.WriteStartObject("completionItem");
         writer.WriteBoolean("snippetSupport", false);
         writer.WriteBoolean("insertReplaceSupport", true);
+        writer.WriteStartArray("documentationFormat");
+        writer.WriteStringValue("markdown");
+        writer.WriteStringValue("plaintext");
+        writer.WriteEndArray();
+        writer.WriteStartObject("resolveSupport");
+        writer.WriteStartArray("properties");
+        writer.WriteStringValue("documentation");
+        writer.WriteStringValue("detail");
+        writer.WriteEndArray();
+        writer.WriteEndObject();
         writer.WriteEndObject();
         writer.WriteStartObject("completionList");
         writer.WriteStartArray("itemDefaults");

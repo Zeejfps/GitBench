@@ -141,7 +141,19 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
 
     /// <summary>The characters the server wants to be asked on, or none before it has said.</summary>
     public IReadOnlyList<char> CompletionTriggers =>
-        _server.Capabilities?.Completion is CompletionSupport.Offered(var triggers) ? triggers : [];
+        _server.Capabilities?.Completion is CompletionSupport.Offered(var triggers, _) ? triggers : [];
+
+    public bool ResolvesCompletions => _server.Capabilities?.Completion is CompletionSupport.Offered(_, true);
+
+    public async Task<CompletionItemDocs?> ResolveCompletionAsync(
+        string absolutePath, CompletionItemHandle item, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return null;
+        if (!ResolvesCompletions) return null;
+        if (!await EnsurePreviewedAsync(absolutePath, cancel).ConfigureAwait(false)) return null;
+
+        return await _session.ResolveCompletionAsync(item).ConfigureAwait(false);
+    }
 
     public async Task<SignatureReply> SignatureHelpAsync(
         string absolutePath, FileLine line, RawColumn column, SignatureAsk ask, CancellationToken cancel)

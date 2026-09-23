@@ -312,6 +312,18 @@ public sealed class EditorCompletionTests
     }
 
     [Fact]
+    public void TheDocsPanelLeadsWithTheSignatureInTheFilesLanguage()
+    {
+        var markdown = CompletionFeed.DocsMarkdown("/repo/Program.cs", "void Console.WriteLine(string value)", "Writes a line.");
+
+        Assert.Equal("```c_sharp\nvoid Console.WriteLine(string value)\n```\n\nWrites a line.", markdown);
+    }
+
+    [Fact]
+    public void AnItemWithNothingToSayHasNoDocs() =>
+        Assert.Null(CompletionFeed.DocsMarkdown("/repo/Program.cs", " ", null));
+
+    [Fact]
     public void AnAcceptedCompletionIsOneUndoStepWithTheCaretAfterIt()
     {
         var session = EditorSession.Of("int co");

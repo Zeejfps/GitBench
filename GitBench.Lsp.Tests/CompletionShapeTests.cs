@@ -121,6 +121,45 @@ public sealed class CompletionShapeTests
         Assert.IsType<CompletionSupport.None>(Capabilities("""{"capabilities":{}}""").Completion);
     }
 
+    // Servers keep what they need to find the item again in fields this client never reads; the
+    // protocol wants the item back whole, so it goes back exactly as it came.
+    [Fact]
+    public void ResolvingHandsTheItemBackWhole()
+    {
+        var item = Read("""[{"label":"WriteLine","data":{"symbolId":42,"nested":[1,2]}}]""").Items[0];
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) LspRequests.ResolveCompletion(item.Handle).WriteParams(writer);
+        using var written = JsonDocument.Parse(stream.ToArray());
+
+        Assert.Equal("WriteLine", written.RootElement.GetProperty("label").GetString());
+        Assert.Equal(42, written.RootElement.GetProperty("data").GetProperty("symbolId").GetInt32());
+    }
+
+    [Fact]
+    public void ResolvedDocsAreReadFromEitherShape()
+    {
+        using var marked = JsonDocument.Parse(
+            """{"label":"a","detail":"void a()","documentation":{"kind":"markdown","value":"Does **a**."}}""");
+        using var plain = JsonDocument.Parse("""{"label":"b","documentation":"Does b."}""");
+
+        var a = CompletionItemDocs.Reader.Read(marked.RootElement);
+        var b = CompletionItemDocs.Reader.Read(plain.RootElement);
+
+        Assert.Equal(("void a()", "Does **a**."), (a.Detail, a.Documentation));
+        Assert.Equal((null, "Does b."), (b.Detail, b.Documentation));
+    }
+
+    [Fact]
+    public void TheCapabilitySaysWhetherItemsResolve()
+    {
+        var resolving = Capabilities("""{"capabilities":{"completionProvider":{"resolveProvider":true}}}""").Completion;
+        var not = Capabilities("""{"capabilities":{"completionProvider":{}}}""").Completion;
+
+        Assert.True(Assert.IsType<CompletionSupport.Offered>(resolving).Resolves);
+        Assert.False(Assert.IsType<CompletionSupport.Offered>(not).Resolves);
+    }
+
     [Fact]
     public void TheRequestSaysWhichCharacterTriggeredIt()
     {

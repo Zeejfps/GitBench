@@ -191,6 +191,13 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         return await connection.CompletionAsync(absolutePath, line, column, ask, cancel).ConfigureAwait(false);
     }
 
+    public async Task<CompletionItemDocs?> ResolveCompletionAsync(
+        string absolutePath, CompletionItemHandle item, CancellationToken cancel)
+    {
+        if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection) return null;
+        return await connection.ResolveCompletionAsync(absolutePath, item, cancel).ConfigureAwait(false);
+    }
+
     public bool CanHelpWithSignatures(string absolutePath)
     {
         if (_disposed) return false;

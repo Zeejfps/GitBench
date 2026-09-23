@@ -1,6 +1,8 @@
 using GitBench.Controls;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.FileBrowser;
+using GitBench.Features.LanguageServers;
+using GitBench.Features.Markdown;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Fonts;
@@ -12,12 +14,14 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Features.Editor;
 
 /// <summary>
-/// Shows an open completion list under the identifier it completes. The popup never takes the
-/// keyboard or the pointer: the editor keeps typing, and steers the list from its own keys.
+/// Shows an open completion list under the identifier it completes, and the selected item's
+/// documentation beside it. Neither takes the keyboard or the pointer: the editor keeps typing, and
+/// steers the list from its own keys.
 /// </summary>
 internal sealed class CompletionPopup : IDisposable
 {
     private const int Gap = 2;
+    private const int DocsGap = 4;
 
     private readonly IPopupWindowFactory _factory;
     private readonly IWindowCoordinates _coordinates;
@@ -25,6 +29,10 @@ internal sealed class CompletionPopup : IDisposable
     private IPopupWindow? _popup;
     private CompletionListView? _view;
     private ScreenRect _anchor;
+    private ScreenSize _listSize;
+
+    private IPopupWindow? _docs;
+    private string? _docsMarkdown;
 
     public CompletionPopup(IPopupWindowFactory factory, IWindowCoordinates coordinates)
     {
@@ -56,6 +64,7 @@ internal sealed class CompletionPopup : IDisposable
             },
             Place = size =>
             {
+                _listSize = size;
                 var below = new ScreenRect(anchor.X, anchor.Y + anchor.Height + Gap, size.Width, size.Height);
                 var above = new ScreenRect(anchor.X, anchor.Y - Gap - size.Height, size.Width, size.Height);
                 return (below, above);
@@ -63,10 +72,29 @@ internal sealed class CompletionPopup : IDisposable
             MousePassThrough = true,
         });
         if (previous is not null) _factory.Release(previous);
+
+        // The list moved or changed size, and the panel beside it has to follow.
+        if (_docsMarkdown is { } markdown) PlaceDocs(markdown);
+    }
+
+    /// <summary>Shows documentation beside the list, or hides it for null. Nothing shows without a list.</summary>
+    public void ShowDocs(string? markdown)
+    {
+        if (markdown == _docsMarkdown && (_docs is not null || markdown is null)) return;
+        _docsMarkdown = markdown;
+        if (markdown is null || _popup is null)
+        {
+            HideDocs();
+            return;
+        }
+
+        PlaceDocs(markdown);
     }
 
     public void Hide()
     {
+        HideDocs();
+        _docsMarkdown = null;
         if (_popup is null) return;
         _factory.Release(_popup);
         _popup = null;
@@ -74,6 +102,36 @@ internal sealed class CompletionPopup : IDisposable
     }
 
     public void Dispose() => Hide();
+
+    // Beside the list where the screen has room for it, on its other side where it does not.
+    private void PlaceDocs(string markdown)
+    {
+        if (_popup is null) return;
+        _popup.Window.GetPosition(out var x, out var y);
+        var list = new ScreenRect(x, y, _listSize.Width, _listSize.Height);
+        var rendered = MarkdownFile.Render(markdown);
+
+        var previous = _docs;
+        _docs = _factory.Acquire(new PopupRequest
+        {
+            BuildRoot = ctx => Direction.Wrap(new HoverCard { Render = rendered }).BuildView(ctx),
+            Place = size =>
+            {
+                var right = new ScreenRect(list.X + list.Width + DocsGap, list.Y, size.Width, size.Height);
+                var left = new ScreenRect(list.X - DocsGap - size.Width, list.Y, size.Width, size.Height);
+                return (right, left);
+            },
+            MousePassThrough = true,
+        });
+        if (previous is not null) _factory.Release(previous);
+    }
+
+    private void HideDocs()
+    {
+        if (_docs is null) return;
+        _factory.Release(_docs);
+        _docs = null;
+    }
 }
 
 /// <summary>

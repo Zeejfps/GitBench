@@ -43,7 +43,9 @@ public abstract record CompletionSupport
 
     public sealed record None : CompletionSupport;
 
-    public sealed record Offered(IReadOnlyList<char> TriggerCharacters) : CompletionSupport;
+    /// <param name="Resolves">Whether an item's documentation and detail can be asked for one at a
+    /// time, which servers that keep their lists small rely on.</param>
+    public sealed record Offered(IReadOnlyList<char> TriggerCharacters, bool Resolves) : CompletionSupport;
 
     internal static CompletionSupport Read(JsonElement capabilities)
     {
@@ -61,7 +63,9 @@ public abstract record CompletionSupport
                     triggers.Add(one[0]);
         }
 
-        return new Offered(triggers);
+        var resolves = provider.ValueKind == JsonValueKind.Object
+            && provider.Optional("resolveProvider") is { ValueKind: JsonValueKind.True };
+        return new Offered(triggers, resolves);
     }
 }
 
@@ -83,6 +87,43 @@ public abstract record CompletionAsk
     public sealed record ForIncomplete : CompletionAsk;
 }
 
+/// <summary>
+/// A completion item exactly as the server sent it, kept to hand back when its documentation is
+/// asked for. Opaque on purpose: servers stash whatever they need to find the item again in fields
+/// this client does not read, and the protocol requires the item back whole.
+/// </summary>
+public sealed record CompletionItemHandle
+{
+    internal CompletionItemHandle(JsonElement item) => Item = item;
+
+    internal JsonElement Item { get; }
+}
+
+/// <summary>What resolving a completion adds: its signature or type, and its documentation as
+/// markdown. Either may be missing.</summary>
+public sealed record CompletionItemDocs(string? Detail, string? Documentation)
+{
+    public static readonly ILspResultReader<CompletionItemDocs> Reader = new DocsReader();
+
+    internal static string? DocumentationOf(JsonElement item) => item.Optional("documentation") switch
+    {
+        { ValueKind: JsonValueKind.String } text => text.GetString(),
+        { ValueKind: JsonValueKind.Object } markup when markup.Optional("value") is { ValueKind: JsonValueKind.String } value
+            => value.GetString(),
+        _ => null,
+    };
+
+    private sealed class DocsReader : ILspResultReader<CompletionItemDocs>
+    {
+        public CompletionItemDocs Read(JsonElement result)
+        {
+            if (result.ValueKind != JsonValueKind.Object) return new CompletionItemDocs(null, null);
+            var detail = result.Optional("detail") is { ValueKind: JsonValueKind.String } text ? text.GetString() : null;
+            return new CompletionItemDocs(detail, DocumentationOf(result));
+        }
+    }
+}
+
 /// <summary>An edit the server attached to a completion, in the text it was asked about.</summary>
 public sealed record LspTextEdit(LspRange Range, string NewText);
 
@@ -95,6 +136,8 @@ public sealed record LspTextEdit(LspRange Range, string NewText);
 /// <param name="ReplaceRange">Where it goes when it replaces the whole word under the caret, where the
 /// server said.</param>
 /// <param name="AdditionalEdits">Edits elsewhere that come with it, such as the import a name needs.</param>
+/// <param name="Documentation">Its documentation as markdown, where the list already carried it.</param>
+/// <param name="Handle">The item as sent, for asking about it again.</param>
 public sealed record LspCompletionItem(
     string Label,
     LspCompletionKind? Kind,
@@ -104,7 +147,9 @@ public sealed record LspCompletionItem(
     string InsertText,
     LspRange? InsertRange,
     LspRange? ReplaceRange,
-    IReadOnlyList<LspTextEdit> AdditionalEdits);
+    IReadOnlyList<LspTextEdit> AdditionalEdits,
+    string? Documentation,
+    CompletionItemHandle Handle);
 
 /// <summary>A server's completions for one position. <see cref="IsIncomplete"/> says typing more
 /// may bring others, so the list has to be asked for again rather than only narrowed.</summary>
@@ -174,7 +219,9 @@ public sealed record LspCompletions(bool IsIncomplete, IReadOnlyList<LspCompleti
                 snippet ? Snippets.Plain(text) : text,
                 insert,
                 replace,
-                AdditionalEditsOf(item));
+                AdditionalEditsOf(item),
+                CompletionItemDocs.DocumentationOf(item),
+                new CompletionItemHandle(item.Clone()));
         }
 
         // A plain edit has a range; an insert-or-replace edit has one of each; an editRange default

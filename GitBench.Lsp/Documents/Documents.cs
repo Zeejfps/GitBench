@@ -353,6 +353,15 @@ public sealed class PreviewSession : IDisposable
             : CompletionReply.Unavailable.Instance;
     }
 
+    /// <summary>A completion's documentation and detail, or null when nobody could be asked.</summary>
+    public async Task<CompletionItemDocs?> ResolveCompletionAsync(CompletionItemHandle item)
+    {
+        if (Asking() is not (_, _, var cancel)) return null;
+
+        var response = await AskAsync(LspRequests.ResolveCompletion(item), cancel).ConfigureAwait(false);
+        return response is LspResponse<CompletionItemDocs>.Ok(var docs) ? docs : null;
+    }
+
     /// <summary>The call around a position in the open file, for the text as it now stands.</summary>
     public async Task<SignatureReply> SignatureHelpAsync(LspPosition position, SignatureAsk ask)
     {

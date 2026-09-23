@@ -1,5 +1,6 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
+using GitBench.Lsp;
 
 namespace GitBench.Features.Editor;
 
@@ -66,6 +67,13 @@ internal sealed record CompletionItem(string Label, CompletionKind Kind)
 
     /// <summary>What a prefix is matched against, where it is not the label.</summary>
     public string? FilterText { get; init; }
+
+    /// <summary>Its documentation as markdown, where the list already carried it.</summary>
+    public string? Documentation { get; init; }
+
+    /// <summary>How to ask its server for the documentation the list left out, or null for an item
+    /// no server offered.</summary>
+    public CompletionItemHandle? Resolve { get; init; }
 
     public CompletionInsert Insert { get; init; } = CompletionInsert.Label;
 }
