@@ -17,7 +17,10 @@ public sealed class EditorGhostTakeTests
 {
     private const string Path = "file.cs";
 
-    private static (GuiTestHarness Harness, DiffContentView View, EditorBuffer Buffer) Show(params string[] lines)
+    private static (GuiTestHarness Harness, DiffContentView View, EditorBuffer Buffer) Show(params string[] lines) =>
+        Show(null, lines);
+
+    private static (GuiTestHarness Harness, DiffContentView View, EditorBuffer Buffer) Show(IUiDispatcher? dispatcher, string[] lines)
     {
         DiffContentView view = null!;
         var harness = GuiTestHarness.Create(
@@ -33,6 +36,7 @@ public sealed class EditorGhostTakeTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
                 ctx.AddService<IClipboard>(new FakeClipboard());
+                if (dispatcher is not null) ctx.AddService(dispatcher);
             });
         var buffer = EditorBuffer.TryOpen(
             Path,
@@ -118,6 +122,35 @@ public sealed class EditorGhostTakeTests
         Assert.True(view.TakeGhost(Path));
 
         Assert.Equal(["a", "b", "X", "Y", "c"], Lines(buffer));
+    }
+
+    [Fact]
+    public void AnInsertion_HangsFromItsLineWhole_WhenLinesBelowReadLikeIt()
+    {
+        var (_, view, buffer) = Show("function A() {", "  return (", "    <Text>", "    </Text>", "  );", "}", "function B() {", "  return (", "    <Text>", "    </Text>", "  );", "}");
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Insert(new FileLine(6)),
+            ["function C() {", "  return (", "    <Text>", "    </Text>", "  );", "}"])));
+
+        Assert.Equal(new FileLine(6), buffer.Rows.Ghost!.After);
+        Assert.Equal(6, buffer.Rows.Ghost.Lines.Count);
+
+        Assert.True(view.TakeGhost(Path));
+        Assert.Equal("function C() {", buffer.Document.Line(new FileLine(7)));
+        Assert.Equal(18, buffer.Document.LineCount);
+    }
+
+    [Fact]
+    public void AnInsertion_Shrinks_AsTheReaderTypesIt()
+    {
+        var dispatcher = new QueuedDispatcher();
+        var (_, view, buffer) = Show(dispatcher, ["a", "b", "Y", "c"]);
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Insert(new FileLine(2)), ["X", "Y"])));
+
+        buffer.Session.Paste(SelectionRange.At(TextPosition.At(2, 1)), "\nX");
+        dispatcher.Drain();
+
+        Assert.Equal(new FileLine(3), buffer.Rows.Ghost!.After);
+        Assert.Equal(["Y"], buffer.Rows.Ghost.Lines);
     }
 
     [Fact]

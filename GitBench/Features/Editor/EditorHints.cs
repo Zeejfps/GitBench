@@ -32,25 +32,14 @@ internal abstract record GhostPlace
 /// <summary>Which lines of a draft the reader has not typed yet, and where the rest now hangs.</summary>
 internal static class GhostMatch
 {
-    /// <summary>How far below the anchor typed lines are looked for, beyond the draft's own length.</summary>
-    private const int Slack = 8;
-
+    /// <param name="below">The line that followed the anchor when the draft was laid, wherever edits
+    /// have moved it since: only the lines between the two are the reader's.</param>
     /// <param name="line">Reads a file line, 1-based.</param>
-    public static GhostLines Remaining(IReadOnlyList<string> draft, FileLine anchor, int lineCount, Func<int, string> line)
+    public static GhostLines Remaining(IReadOnlyList<string> draft, FileLine anchor, FileLine below, int lineCount, Func<int, string> line)
     {
-        // Typed means inside the run the reader has written: from the anchor down to the last line
-        // with real content that reads as a line of the draft. A lone brace below it is the file's
-        // own, not theirs.
-        var end = Math.Min(lineCount, anchor.Value + draft.Count * 2 + Slack);
-        var lastTyped = anchor.Value;
-        for (var i = end; i > anchor.Value; i--)
-        {
-            var text = line(i).Trim();
-            if (!text.Any(char.IsLetterOrDigit) || !Contains(draft, text)) continue;
-            lastTyped = i;
-            break;
-        }
-
+        // Lines already in the file are never taken for typed ones, however much they read like
+        // the draft: a closing tag or a `return (` further down is the file's own.
+        var lastTyped = Math.Clamp(below.Value - 1, anchor.Value, Math.Max(anchor.Value, lineCount));
         var typed = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = anchor.Value + 1; i <= lastTyped; i++)
         {
@@ -88,11 +77,15 @@ internal static class GhostMatch
         return new FileLine(Math.Max(first, anchor.Value + added - removed));
     }
 
-    private static bool Contains(IReadOnlyList<string> lines, string trimmed)
+    /// <summary>Where the line below a draft stands after an edit, given the edit that would undo
+    /// it. As <see cref="Shift"/>, except that text put in at the very start of that line goes above
+    /// it: it is typed, not the file's.</summary>
+    public static FileLine ShiftBelow(FileLine below, TextEdit undo)
     {
-        foreach (var candidate in lines)
-            if (candidate.Trim() == trimmed)
-                return true;
-        return false;
+        var start = undo.Range.Start;
+        if (start.Line.Value > below.Value || (start.Line.Value == below.Value && start.Column.Value > 0)) return below;
+        var added = undo.Range.End.Line.Value - start.Line.Value;
+        var removed = undo.Replacement.Count(c => c == '\n');
+        return new FileLine(Math.Max(start.Line.Value, below.Value + added - removed));
     }
 }

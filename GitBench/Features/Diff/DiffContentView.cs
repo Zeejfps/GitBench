@@ -211,6 +211,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private Features.Editor.EditorHints? _hints;
     private FileLine? _ghostAnchor;
     private FileLine? _ghostFrom;
+    private FileLine? _ghostBelow;
     private (string Path, Action<bool> Done)? _pendingTake;
     private ReplacedLine?[] _replaced = [];
     private Features.Editor.EditorBuffer? _ghostBuffer;
@@ -620,11 +621,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _hints = hints;
         _surface.SuggestionActions = hints?.Actions;
         _surface.SuggestionHead = hints is null ? null : SuggestionHeadRow;
-        (_ghostFrom, _ghostAnchor) = hints?.Ghost.Place switch
+        (_ghostFrom, _ghostAnchor, _ghostBelow) = hints?.Ghost.Place switch
         {
-            null => (null, null),
-            Features.Editor.GhostPlace.Insert insert => ((FileLine?)null, (FileLine?)insert.After),
-            Features.Editor.GhostPlace.Replace replace => (replace.From, replace.To),
+            null => (null, null, null),
+            Features.Editor.GhostPlace.Insert insert => ((FileLine?)null, (FileLine?)insert.After, (FileLine?)new FileLine(insert.After.Value + 1)),
+            Features.Editor.GhostPlace.Replace replace => (replace.From, replace.To, null),
             _ => throw new InvalidOperationException("Unknown ghost place."),
         };
         ApplyGhost();
@@ -784,7 +785,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var document = target.Document;
         target.Rows.SetGhost(_ghostFrom is { } from
             ? Replacement(document, from, anchor, ghost.Lines)
-            : Features.Editor.GhostMatch.Remaining(ghost.Lines, anchor, document.LineCount, n => document.Line(new FileLine(n))));
+            : Features.Editor.GhostMatch.Remaining(
+                ghost.Lines, anchor, _ghostBelow ?? new FileLine(anchor.Value + 1), document.LineCount, n => document.Line(new FileLine(n))));
         ReconcileRows();
         if (_pendingTake is not null) _dispatcher?.Post(RunPendingTake);
     }
@@ -794,6 +796,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (_ghostAnchor is { } anchor) _ghostAnchor = Features.Editor.GhostMatch.Shift(anchor, edit.Inverse);
         if (_ghostFrom is { } from) _ghostFrom = Features.Editor.GhostMatch.Shift(from, edit.Inverse);
+        if (_ghostBelow is { } below) _ghostBelow = Features.Editor.GhostMatch.ShiftBelow(below, edit.Inverse);
         if (_ghostRefreshPosted || _dispatcher is null) return;
         _ghostRefreshPosted = true;
         _dispatcher.Post(() =>
