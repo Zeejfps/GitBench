@@ -210,6 +210,35 @@ public sealed class EditorTypingAidsTests
         Assert.Equal("fn f(x: &'", session.Document.Text);
     }
 
+    [Theory]
+    [InlineData("Max(", 0)]
+    [InlineData("Max(1, ", 1)]
+    [InlineData("Max(Min(1, 2), ", 1)]
+    [InlineData("Max(\"a, b\", ", 1)]
+    [InlineData("Max(new[] { 1, 2 }, x, ", 2)]
+    public void TheArgumentIsTheCommasAtTheCallsOwnDepth(string before, int expected)
+    {
+        var rules = TypingRules.For("csharp");
+
+        var index = LineContext.ArgumentIndex(_ => before, 1, before.Length, rules, "//");
+
+        Assert.Equal(expected, index);
+    }
+
+    [Fact]
+    public void AnArgumentIsCountedAcrossLines()
+    {
+        string[] lines = ["Call(first,", "     second, "];
+
+        var index = LineContext.ArgumentIndex(n => lines[n - 1], 2, lines[1].Length, TypingRules.For("csharp"), "//");
+
+        Assert.Equal(2, index);
+    }
+
+    [Fact]
+    public void InsideABraceRatherThanACallThereIsNoArgument() =>
+        Assert.Null(LineContext.ArgumentIndex(_ => "var x = new[] { 1, ", 1, 19, TypingRules.For("csharp"), "//"));
+
     [Fact]
     public void OptionsForASourceFilePickTheLanguagesRules()
     {

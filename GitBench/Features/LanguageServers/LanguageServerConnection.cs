@@ -143,6 +143,24 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
     public IReadOnlyList<char> CompletionTriggers =>
         _server.Capabilities?.Completion is CompletionSupport.Offered(var triggers) ? triggers : [];
 
+    public async Task<SignatureReply> SignatureHelpAsync(
+        string absolutePath, FileLine line, RawColumn column, SignatureAsk ask, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return SignatureReply.Unavailable.Instance;
+        if (!AnswersSignatureHelp) return SignatureReply.Unavailable.Instance;
+        if (!await EnsurePreviewedAsync(absolutePath, cancel).ConfigureAwait(false))
+            return SignatureReply.Unavailable.Instance;
+
+        return await _session.SignatureHelpAsync(At(line, column), ask).ConfigureAwait(false);
+    }
+
+    public bool AnswersSignatureHelp => _server.Capabilities is not { SignatureHelp: SignatureHelpSupport.None };
+
+    /// <summary>What the server said opens parameter info and keeps it current, or nothing before
+    /// it has said.</summary>
+    public SignatureHelpSupport SignatureHelpSupport =>
+        _server.Capabilities?.SignatureHelp ?? SignatureHelpSupport.Unsupported;
+
     public async Task PrepareAsync(string absolutePath, CancellationToken cancel)
     {
         if (await Handshaked().ConfigureAwait(false) is not null) return;

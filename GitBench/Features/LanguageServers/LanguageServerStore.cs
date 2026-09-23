@@ -22,7 +22,7 @@ internal enum StarterConfigOutcome
 }
 
 internal interface ILanguageServerStore
-    : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource
+    : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource, ISignatureHelpSource
 {
     IReadable<LanguageServerSnapshot> Active { get; }
 
@@ -189,6 +189,35 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
             return CompletionReply.Unavailable.Instance;
         return await connection.CompletionAsync(absolutePath, line, column, ask, cancel).ConfigureAwait(false);
+    }
+
+    public bool CanHelpWithSignatures(string absolutePath)
+    {
+        if (_disposed) return false;
+        if (_config.ServerFor(absolutePath) is not { } entry) return false;
+        if (_registry.Active.Value is not { } repo) return false;
+
+        return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language)
+            is not { } connection || connection.AnswersSignatureHelp;
+    }
+
+    public SignatureHelpSupport SignatureTriggers(string absolutePath)
+    {
+        if (_disposed) return SignatureHelpSupport.Unsupported;
+        if (_config.ServerFor(absolutePath) is not { } entry) return SignatureHelpSupport.Unsupported;
+        if (_registry.Active.Value is not { } repo) return SignatureHelpSupport.Unsupported;
+
+        return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language) is { } connection
+            ? connection.SignatureHelpSupport
+            : SignatureHelpSupport.Unsupported;
+    }
+
+    public async Task<SignatureReply> SignatureHelpAsync(
+        string absolutePath, FileLine line, RawColumn column, SignatureAsk ask, CancellationToken cancel)
+    {
+        if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
+            return SignatureReply.Unavailable.Instance;
+        return await connection.SignatureHelpAsync(absolutePath, line, column, ask, cancel).ConfigureAwait(false);
     }
 
     public bool CanClassify(string absolutePath)

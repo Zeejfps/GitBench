@@ -235,6 +235,7 @@
   "shortcuts.command.save_file": "حفظ الملف",
   "shortcuts.command.toggle_line_comment": "تبديل تعليق السطر",
   "shortcuts.command.show_completions": "إظهار الإكمالات",
+  "shortcuts.command.parameter_info": "إظهار معلومات المعاملات",
   "shortcuts.command.editor_zoom_in": "تكبير خط المحرر",
   "shortcuts.command.editor_zoom_out": "تصغير خط المحرر",
   "shortcuts.command.terminal_copy": "نسخ",

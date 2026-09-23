@@ -62,6 +62,7 @@ public enum KeyCommand
     SaveFile,
     ToggleLineComment,
     ShowCompletions,
+    ParameterInfo,
 
     // Any file or diff body, editable or not: the code's own size, apart from the UI.
     EditorZoomIn,

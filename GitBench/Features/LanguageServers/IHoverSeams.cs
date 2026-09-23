@@ -82,6 +82,19 @@ internal interface ICompletionSource
         string absolutePath, FileLine line, RawColumn column, CompletionAsk ask, CancellationToken ct);
 }
 
+internal interface ISignatureHelpSource
+{
+    /// <summary>Whether a server may answer for this file. Optimistic while it has yet to launch.</summary>
+    bool CanHelpWithSignatures(string absolutePath);
+
+    /// <summary>The characters that open parameter info and keep it current, as the running server
+    /// said; none where no server has.</summary>
+    SignatureHelpSupport SignatureTriggers(string absolutePath);
+
+    Task<SignatureReply> SignatureHelpAsync(
+        string absolutePath, FileLine line, RawColumn column, SignatureAsk ask, CancellationToken ct);
+}
+
 internal interface ISemanticTokenSource
 {
     /// <summary>Whether asking is worth it. Optimistic while the server has yet to launch, like

@@ -182,6 +182,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private RectF? _completionAnchor;
     private bool _completionRefreshPosted;
 
+    // Parameter info: the answer on screen, the caret row and column it was anchored at — held while
+    // the caret stays on that row, so typing arguments does not drag it along — and where it was drawn.
+    private readonly Features.Editor.SignaturePopup? _signaturePopup;
+    private Lsp.SignatureHelp? _signatureHelp;
+    private Features.Editor.TextPosition? _signatureOrigin;
+    private RectF? _signatureAnchor;
+    private bool _signatureRefreshPosted;
+
     /// <summary>Whether a selection here offers the assistant's quick actions. Only the main
     /// window's diff sets it: the assistant overlay is a child of that window, so an answer asked
     /// for from a pop-out would arrive somewhere the reader is not looking.</summary>
@@ -228,12 +236,18 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _clipboard = ctx.Require<IClipboard>();
         _saves = Features.Editor.DocumentSaves.From(ctx);
         _dispatcher = ctx.Get<IUiDispatcher>();
-        var completionFeed = ctx.Get<Features.LanguageServers.ILanguageServerStore>() is { } servers && _dispatcher is not null
-            ? new Features.Editor.CompletionFeed(servers, _dispatcher)
-            : null;
-        _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap(), completionFeed);
+        var servers = _dispatcher is null ? null : ctx.Get<Features.LanguageServers.ILanguageServerStore>();
+        var completionFeed = servers is null ? null : new Features.Editor.CompletionFeed(servers, _dispatcher!);
+        var parameterHints = servers is null
+            ? null
+            : new Features.Editor.ParameterHints(servers, _dispatcher!, PresentSignatures, ArgumentAt);
+        _editorController = new Features.Editor.EditorController(
+            this, input, ctx.KeyMap(), completionFeed, parameterHints);
         if (ctx.Get<IPopupWindowFactory>() is { } popups && ctx.Get<IWindowCoordinates>() is { } coordinates)
+        {
             _completionPopup = new Features.Editor.CompletionPopup(popups, coordinates);
+            _signaturePopup = new Features.Editor.SignaturePopup(popups, coordinates);
+        }
         var editorFontSize = ctx.Get<IWritable<EditorFontSize>>();
         _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController)
         {
@@ -297,7 +311,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         }
 
         var (newPath, _) = DescribeState(state);
-        if (newPath != prevPath) _editorController.CloseCompletions();
+        if (newPath != prevPath)
+        {
+            _editorController.CloseCompletions();
+            _editorController.CloseParameterInfo();
+        }
         if (newPath != prevPath) _selection.Clear();
         else _selection.Remap(remap);
         if (newPath != prevPath) _pendingScrollLine = null;
@@ -598,6 +616,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var pos = Position;
         var z = GetDrawZIndex();
         TrackCompletionAnchor();
+        TrackSignatureAnchor();
 
         c.DrawRect(new DrawRectInputs
         {
@@ -908,6 +927,67 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             ? caret with { Left = caret.Left - list.Prefix.Length * _surface.MonoAdvance }
             : null;
 
+    /// <summary>Shows parameter info, or hides it for null. Anchored where the caret was when it
+    /// opened for as long as the caret stays on that row.</summary>
+    private void PresentSignatures(Lsp.SignatureHelp? help)
+    {
+        _signatureHelp = help;
+        if (help is null || !_selection.IsActive)
+        {
+            _signatureOrigin = null;
+            _signatureAnchor = null;
+            _signaturePopup?.Hide();
+            return;
+        }
+
+        var focus = CaretInDocument();
+        if (_signatureOrigin is not { } origin || focus is not { } at || origin.Line != at.Line) _signatureOrigin = focus;
+        _signatureAnchor = SignatureAnchorRect();
+        if (_signaturePopup is null) return;
+        if (_signatureAnchor is { } anchor) _signaturePopup.Show(help, anchor);
+        else _signaturePopup.Hide();
+    }
+
+    private int? ArgumentAt(Features.Editor.TextPosition caret)
+    {
+        if (Document is not { } editor) return null;
+        var options = editor.Session.Options;
+        return Features.Editor.LineContext.ArgumentIndex(
+            number => editor.Document.Line(new FileLine(number)),
+            caret.Line.Value, caret.Column.Value, options.Typing, options.LineComment);
+    }
+
+    // Held as a document position rather than a row: a parse that adds or drops a usages row moves
+    // every row index below it while the caret stays exactly where it was.
+    private Features.Editor.TextPosition? CaretInDocument() =>
+        Document is { } editor && _selection.IsActive ? editor.PositionOf(_selection.Focus) : null;
+
+    private RectF? SignatureAnchorRect() =>
+        _signatureOrigin is { } origin && CaretInDocument() is { } focus && origin.Line == focus.Line
+            && CaretRect() is { } caret
+            ? caret with { Left = caret.Left - (focus.Column.Value - origin.Column.Value) * _surface.MonoAdvance }
+            : null;
+
+    /// <summary>Has parameter info asked again once the caret has left the row it was anchored on —
+    /// a click somewhere else — and redrawn where it belongs once a scroll has moved that row.</summary>
+    private void TrackSignatureAnchor()
+    {
+        if (_signatureHelp is not { } help || _signatureRefreshPosted || _dispatcher is null) return;
+
+        var anchor = SignatureAnchorRect();
+        if (anchor == _signatureAnchor) return;
+
+        _signatureRefreshPosted = true;
+        _dispatcher.Post(() =>
+        {
+            _signatureRefreshPosted = false;
+            if (!ReferenceEquals(_signatureHelp, help)) return;
+            if (_signatureOrigin is { } origin && CaretInDocument() is { } focus && origin.Line == focus.Line)
+                PresentSignatures(help);
+            else _editorController.RefreshParameterInfo();
+        });
+    }
+
     /// <summary>Has an open list re-read when the word it completes has moved on screen — a scroll,
     /// a click — without a keystroke to say so. Posted, because a popup is a window and this runs
     /// inside a draw.</summary>
@@ -1175,7 +1255,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_focused == focused) return;
         _focused = focused;
         _caretPhase = 0f;
-        if (!focused) _editorController.CloseCompletions();
+        if (!focused)
+        {
+            _editorController.CloseCompletions();
+            _editorController.CloseParameterInfo();
+        }
         _editorController.SyncIme();
         if (Document != null) SetDirty();
     }

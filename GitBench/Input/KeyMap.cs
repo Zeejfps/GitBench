@@ -160,6 +160,8 @@ public sealed class KeyMap : IKeyMap
         KeyCommand.ToggleLineComment => [KeyGesture.WithPrimary(KeyboardKey.Slash)],
         // Ctrl on macOS too: Cmd+Space is Spotlight.
         KeyCommand.ShowCompletions => [new(KeyboardKey.Space, InputModifiers.Control)],
+        // Not Rider's Ctrl+P, which is already the app's Find File.
+        KeyCommand.ParameterInfo => [new(KeyboardKey.Space, InputModifiers.Control | InputModifiers.Shift)],
         KeyCommand.EditorZoomIn =>
         [
             KeyGesture.WithPrimary(KeyboardKey.Equals),

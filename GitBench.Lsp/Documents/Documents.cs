@@ -150,6 +150,20 @@ public abstract record CompletionReply
     public sealed record Answered(LspCompletions Completions) : CompletionReply;
 }
 
+/// <summary>What a server said about the call around a position: its overloads, or that there is
+/// no call there — which is also what a server that could not be asked reads as.</summary>
+public abstract record SignatureReply
+{
+    private SignatureReply() { }
+
+    public sealed record Unavailable : SignatureReply
+    {
+        public static readonly Unavailable Instance = new();
+    }
+
+    public sealed record Answered(SignatureHelp Help) : SignatureReply;
+}
+
 /// <summary>
 /// One open document at a time: the handle the Files pane holds for the file on screen. Previewing
 /// a file opens it, previewing another closes it first, previewing it again with new text changes it
@@ -337,6 +351,19 @@ public sealed class PreviewSession : IDisposable
         return response is LspResponse<LspCompletions>.Ok(var completions)
             ? new CompletionReply.Answered(completions)
             : CompletionReply.Unavailable.Instance;
+    }
+
+    /// <summary>The call around a position in the open file, for the text as it now stands.</summary>
+    public async Task<SignatureReply> SignatureHelpAsync(LspPosition position, SignatureAsk ask)
+    {
+        if (Asking() is not (var uri, var version, var cancel)) return SignatureReply.Unavailable.Instance;
+
+        var response = await AskAsync(LspRequests.SignatureHelp(uri, position, ask), cancel).ConfigureAwait(false);
+        if (!StillShowing(uri, version)) return SignatureReply.Unavailable.Instance;
+
+        return response is LspResponse<SignatureHelp>.Ok(var help)
+            ? new SignatureReply.Answered(help)
+            : SignatureReply.Unavailable.Instance;
     }
 
     public void Dispose()

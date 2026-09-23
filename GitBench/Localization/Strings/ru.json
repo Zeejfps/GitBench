@@ -228,6 +228,7 @@
   "shortcuts.command.save_file": "Сохранить файл",
   "shortcuts.command.toggle_line_comment": "Переключить комментарий строки",
   "shortcuts.command.show_completions": "Показать варианты автодополнения",
+  "shortcuts.command.parameter_info": "Показать сведения о параметрах",
   "shortcuts.command.editor_zoom_in": "Увеличить шрифт редактора",
   "shortcuts.command.editor_zoom_out": "Уменьшить шрифт редактора",
   "shortcuts.command.terminal_copy": "Копировать",

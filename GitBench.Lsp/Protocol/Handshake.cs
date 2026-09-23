@@ -35,6 +35,8 @@ public sealed record ServerCapabilities(
 
     public CompletionSupport Completion { get; init; } = CompletionSupport.Unsupported;
 
+    public SignatureHelpSupport SignatureHelp { get; init; } = SignatureHelpSupport.Unsupported;
+
     /// <summary>Whether an edited document is sent as a change rather than closed and reopened.</summary>
     public bool FollowsEdits => TextSync is TextSync.Full or TextSync.Incremental;
 
@@ -68,6 +70,7 @@ public sealed record ServerCapabilities(
                 SemanticTokens = SemanticTokensSupport.Read(capabilities),
                 TextSync = ReadTextSync(capabilities),
                 Completion = CompletionSupport.Read(capabilities),
+                SignatureHelp = SignatureHelpSupport.Read(capabilities),
             };
         }
 
@@ -135,6 +138,7 @@ public static class LspHandshake
             writer.WriteEndObject();
             WriteSemanticTokensCapability(writer);
             WriteCompletionCapability(writer);
+            WriteSignatureHelpCapability(writer);
             writer.WriteStartObject("publishDiagnostics");
             writer.WriteBoolean("versionSupport", true);
             writer.WriteEndObject();
@@ -177,6 +181,24 @@ public static class LspHandshake
     // Snippets are declined: nothing here steps through tab stops, and a server that sends one anyway
     // has it reduced to plain text. Insert-and-replace ranges are what let Tab replace the rest of
     // the word while Enter only replaces what was typed.
+    // Offsets are asked for so a parameter is found in its label by position rather than by searching
+    // for a name that may appear twice.
+    private static void WriteSignatureHelpCapability(Utf8JsonWriter writer)
+    {
+        writer.WriteStartObject("signatureHelp");
+        writer.WriteBoolean("contextSupport", true);
+        writer.WriteStartObject("signatureInformation");
+        writer.WriteStartArray("documentationFormat");
+        writer.WriteStringValue("plaintext");
+        writer.WriteEndArray();
+        writer.WriteStartObject("parameterInformation");
+        writer.WriteBoolean("labelOffsetSupport", true);
+        writer.WriteEndObject();
+        writer.WriteBoolean("activeParameterSupport", true);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
     private static void WriteCompletionCapability(Utf8JsonWriter writer)
     {
         writer.WriteStartObject("completion");

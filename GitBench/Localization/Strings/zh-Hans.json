@@ -193,6 +193,7 @@
   "shortcuts.command.save_file": "保存文件",
   "shortcuts.command.toggle_line_comment": "切换行注释",
   "shortcuts.command.show_completions": "显示补全建议",
+  "shortcuts.command.parameter_info": "显示参数信息",
   "shortcuts.command.editor_zoom_in": "增大编辑器字号",
   "shortcuts.command.editor_zoom_out": "减小编辑器字号",
   "shortcuts.command.terminal_copy": "复制",

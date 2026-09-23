@@ -109,7 +109,7 @@ internal abstract record LineContext
         for (var number = lineNumber; number >= floor; number--)
         {
             var line = lineAt(number);
-            CodeBrackets(line, number == lineNumber ? column : line.Length, rules, lineComment, brackets);
+            CodeBrackets(line, number == lineNumber ? column : line.Length, rules, lineComment, brackets, commas: false);
             for (var i = brackets.Count - 1; i >= 0; i--)
             {
                 var c = brackets[i];
@@ -132,7 +132,51 @@ internal abstract record LineContext
         return null;
     }
 
-    private static void CodeBrackets(string line, int stop, TypingRules rules, string? lineComment, List<char> into)
+    /// <summary>
+    /// Which argument of the call around a position it is in: the commas at the call's own depth
+    /// between its <c>(</c> and the position, skipping strings, comments and anything nested. Null
+    /// when the nearest unclosed bracket is not a <c>(</c>, or none is found within
+    /// <paramref name="maxLines"/>. For a server that names the overloads but never the argument.
+    /// </summary>
+    public static int? ArgumentIndex(
+        Func<int, string> lineAt, int lineNumber, int column, TypingRules rules, string? lineComment,
+        int maxLines = 200)
+    {
+        var depth = 0;
+        var commas = 0;
+        var marks = new List<char>();
+        var floor = Math.Max(1, lineNumber - maxLines);
+        for (var number = lineNumber; number >= floor; number--)
+        {
+            var line = lineAt(number);
+            CodeBrackets(line, number == lineNumber ? column : line.Length, rules, lineComment, marks, commas: true);
+            for (var i = marks.Count - 1; i >= 0; i--)
+            {
+                var c = marks[i];
+                if (c == ',')
+                {
+                    if (depth == 0) commas++;
+                }
+                else if (rules.IsCloser(c))
+                {
+                    depth++;
+                }
+                else if (depth > 0)
+                {
+                    depth--;
+                }
+                else
+                {
+                    return c == '(' ? commas : null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static void CodeBrackets(
+        string line, int stop, TypingRules rules, string? lineComment, List<char> into, bool commas)
     {
         into.Clear();
         char? quote = null;
@@ -149,7 +193,7 @@ internal abstract record LineContext
 
             if (lineComment != null && line.AsSpan(i).StartsWith(lineComment)) return;
             if (rules.IsQuote(c)) quote = c;
-            else if (rules.IsOpener(c) || rules.IsCloser(c)) into.Add(c);
+            else if (rules.IsOpener(c) || rules.IsCloser(c) || (commas && c == ',')) into.Add(c);
         }
     }
 }

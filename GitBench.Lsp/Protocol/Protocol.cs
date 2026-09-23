@@ -288,6 +288,32 @@ public static class LspRequests
             more.WriteEndObject();
         }), LspCompletions.Reader);
 
+    /// <summary>The overloads of the call around a position, and which parameter it is in.</summary>
+    public static LspRequest<SignatureHelp> SignatureHelp(DocumentUri uri, LspPosition at, SignatureAsk ask) =>
+        new(LspMethod.SignatureHelp, writer => WriteTextDocumentPosition(writer, uri, at, more =>
+        {
+            more.WriteStartObject("context");
+            switch (ask)
+            {
+                case SignatureAsk.Requested:
+                    more.WriteNumber("triggerKind", 1);
+                    more.WriteBoolean("isRetrigger", false);
+                    break;
+                case SignatureAsk.TypedTrigger(var character):
+                    more.WriteNumber("triggerKind", 2);
+                    more.WriteString("triggerCharacter", character.ToString());
+                    more.WriteBoolean("isRetrigger", false);
+                    break;
+                case SignatureAsk.ContentChanged:
+                    more.WriteNumber("triggerKind", 3);
+                    more.WriteBoolean("isRetrigger", true);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(ask), ask, null);
+            }
+            more.WriteEndObject();
+        }), Lsp.SignatureHelp.Reader);
+
     /// <summary>What every name in a document is — a struct, an interface, a parameter — as the
     /// server's own compiler sees it, read against the legend the server announced.</summary>
     public static LspRequest<SemanticTokens> SemanticTokens(DocumentUri uri, SemanticTokensLegend legend) =>

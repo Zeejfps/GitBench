@@ -81,6 +81,7 @@ public static class KeyCommandSections
         KeyCommand.SaveFile
             or KeyCommand.ToggleLineComment
             or KeyCommand.ShowCompletions
+            or KeyCommand.ParameterInfo
             or KeyCommand.EditorZoomIn
             or KeyCommand.EditorZoomOut => KeyCommandSection.Editor,
 

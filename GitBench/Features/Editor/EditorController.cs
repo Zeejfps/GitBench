@@ -88,17 +88,21 @@ internal sealed class EditorController
     private readonly ImeSession _ime;
     private readonly CompletionSession _completion = new();
     private readonly CompletionFeed? _feed;
+    private readonly ParameterHints? _hints;
 
     private DiffTextPos _caret;
     private bool _hasCaret;
 
     /// <param name="feed">The language server's completions, or null where there is none to ask.</param>
-    public EditorController(IEditorSurface surface, InputSystem input, IKeyMap keys, CompletionFeed? feed = null)
+    /// <param name="hints">The language server's parameter info, or null where there is none to ask.</param>
+    public EditorController(
+        IEditorSurface surface, InputSystem input, IKeyMap keys, CompletionFeed? feed = null, ParameterHints? hints = null)
     {
         _surface = surface;
         _keys = keys;
         _ime = new ImeSession(input);
         _feed = feed;
+        _hints = hints;
     }
 
     /// <summary>Whether the surface has a file open for editing.</summary>
@@ -162,8 +166,18 @@ internal sealed class EditorController
             return;
         }
 
+        if (_hints is { IsOpen: true } && e.Key == KeyboardKey.Escape && e.Modifiers == InputModifiers.None)
+        {
+            _hints.Close();
+            e.Consume();
+            return;
+        }
+
+        var revision = DocumentRevision.Of(editor.Document);
+        var focus = selection.Focus;
         var claimed = Handle(editor, selection, e.Key, e.Modifiers);
-        if (claimed == Claimed.Command) FollowCompletions(editor, selection);
+        if (claimed == Claimed.Command && (!revision.Describes(editor.Document) || selection.Focus != focus))
+            CaretOrTextMoved(editor, selection);
 
         switch (claimed)
         {
@@ -191,6 +205,19 @@ internal sealed class EditorController
         Edit(editor, selection, editor.Session.Type(editor.SelectionOf(selection), e.Rune.ToString()));
         e.Consume();
         CompleteTyped(editor, selection, e.Rune);
+        if (_hints is not null && e.Rune.IsBmp)
+            _hints.Typed(editor.Path, editor.SelectionOf(selection).Caret, (char)e.Rune.Value);
+    }
+
+    /// <summary>Closes parameter info, for everything that takes the caret away without a keystroke.</summary>
+    public void CloseParameterInfo() => _hints?.Close();
+
+    /// <summary>Asks for parameter info again against where the caret is now, after something other
+    /// than a key moved it — a click.</summary>
+    public void RefreshParameterInfo()
+    {
+        if (_hints is not { IsOpen: true } || _surface.Editor is not { } editor || !_surface.Selection.IsActive) return;
+        _hints.Moved(editor.Path, editor.SelectionOf(_surface.Selection).Caret);
     }
 
     /// <summary>Takes the composition the OS reports while a candidate is still being chosen. It is
@@ -229,6 +256,12 @@ internal sealed class EditorController
         if (_keys.Matches(KeyCommand.ShowCompletions, key, modifiers))
         {
             InvokeCompletions(editor, selection);
+            return Claimed.Command;
+        }
+
+        if (_keys.Matches(KeyCommand.ParameterInfo, key, modifiers))
+        {
+            if (editor.SelectionOf(selection) is { IsEmpty: true } at) _hints?.Invoke(editor.Path, at.Caret);
             return Claimed.Command;
         }
 
@@ -542,6 +575,15 @@ internal sealed class EditorController
         var line = editor.Document.Line(caret.Line);
         var options = editor.Session.Options;
         return LineContext.At(line, caret.Column.Value, options.Typing, options.LineComment) is LineContext.Code;
+    }
+
+    /// <summary>What a key that moved the caret or changed the text owes the two popups.</summary>
+    private void CaretOrTextMoved(EditorBuffer editor, DiffSelectionModel selection)
+    {
+        FollowCompletions(editor, selection);
+        var current = editor.SelectionOf(selection);
+        if (current.IsEmpty) _hints?.Moved(editor.Path, current.Caret);
+        else _hints?.Close();
     }
 
     private void FollowCompletions(EditorBuffer editor, DiffSelectionModel selection)

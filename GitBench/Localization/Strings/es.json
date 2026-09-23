@@ -193,6 +193,7 @@
   "shortcuts.command.save_file": "Guardar archivo",
   "shortcuts.command.toggle_line_comment": "Alternar comentario de línea",
   "shortcuts.command.show_completions": "Mostrar sugerencias de completado",
+  "shortcuts.command.parameter_info": "Mostrar información de parámetros",
   "shortcuts.command.editor_zoom_in": "Aumentar tamaño de fuente del editor",
   "shortcuts.command.editor_zoom_out": "Reducir tamaño de fuente del editor",
   "shortcuts.command.terminal_copy": "Copiar",
