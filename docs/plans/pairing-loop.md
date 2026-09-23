@@ -38,8 +38,9 @@ Goal ──► Roadmap ──► Stop ──► you edit ──► Done ──�
   survive your edits. A stop for a symbol that doesn't exist yet names the file and the symbol it
   should go next to.
 - **Kind.** The agent decides per stop: an **edit stop** or a **test stop**.
-- **Done.** Saves the affected files and returns your diff since the stop was shown, plus an
-  optional note ("went with an event instead of a callback"). The agent either sends a correction
+- **Done.** Saves the affected files and returns your diff since the stop was shown. Anything
+  you want to say about it ("went with an event instead of a callback") you say in the
+  conversation, which the agent keeps for the whole session. The agent either sends a correction
   stop at the same place or moves on.
 - **Finish.** The agent ends the session when the roadmap is empty. You can end it at any time.
 
@@ -47,9 +48,9 @@ Goal ──► Roadmap ──► Stop ──► you edit ──► Done ──�
 
 | On rails (enforced by the app) | Instructions (asked of the agent) |
 |---|---|
-| The agent can't write files other than through `pairing_write_test` | Pick an order that builds: definitions before callers, test before code |
+| The agent can't write files other than through `pairing_write_test` | Work top down: callers before what they call, test before code, a type only once code needs it |
 | One open stop at a time: proposing another while one is open fails | Keep a stop to one function or one small edit |
-| Every turn gets the same input: goal, roadmap, your diff, your note | Explain *why here*, not the code to type |
+| Every turn gets the same input: goal, roadmap, your diff, what you said | Explain *why here*, not the code to type |
 | A test stop can't be finished until its test passes (overridable, flagged) | Revise the roadmap whenever your diff departs from it |
 | Hints only go up a level when you ask | No code in the explanation below the level you asked for |
 
@@ -96,6 +97,20 @@ A console project, before any UI:
 - If no adapter passes 2 and 3, step 5 (terminal harnesses) becomes the main path and the rails in
   the first row above become per-harness flags.
 
+### Findings
+
+Measured in `spikes/acp` (full table in its README). **Go for Claude, Codex and Gemini**, all on
+their subscription logins, with four conditions the connection has to meet:
+
+- **Set the asking mode after `session/new`**: `default` for Claude and Gemini, `read-only` for
+  Codex. Claude otherwise inherits the user's `defaultMode`, and in `auto` no write ever reaches
+  the client.
+- **Decide by tool kind**: `edit`, `delete`, `move`, `execute` rejected; `read`, `search`, `think`,
+  `fetch` allowed. Claude runs read-only shell without asking, which the write guard doesn't mind.
+- **Allow the app's own MCP tools**, which every adapter asks about, matched by each adapter's own
+  marker.
+- **Re-prompt after a rejection that ends the turn** (Codex always ends it `cancelled`).
+
 ---
 
 ## Step 2: The loop, with edit stops
@@ -120,7 +135,7 @@ Pairing reuses the walkthrough store over the editor:
 - `EditorPresentation` implements it over the editor: focusing a stop opens the file and places the
   caret on the resolved symbol with the declaration a third of the way down; spotlights highlight
   editor ranges; the selection is the editor selection.
-- The wait gains one action, `done { at, diff, note }`. The diff is taken from the point the stop
+- The wait gains one action, `done { at, diff }`. The diff is taken from the point the stop
   was shown, so it's your edit and nothing else.
 
 ### Tools
@@ -140,7 +155,8 @@ The server instructions get a pairing section: the order to work in, one edit pe
 
 - **Pairing panel:** goal, roadmap (with changes marked), harness status, and the agent's messages
   rendered as markdown.
-- **Stop card** beside the editor: title, reason, a note field, **Done**, and a question field.
+- **Stop card** beside the editor: title, reason and **Done**, over a message field into the
+  conversation.
 
 ### Done when
 
@@ -222,3 +238,106 @@ the same MCP tools, so steps 2–4 work unchanged. What's weaker:
 
 - A custom preset can run a pairing session end to end through the terminal.
 - A session without an enforced guard is labelled as such in the Pairing panel.
+
+---
+
+## Implementation notes
+
+All five steps are built on the `pairing-loop` branch. Where the build departs from the plan above,
+this says so and why.
+
+### Step 2
+
+- **The walkthrough store was not generalised.** `ReviewWalkthroughStore` and `IReviewPresentation`
+  are shaped around review-diff lines and batches of steps walked with Next and Back; a pairing
+  session has one open stop, a roadmap and Done. `PairingStore` (`Features/Pairing/`) keeps the
+  same protocol — one waiter, a bounded wait answering `pending`, cancellation on a newer wait —
+  over its own model, and the review walkthrough is untouched. One difference on purpose: the
+  user's moves **queue** while no wait is attached instead of latching latest-wins, so a Done is
+  never lost behind a question asked after it.
+- **Sessions are per repository.** The pairing tools take `repo` like every other exported tool and
+  find the repository's live session; there is no separate session id on the wire.
+- **ACP agents reach the app through the Agent connections server**, which a session turns on if
+  it is off (the dialog says so). The app's own MCP tools are allowed **once** per call rather
+  than "always": Claude Code writes an "always" into the repository's `.claude/settings.local.json`.
+  An MCP approval that names no server is asked of the user.
+- **The guard only sees what the CLI asks about.** A CLI's own allow rules (Claude Code's
+  `permissions.allow`, for instance) decide without asking the client. For Claude Code the session
+  therefore also takes the edit and shell tools away inside the CLI (`disallowedTools` through
+  `session/new`'s `_meta`); for Codex and Gemini the guard is as strong as their asking modes.
+- **Stops resolve through the tree-sitter outline** (then the name as a whole word). The app has no
+  LSP `documentSymbol` request, so the language server is not consulted. The outline counts a
+  member that ends with its line break as reaching its type's closing line; the resolver corrects
+  for that rather than changing the extractor, whose end lines also drive folding.
+- **Done's diff** comes from `WorkingTreeSnapshots`: the working tree written to a tree object
+  through a throwaway index when the stop opens and again at Done, so new files count and the
+  user's staging area is never touched.
+- **The stop card is part of the Pairing panel**, docked beside the content panel: the stop's text,
+  test and hints scroll with the roadmap and the conversation, and Done, Skip and More help stay
+  pinned above the message field.
+- **No note on Done.** The field under the conversation is the one place to talk to the agent, for
+  questions and for "I did this instead" alike: the agent keeps the conversation, so what was said
+  before Done is in mind when it reads the diff. On the wire the wait answers
+  `{action:"message", text}` rather than `ask`.
+- **The agent talks through `pairing_say`.** Prose outside the tools isn't reliable: Claude Code
+  sent its answer to a message as a *thought* chunk, which the panel doesn't show, and a terminal
+  agent's prose never reaches the panel at all. The instructions say `pairing_say` is the only way
+  the user hears it. Streamed prose is still shown when it does arrive.
+- **`pairing_show` points at code without a stop.** Asked "show me the test", an agent with only
+  `pairing_stop` refused, since a stop was already open. `pairing_show` opens a file on a
+  declaration or a line and touches nothing else: the open stop, its card and its hints stay, and
+  the card's link takes the user back.
+- **The panel follows the conversation**: a new message or a streaming reply scrolls it to the end,
+  and a new stop takes it back to the top, where the stop card is. Done, Skip and More help sit
+  under the message field.
+- **Top down, not bottom up.** The agent starts where the change is used and creates each
+  function or type only once the code written so far needs it; the plan's "definitions before
+  callers" is reversed. A diff that calls something not written yet is the next stop, not an error.
+- **The conversation is per stop.** Done or Skip clears it, so stop 6 isn't shown under the chat
+  about stop 1; what the agent says between stops, before it opens the next, stays with the next
+  one. A question still waiting on the user survives the clear. The agent keeps its own memory.
+- `DIFFDINO_ACP_TRACE=<dir>` writes each ACP session's protocol traffic to a file there.
+
+### Step 3
+
+- **Test output is shown on the stop card** (its tail), not streamed into a terminal tab: the
+  terminal has no tap on its output, and the app needs the output anyway to hand to the agent.
+- **Test files are recognised by built-in rules** (`TestFiles`): a test directory on the path, or a
+  file named like a test. There is no per-repository glob setting yet.
+- **The user runs every test the agent writes**, from the stop card (the test's path opens it
+  first). The plan had the app run it at once; but a test is the agent's code, and running it
+  unread would let `pairing_write_test` stand in for the shell the guard refuses. Done reruns the
+  same test without asking.
+- **Build and runner configuration files are never test files** (`*.csproj`, `conftest.py`,
+  `package.json`, `*.config.*`, …), and a test name is one plain argument — no spaces, no leading
+  `-` — so it can't add options to the test command.
+- **The test command is kept per repository** in the preferences, prefilled on the stop card from
+  the agent's suggestion the first time.
+
+### Step 4
+
+- The starting level is chosen in the New pairing session dialog and remembered.
+- A draft line counts as typed when a line reading the same (trimmed) is in the run the user has
+  written below the anchor — down to the last typed line with real content — so a lone brace of
+  the file's own doesn't swallow the draft's.
+
+### Step 5
+
+- Two extra placeholders: `{promptFile}` and `{mcpConfigFile}`, because a multi-line prompt and a
+  JSON config can't be quoted into every shell's command line (the Windows command processor
+  can't quote some characters at all, and refuses rather than half-quotes).
+- The built-in preset runs Claude Code with the app's server as an MCP config file and its edit and
+  shell tools disallowed. On Windows the shell stays open after the agent exits, so a session there
+  only learns the agent is gone when the user ends it.
+
+### Verified by hand
+
+Claude Code over ACP, in a scratch repository: a session start to finish with a correction stop;
+hint levels up to draft with the draft shrinking as it was typed; a test stop red, still red after
+a wrong edit, then green and closed; End from the panel. Claude Code in a terminal tab from the
+preset. Codex and Gemini are covered by the spike, not yet by a session in the app.
+
+### Open
+
+- Take this draft is unit-tested through the store but was not clicked in the running app.
+- Untracked build output (`__pycache__`, `bin/`) that isn't ignored shows up in Done's diff.

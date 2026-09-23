@@ -7,6 +7,7 @@ using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Review.Walkthrough;
@@ -65,6 +66,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
     private readonly RepoRegistry _registry;
     private readonly Repo _repo;
     private readonly ReviewWindowsViewModel _windows;
+    private readonly FixedPairingSessions _pairing = new();
     private readonly AgentToolExport _export;
     private readonly AgentToolMcpSource _source;
     private readonly McpPathToken _token = McpPathToken.Generate();
@@ -106,7 +108,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
 
         var surface = new AssistantWriteSurface(
             _dispatcher, _bus, _registry, new SilentCommitEditor(), new IdleRemoteOperations(), new TestDocuments.Empty());
-        _export = new AgentToolExport(_git, new UnparsedFiles(), new ReviewProgressStore(), _windows, surface);
+        _export = new AgentToolExport(_git, new UnparsedFiles(), new ReviewProgressStore(), _windows, surface, _pairing);
         _source = new AgentToolMcpSource(_export, _registry, _windows, surface, _clock);
 
         _server = new GuiMcpServer(
@@ -369,5 +371,52 @@ public sealed class AgentToolMcpSourceTests : IDisposable
 
         Assert.True(McpTestClient.IsError(result));
         Assert.Contains("repo", McpTestClient.TextOf(result));
+    }
+    private PairingStore StartPairing()
+    {
+        var store = new PairingStore("Add a retry", "Test agent", new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _clock);
+        store.MarkRunning();
+        _pairing.Stores[_repo.Id] = store;
+        return store;
+    }
+
+    [Fact]
+    public async Task PairingLoop_RoadmapStopWaitDone_OverMcp()
+    {
+        await _client.Initialize();
+        var store = StartPairing();
+
+        var roadmap = Await(_client.Call("pairing_roadmap", new { repo = _dir.Path, milestones = new[] { new { title = "Retry" } } }), "the roadmap");
+        Assert.False(McpTestClient.IsError(roadmap));
+        Assert.Single(store.Roadmap.Value);
+
+        var stop = Await(_client.Call("pairing_stop", new
+        {
+            repo = _dir.Path, path = "src/Client.cs", symbol = "Fetch", title = "Retry the fetch", reason = "It fails transiently.",
+        }), "the stop");
+        Assert.False(McpTestClient.IsError(stop));
+        using (var json = JsonDocument.Parse(McpTestClient.TextOf(stop)))
+            Assert.Equal(1, json.RootElement.GetProperty("stop").GetInt32());
+
+        var wait = _client.Call("pairing_wait", new { repo = _dir.Path });
+        Pump.WaitFor(_dispatcher, () => store.Phase.Value is PairingPhase.Running { Waiting: true }, "the wait to attach");
+        Await(store.DoneAsync(), "Done");
+        var done = Await(wait, "the wait to return");
+
+        using var result = JsonDocument.Parse(McpTestClient.TextOf(done));
+        Assert.Equal("done", result.RootElement.GetProperty("action").GetString());
+        Assert.True(result.RootElement.TryGetProperty("diff", out _));
+        store.Dispose();
+    }
+
+    [Fact]
+    public async Task PairingTool_WithoutASession_SaysHowToStartOne()
+    {
+        await _client.Initialize();
+
+        var result = Await(_client.Call("pairing_state", new { repo = _dir.Path }), "the call");
+
+        Assert.True(McpTestClient.IsError(result));
+        Assert.Contains("New pairing session", McpTestClient.TextOf(result));
     }
 }

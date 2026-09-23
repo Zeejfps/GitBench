@@ -25,6 +25,13 @@ internal interface ITerminalSessionStore
     /// recognises, which is the registry's, not this dictionary's.
     /// </remarks>
     IReadOnlyList<Guid> ReposWithLiveShells();
+
+    /// <summary>Starts a terminal running <paramref name="launch"/> in one of the repository's tabs,
+    /// made the active one.</summary>
+    TerminalInstance StartIn(Repo repo, ITerminalLaunch launch);
+
+    /// <summary>Ends one of the repository's terminals and takes its tab off the strip.</summary>
+    void CloseIn(Repo repo, TerminalInstance terminal);
 }
 
 /// <summary>
@@ -73,6 +80,14 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
 
     public IReadOnlyList<Guid> ReposWithLiveShells() =>
         _tabs.Where(pair => pair.Value.HasLiveShell).Select(pair => pair.Key).ToArray();
+
+    public TerminalInstance StartIn(Repo repo, ITerminalLaunch launch) =>
+        TabsFor(repo).StartNew(new TerminalInstance(launch, _dispatcher));
+
+    public void CloseIn(Repo repo, TerminalInstance terminal)
+    {
+        if (_tabs.TryGetValue(repo.Id, out var tabs)) tabs.Close(terminal);
+    }
 
     public void Start()
     {

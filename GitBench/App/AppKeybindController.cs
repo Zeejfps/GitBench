@@ -1,6 +1,7 @@
 using GitBench.Features.Assistant;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Notifications;
+using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Input;
 using GitBench.Localization;
@@ -70,6 +71,13 @@ internal sealed class AppKeybindController : KeyboardMouseController
         if (_keys.Matches(KeyCommand.ToggleAssistant, e.Key, e.Modifiers))
         {
             _assistant.Toggle.Execute();
+            e.Consume();
+            return;
+        }
+
+        if (_keys.Matches(KeyCommand.NewPairingSession, e.Key, e.Modifiers))
+        {
+            NewPairingSessionDialog.Show(_bus);
             e.Consume();
             return;
         }

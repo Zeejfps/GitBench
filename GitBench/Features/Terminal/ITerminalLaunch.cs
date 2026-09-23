@@ -35,6 +35,56 @@ internal interface ITerminalLaunch
     TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher);
 }
 
+/// <summary>A command line run in the user's shell, in a repository, following the pane's size —
+/// an agent's CLI started for a pairing session.</summary>
+internal sealed class CommandLaunch : ITerminalLaunch
+{
+    readonly string _workingDirectory;
+    readonly string _commandLine;
+    readonly IPtySessionFactory _sessions;
+    readonly ITerminalEngineFactory _engines;
+    readonly IClipboard _clipboard;
+    readonly ITerminalPalette _palette;
+
+    public CommandLaunch(
+        string name,
+        string workingDirectory,
+        string commandLine,
+        IPtySessionFactory sessions,
+        ITerminalEngineFactory engines,
+        ITerminalPalette palette,
+        IClipboard clipboard)
+    {
+        Name = name;
+        _workingDirectory = workingDirectory;
+        _commandLine = commandLine;
+        _sessions = sessions;
+        _engines = engines;
+        _palette = palette;
+        _clipboard = clipboard;
+    }
+
+    public string Name { get; }
+
+    public TerminalSize SizeFor(TerminalSize viewport) => viewport;
+
+    public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>
+        TerminalSession.Start(
+            _sessions,
+            _engines,
+            ShellCommand.ForCommand(
+                _workingDirectory,
+                new PtySize(size.Columns, size.Rows),
+                _palette.Resolve(TerminalColorSlot.Background),
+                _commandLine),
+            dispatcher,
+            clipboard: _clipboard,
+            palette: _palette);
+}
+
+/// <summary>Makes command launches: everything but the command line is the app's.</summary>
+internal delegate ITerminalLaunch CommandLaunchFactory(string name, string workingDirectory, string commandLine);
+
 /// <summary>The ordinary launch: the user's shell, in a repository, following the pane's size.</summary>
 internal sealed class ShellLaunch : ITerminalLaunch
 {

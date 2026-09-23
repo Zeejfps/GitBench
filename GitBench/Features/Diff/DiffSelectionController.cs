@@ -153,6 +153,14 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
 
     public override void OnFocusGained() => _surface.FocusChanged(true);
 
+    /// <summary>Gives the body the keyboard, as a click in it would — unless the reader is typing
+    /// into a field somewhere else, whose keystrokes would otherwise land in the file.</summary>
+    public void TakeFocusUnlessTyping()
+    {
+        if (_input.FocusedComponent is ZGF.Gui.Desktop.Components.TextInput.BaseTextInputKbmController) return;
+        _input.StealFocus(this);
+    }
+
     public override void OnFocusLost()
     {
         _armed = false;

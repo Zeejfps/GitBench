@@ -22,6 +22,7 @@ public enum KeyCommand
     RepoHotkey7,
     RepoHotkey8,
     RepoHotkey9,
+    NewPairingSession,
 
     // A focused row list.
     ListUp,

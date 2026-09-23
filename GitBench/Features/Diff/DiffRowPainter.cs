@@ -34,7 +34,8 @@ internal readonly record struct DiffRowPaint(
     CharRange? Link = null,
     UsageLensState? Usages = null,
     bool LensHovered = false,
-    IReadOnlyList<SearchMark>? Search = null);
+    IReadOnlyList<SearchMark>? Search = null,
+    bool Spotlit = false);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -167,6 +168,9 @@ internal sealed class DiffRowPainter
                 break;
             case DiffRow.Lens lens:
                 DrawLensRow(c, lens, p);
+                break;
+            case DiffRow.Ghost ghost:
+                DrawGhostRow(c, ghost, p);
                 break;
         }
     }
@@ -416,6 +420,13 @@ internal sealed class DiffRowPainter
     private void DrawLineRow(ICanvas c, DiffRow.Line l, in DiffRowPaint p)
     {
         DrawRowBackground(c, l, p);
+        if (p.Spotlit)
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
+                Style = SolidBgStyle(SpotlightBand),
+                ZIndex = p.Z,
+            });
         var textLeft = DrawGutterAndGlyph(c, l, p);
         if (l.Emphasis is { Count: > 0 } ranges)
             DrawIntraLineEmphasis(c, l, ranges, textLeft, p.Bottom, p.Z);
@@ -443,6 +454,31 @@ internal sealed class DiffRowPainter
         // the row's characters, so nothing selects it and nothing measures a caret against it.
         if (l.Fold is { Chip: true })
             DrawFoldChip(c, l, textLeft, p);
+    }
+
+    /// <summary>The wash a line lit up for the reader is drawn under; set from the theme by the
+    /// surface that draws spotlights.</summary>
+    public uint SpotlightBand { get; set; }
+
+    // A suggestion, not a line: no gutter number, in the muted color the usages rows use, over the
+    // spotlight wash so it reads as something laid over the file.
+    private void DrawGhostRow(ICanvas c, DiffRow.Ghost ghost, in DiffRowPaint p)
+    {
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
+            Style = SolidBgStyle(Styles.Background),
+            ZIndex = p.Z,
+        });
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
+            Style = SolidBgStyle(SpotlightBand),
+            ZIndex = p.Z,
+        });
+        var textLeft = TextOriginOf(p);
+        DrawMonoText(c, ghost.Text, textLeft, p.Bottom, Math.Max(0f, p.Left + p.Width - textLeft),
+            Styles.UsageLensText, TextAlignment.Start, p.Z + 2);
     }
 
     // Text and nothing else. A usages row has no line of its own in the file, so a number in the

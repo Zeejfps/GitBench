@@ -131,6 +131,21 @@ internal sealed record FileBrowserTextBody : Widget
         // transition, which would reset horizontal scroll and restore a stale pixel offset.
         content.Bind(browser.Folds, content.SetFoldState);
 
+        content.Bind(browser.Hints, content.SetHints);
+        content.Bind(browser.TakeGhostRequested, request =>
+        {
+            if (request is null) return;
+            content.TakeGhost(request.Path);
+            browser.CompleteTakeGhost(request);
+        });
+
+        content.Bind(browser.CaretRequest, request =>
+        {
+            if (request is null) return;
+            content.RequestCaretAt(request.Path, request.At);
+            browser.CompleteCaretRequest(request);
+        });
+
         // Asking a language server about whatever the pointer rests on. Only here: the diff pane and
         // the review window show a file as it was at a commit, and a server asked about that would
         // answer about the file on disk instead.
@@ -197,6 +212,13 @@ internal sealed record FileBrowserTextBody : Widget
             subscriptions.Add(() => content.TopVisibleLineChanged -= publishTop);
             content.OnToggleFold += browser.ToggleFold;
             subscriptions.Add(() => content.OnToggleFold -= browser.ToggleFold);
+            Action publishCaret = () => browser.PublishCaret(
+                content.Caret is { } at && browser.Preview.Value is FilePreview.Text shown
+                    ? new EditorCaret(shown.Path, at, content.SelectedText)
+                    : null);
+            content.CaretMoved += publishCaret;
+            subscriptions.Add(() => content.CaretMoved -= publishCaret);
+            subscriptions.Add(() => browser.PublishCaret(null));
             return subscriptions;
         });
 

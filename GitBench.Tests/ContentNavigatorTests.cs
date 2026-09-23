@@ -247,6 +247,10 @@ public sealed class ContentNavigatorTests(CodeIntelFixture fixture) : IDisposabl
         public bool HasLiveShell(Guid repoId) => false;
 
         public IReadOnlyList<Guid> ReposWithLiveShells() => [];
+
+        public TerminalInstance StartIn(GitBench.Git.Repo repo, ITerminalLaunch launch) => throw new NotSupportedException();
+
+        public void CloseIn(GitBench.Git.Repo repo, TerminalInstance terminal) { }
     }
 
     /// <summary>A launch that never spawns: these tests are about the tabs, not the shells.</summary>

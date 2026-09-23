@@ -186,6 +186,7 @@ internal sealed class KeyboardShortcutsViewModel
         KeyCommand.Refresh => s.ShortcutsCommandRefresh,
         KeyCommand.ToggleRepoBar => s.ShortcutsCommandToggleRepoBar,
         KeyCommand.ToggleAssistant => s.ShortcutsCommandToggleAssistant,
+        KeyCommand.NewPairingSession => s.ShortcutsCommandNewPairingSession,
         KeyCommand.FindInFile => s.ShortcutsCommandFindInFile,
         KeyCommand.FindFile => s.ShortcutsCommandFindFile,
 

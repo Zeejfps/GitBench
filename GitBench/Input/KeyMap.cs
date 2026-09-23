@@ -125,6 +125,7 @@ public sealed class KeyMap : IKeyMap
         KeyCommand.RepoHotkey7 => RepoHotkey(KeyboardKey.Alpha7, KeyboardKey.Numpad7),
         KeyCommand.RepoHotkey8 => RepoHotkey(KeyboardKey.Alpha8, KeyboardKey.Numpad8),
         KeyCommand.RepoHotkey9 => RepoHotkey(KeyboardKey.Alpha9, KeyboardKey.Numpad9),
+        KeyCommand.NewPairingSession => [KeyGesture.WithPrimary(KeyboardKey.P, InputModifiers.Shift)],
 
         KeyCommand.ListUp => [new(KeyboardKey.UpArrow)],
         KeyCommand.ListDown => [new(KeyboardKey.DownArrow)],

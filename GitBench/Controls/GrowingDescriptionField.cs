@@ -216,10 +216,19 @@ internal sealed class GrowingDescriptionField : ContainerView
 
         // MeasureHeight(width) handles the height-for-width case directly now; pass the
         // input's laid-out width and cache the clamped desired height as PreferredHeight.
+        // Measured at the width the text has with the scroll bar showing, whether or not it is.
+        // Measuring at the width it has now loops when a word sits on the wrap edge: the text fits
+        // wide, overflows narrow, and the bar coming and going flips it between the two every frame.
         var chrome = 2f * (BoxBorderThickness + BoxPaddingVertical);
-        var contentHeight = _input.MeasureHeight(_input.Position.Width);
-        var desired = Math.Clamp(contentHeight + chrome, _minHeight, _maxHeight);
-        if (Math.Abs(desired - Height) > 0.5f)
+        var width = _scrollBar.IsVisible
+            ? _input.Position.Width
+            : Math.Max(1f, _input.Position.Width - ScrollBarSync.Thickness);
+        var contentHeight = _input.MeasureHeight(width);
+        // Rounded up, and never left short: at a fractional line height a field even half a pixel
+        // shorter than its text overflows, shows the bar below its cap, and loses the width the
+        // bar takes — which is the very edge a wrap flips on.
+        var desired = Math.Clamp(MathF.Ceiling(contentHeight + chrome), _minHeight, _maxHeight);
+        if (desired > Height || Height - desired > 0.5f)
         {
             // Setting PreferredHeight via SetField marks us IsSelfDirty, so the next frame's
             // layout re-runs OnLayoutSelf with the new value.

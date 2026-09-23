@@ -47,7 +47,8 @@ public static class KeyCommandSections
             or KeyCommand.RepoHotkey6
             or KeyCommand.RepoHotkey7
             or KeyCommand.RepoHotkey8
-            or KeyCommand.RepoHotkey9 => KeyCommandSection.Application,
+            or KeyCommand.RepoHotkey9
+            or KeyCommand.NewPairingSession => KeyCommandSection.Application,
 
         KeyCommand.ListUp
             or KeyCommand.ListDown

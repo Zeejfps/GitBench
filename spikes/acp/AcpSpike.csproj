@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Throwaway spike for docs/plans/pairing-loop.md Step 1. Deliberately NOT in GitBench.sln: it
+    must not affect the app build, and it is deleted once its findings are folded into the plan.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="echo-mcp.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

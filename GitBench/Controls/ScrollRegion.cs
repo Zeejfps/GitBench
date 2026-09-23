@@ -25,11 +25,19 @@ internal sealed record ScrollRegion : Widget
     /// children get real slack to expand into (see <see cref="VerticalScrollPane.StretchContent"/>).</summary>
     public bool StretchContent { get; init; }
 
+    /// <summary>Lets its owner move the region to either end — to follow a conversation, or to go
+    /// back to what sits at the top of it.</summary>
+    public ScrollRegionHandle? Handle { get; init; }
+
     protected override View CreateView(Context ctx)
     {
         var pane = new VerticalScrollPane { StretchContent = StretchContent, FillParent = FillParent };
+        var handle = Handle;
+        if (handle is not null) pane.Use(() => handle.Attach(pane));
         pane.Children.Add(new FlexItem { Grow = 1, Child = Content.BuildView(ctx) });
-        pane.UseController(ctx.Require<InputSystem>(), () => WheelScrollController.For(pane));
+        pane.UseController(ctx.Require<InputSystem>(), () => handle is null
+            ? WheelScrollController.For(pane)
+            : new WheelScrollController((_, dy) => handle.UserScroll(dy)));
 
         var bar = ScrollBars.CreateVertical(ctx);
         bar.IsVisible = false;
@@ -52,4 +60,57 @@ internal sealed record ScrollRegion : Widget
         container.Use(() => new ScrollSyncController(pane, bar));
         return container;
     }
+}
+
+/// <summary>
+/// Moves a <see cref="ScrollRegion"/> to its top, or pins it to its bottom the way a chat keeps up
+/// with its newest message: pinned, every layout pass snaps it back to the end, so rows that are
+/// still being laid out or still growing stay in view. Scrolling with the wheel releases the pin,
+/// and scrolling back down to the end takes it again. Does nothing while the region is unmounted.
+/// </summary>
+internal sealed class ScrollRegionHandle
+{
+    private VerticalScrollPane? _pane;
+    private bool _pinned = true;
+
+    public void ScrollToTop()
+    {
+        _pinned = false;
+        _pane?.ScrollToTop();
+    }
+
+    /// <summary>Pins the region to its end, from now until the reader scrolls away.</summary>
+    public void FollowBottom()
+    {
+        _pinned = true;
+        _pane?.ScrollToBottom();
+    }
+
+    internal bool UserScroll(float dy)
+    {
+        if (_pane is not { } pane) return false;
+        var moved = pane.Scroll(dy);
+        if (moved) _pinned = dy > 0 && AtBottom(pane);
+        return moved;
+    }
+
+    internal IDisposable Attach(VerticalScrollPane pane)
+    {
+        _pane = pane;
+        void OnLaidOut(float _)
+        {
+            // Scroll answers false once already at the end, so this settles rather than relaying
+            // out forever.
+            if (_pinned) pane.ScrollToBottom();
+        }
+
+        pane.ScrollPositionChanged += OnLaidOut;
+        return new ActionDisposable(() =>
+        {
+            pane.ScrollPositionChanged -= OnLaidOut;
+            if (ReferenceEquals(_pane, pane)) _pane = null;
+        });
+    }
+
+    private static bool AtBottom(VerticalScrollPane pane) => pane.Scale >= 1f || pane.ScrollNormalized >= 0.999f;
 }

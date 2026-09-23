@@ -1,4 +1,5 @@
 using GitBench.Features.Assistant.Tools;
+using GitBench.Features.Pairing;
 using GitBench.Features.Review.Walkthrough;
 using McpSdk.Protocol.Models;
 using McpSdk.Server;
@@ -6,8 +7,8 @@ using McpSdk.Server;
 namespace GitBench.Features.AgentConnections;
 
 /// <summary>
-/// What the server tells a connecting agent about itself: the review walkthrough protocol, as
-/// the model should follow it. Sent as <c>instructions</c> on initialize and restated by the
+/// What the server tells a connecting agent about itself: the review walkthrough protocol and the
+/// pairing loop, as the model should follow them. Sent as <c>instructions</c> on initialize and restated by the
 /// <c>walkthrough</c> prompt.
 /// </summary>
 internal static class AgentConnectionInstructions
@@ -52,7 +53,9 @@ internal static class AgentConnectionInstructions
         + "\n"
         + "Marking files:\n"
         + "- mark_viewed ticks the reviewer's own Viewed checkbox. Only mark files you have "
-        + "actually read through.";
+        + "actually read through.\n"
+        + "\n"
+        + PairingInstructions.Protocol;
 }
 
 /// <summary>The one prompt the server offers: ask for a walkthrough of the change under review.</summary>

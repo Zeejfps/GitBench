@@ -32,6 +32,8 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
     private int[]? _lineOfRow;
     private int _hiddenLines;
     private int _lensRows;
+    private int _ghostRows;
+    private GhostLines? _ghost;
 
     /// <param name="truncated">Whether the loader stopped short of the end of the file, which closes
     /// the stream with a truncation banner.</param>
@@ -116,8 +118,24 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         }
     }
 
-    /// <summary>The file line a row stands for, or null for a usages row, the truncation banner and
-    /// a row index this stream does not have.</summary>
+    /// <summary>Suggested lines drawn after a line of the file, which moves with the edits above
+    /// it; null for none.</summary>
+    public GhostLines? Ghost => _ghost;
+
+    /// <summary>Draws suggested lines after a line of the file, or none. They are rows without a
+    /// line: the caret, the selection and search never land on them.</summary>
+    public void SetGhost(GhostLines? ghost)
+    {
+        AssertThread();
+        if (Equals(_ghost, ghost)) return;
+        Reshaping?.Invoke();
+        _ghost = ghost;
+        Replan();
+        Reshaped?.Invoke();
+    }
+
+    /// <summary>The file line a row stands for, or null for a usages row, a suggested line, the
+    /// truncation banner and a row index this stream does not have.</summary>
     public FileLine? NewLineAt(RowIndex row)
     {
         AssertThread();
@@ -264,7 +282,7 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         _document.Length == 0 ? 0 : _document.LineCount - (_document.EndsWithNewline ? 1 : 0);
 
     private int RowCount =>
-        _lines.Count - _hiddenLines + _lensRows + (_truncation != null ? 1 : 0);
+        _lines.Count - _hiddenLines + _lensRows + _ghostRows + (_truncation != null ? 1 : 0);
 
     private DiffRowKey? KeyAt(int row) =>
         NewLineAt(new RowIndex(row)) is { } line ? DiffRowKey.NewSide(line) : null;
@@ -287,7 +305,10 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         if (_truncation is { } banner && index == RowCount - 1) return banner;
 
         var line = LineOfRow(index);
-        if (RowOfLine(line) != index)
+        var own = RowOfLine(line);
+        if (index > own && _ghost is { } ghost)
+            return new DiffRow.Ghost(DiffText.ExpandTabs(ghost.Lines[index - own - 1]));
+        if (own != index)
             return _plan.LensAt(line)
                 ?? throw new InvalidOperationException(
                     $"Row {index} indexes line {line}, which is not where that line is drawn and " +
@@ -369,7 +390,7 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 
     private void Replace(int first, int lastOld, int lastNew)
     {
-        var patch = _plan.IsEmpty || lastOld == lastNew;
+        var patch = (_plan.IsEmpty && _ghost is null) || lastOld == lastNew;
 
         if (patch)
             for (var i = first; i <= lastOld; i++)
@@ -389,6 +410,8 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 
         if (_outline is { } outline && lastOld != lastNew)
             _outline = Shifted(outline, lastOld + 1, lastNew - lastOld);
+        if (_ghost is { } ghost && lastOld != lastNew)
+            _ghost = ghost with { After = new FileLine(Math.Clamp(Move(ghost.After.Value, lastOld + 1, lastNew - lastOld), 1, Math.Max(1, _lines.Count))) };
 
         if (!patch)
         {
@@ -439,8 +462,9 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         if (_truncation is { } banner) _widths.Add(DiffText.VisualCells(banner.Text));
         _hiddenLines = 0;
         _lensRows = 0;
+        _ghostRows = 0;
 
-        if (_plan.IsEmpty)
+        if (_plan.IsEmpty && _ghost is null)
         {
             _rowOfLine = null;
             _lineOfRow = null;
@@ -475,6 +499,14 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
             rowOfLine[i] = lineOfRow.Count;
             lineOfRow.Add(line);
             _widths.Add(Contribution(i));
+
+            if (_ghost is not { } ghost || ghost.After.Value != line) continue;
+            foreach (var text in ghost.Lines)
+            {
+                lineOfRow.Add(line);
+                _ghostRows++;
+                _widths.Add(DiffText.VisualCells(DiffText.ExpandTabs(text)));
+            }
         }
 
         _rowOfLine = rowOfLine;
@@ -575,4 +607,14 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
+}
+
+/// <summary>Lines suggested to the reader, drawn after a line of the file. Compared by content, so
+/// setting the same suggestion again changes nothing.</summary>
+internal sealed record GhostLines(FileLine After, IReadOnlyList<string> Lines)
+{
+    public bool Equals(GhostLines? other) =>
+        other is not null && After == other.After && Lines.SequenceEqual(other.Lines);
+
+    public override int GetHashCode() => HashCode.Combine(After, Lines.Count);
 }

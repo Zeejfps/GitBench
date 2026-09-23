@@ -3,6 +3,7 @@ using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -109,6 +110,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// the owner's; this says which declaration was asked about, and where under the lens whatever
     /// answers should hang.</summary>
     public event Action<UsageLensTarget, PointF>? UsageLensActivated;
+    /// <summary>The caret or the selection moved, by the keyboard, the pointer or a placement.</summary>
+    public event Action? CaretMoved;
+
     public event Action<float>? HorizontalScrollPositionChanged
     {
         add => _scroll.HorizontalScrollPositionChanged += value;
@@ -196,6 +200,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public bool AssistantActions { get; set; }
 
     private FileLine? _pendingScrollLine;
+    private (string Path, Features.Editor.TextPosition At)? _pendingCaret;
+
+    // A guide's hints over the file: the lines it lit up, and the suggested lines with the line
+    // they hang from as edits have moved it. The buffer is the one the suggestion was drawn into.
+    private Features.Editor.EditorHints? _hints;
+    private FileLine? _ghostAnchor;
+    private Features.Editor.EditorBuffer? _ghostBuffer;
+    private bool _ghostRefreshPosted;
     private FileSpan? _pendingSearchReveal;
     private FileLine? _lastTopLine;
     private bool _topLinePublished;
@@ -254,6 +266,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             Zoom = editorFontSize is null ? null : new Features.Editor.EditorZoomKeys(ctx.KeyMap(), editorFontSize),
         };
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
+        _selection.Changed += () => CaretMoved?.Invoke();
+        // A view torn down with a suggestion up lets go of the buffer it drew it into.
+        this.Use(() => new ActionDisposable(() => SetHints(null)));
 
         if (ctx.Get<IFrameTicker>() is { } ticker) UseCaretBlink(ticker);
 
@@ -262,6 +277,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             _styles = s.DiffContent;
             _surface.ButtonStyles = s.DiffHunkButton;
             _painter.Styles = s.DiffContent;
+            _painter.SpotlightBand = s.ReviewSpotlight.Band;
             SetDirty();
         });
 
@@ -324,6 +340,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (newPath != prevPath) _topLinePublished = false;
 
         RefreshSearchScope();
+        ApplyGhost();
         _list.ItemCount = RowSource.Rows.Count;
         _list.NotifyItemsChanged();
         ApplyScrollForTransition(state, prevPath, prevWasFullFile, prevTopLine, prevScrollY, prevScrollX);
@@ -563,6 +580,136 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
+    /// <summary>Puts the caret at a place in the edited file, takes the keyboard unless a field has
+    /// it, and scrolls the
+    /// line a third of the way down the viewport. Held until <paramref name="path"/> is the document
+    /// on screen and its rows are measured, so it can be asked for before the file has loaded.</summary>
+    public void RequestCaretAt(string path, Features.Editor.TextPosition at)
+    {
+        _pendingCaret = (path, at);
+        ApplyPendingCaret();
+        SetDirty();
+    }
+
+    private void ApplyPendingCaret()
+    {
+        if (_pendingCaret is not { } pending || _surface.LineHeight <= 0) return;
+        if (Document is not { } editor || !PathKey.Comparer.Equals(PathKey.Normalize(editor.Path), PathKey.Normalize(pending.Path))) return;
+        _pendingCaret = null;
+
+        var at = editor.Document.Clamp(pending.At);
+        editor.Write(_selection, Features.Editor.SelectionRange.At(at), null);
+        ReconcileRows();
+        if (RowSource.RowNearestNewLine(at.Line) is { } row)
+            _scroll.SetTarget(ContentOffsetOf(row.Value) - _list.Position.Height / 3f);
+        _selectionController.TakeFocusUnlessTyping();
+        NoteCaretMoved();
+    }
+
+    /// <summary>Lays a guide's hints over the file, or takes them away: lines lit up, and suggested
+    /// lines drawn after a line — a draft shrinking as the reader types it. Only over the file they
+    /// name; another file on screen shows none.</summary>
+    public void SetHints(Features.Editor.EditorHints? hints)
+    {
+        _hints = hints;
+        _ghostAnchor = hints?.Ghost?.After;
+        ApplyGhost();
+        SetDirty();
+    }
+
+    /// <summary>Types what is left of the suggestion into the file after the line it hangs from, as
+    /// one undo step. Answers whether there was anything to take.</summary>
+    public bool TakeGhost(string path)
+    {
+        if (Document is not { } editor || !IsHinted(editor.Path, path)) return false;
+        if (editor.Rows.Ghost is not { Lines.Count: > 0 } ghost) return false;
+
+        var line = editor.Document.Line(ghost.After);
+        var at = new Features.Editor.TextPosition(ghost.After, new RawColumn(line.Length));
+        var text = "\n" + string.Join("\n", ghost.Lines);
+        var pasted = editor.Session.Paste(Features.Editor.SelectionRange.At(at), text);
+        editor.Write(_selection, pasted, null);
+        ReconcileRows();
+        ((Features.Editor.IEditorSurface)this).RevealCaret();
+        return true;
+    }
+
+    private static bool IsHinted(string documentPath, string hintedPath) =>
+        PathKey.Comparer.Equals(PathKey.Normalize(documentPath), PathKey.Normalize(hintedPath));
+
+    private bool SpotlitAt(int rowIndex)
+    {
+        if (_hints is not { Spotlights.Count: > 0 } hints || Document is not { } editor) return false;
+        if (!IsHinted(editor.Path, hints.Path)) return false;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } line) return false;
+        foreach (var span in hints.Spotlights)
+            if (span.Contains(line.Value))
+                return true;
+        return false;
+    }
+
+    // Draws the suggestion into the buffer on screen when it is the hinted file, and takes it out of
+    // whichever buffer had it before.
+    private void ApplyGhost()
+    {
+        var target = Document is { } editor && _hints is { Ghost: not null } hints && IsHinted(editor.Path, hints.Path)
+            ? editor
+            : null;
+        if (!ReferenceEquals(_ghostBuffer, target))
+        {
+            if (_ghostBuffer is { } previous)
+            {
+                previous.Edited -= OnGhostedEdit;
+                previous.Rows.SetGhost(null);
+            }
+
+            _ghostBuffer = target;
+            if (target is not null) target.Edited += OnGhostedEdit;
+        }
+
+        if (target is null || _hints?.Ghost is not { } ghost || _ghostAnchor is not { } anchor) return;
+        var document = target.Document;
+        target.Rows.SetGhost(Features.Editor.GhostMatch.Remaining(
+            ghost, anchor, document.LineCount, n => document.Line(new FileLine(n))));
+        ReconcileRows();
+    }
+
+    // Mid-edit the rows are the editor's; the suggestion is re-matched once the keystroke is done.
+    private void OnGhostedEdit(Features.Editor.DocumentEdit edit)
+    {
+        if (_ghostAnchor is { } anchor) _ghostAnchor = Features.Editor.GhostMatch.Shift(anchor, edit.Inverse);
+        if (_ghostRefreshPosted || _dispatcher is null) return;
+        _ghostRefreshPosted = true;
+        _dispatcher.Post(() =>
+        {
+            _ghostRefreshPosted = false;
+            ApplyGhost();
+        });
+    }
+
+    /// <summary>Where the caret is in the edited file, or null when nothing is being edited or no
+    /// caret has been placed.</summary>
+    public Features.Editor.TextPosition? Caret => CaretInDocument();
+
+    /// <summary>How many lines of a selection <see cref="SelectedText"/> reads: it is published on
+    /// every caret move, and a select-all in a large file would otherwise be copied per keystroke.</summary>
+    private const int SelectedTextLines = 200;
+
+    /// <summary>The text the edited file's selection covers, up to its first
+    /// <see cref="SelectedTextLines"/> lines; empty for a bare caret.</summary>
+    public string SelectedText
+    {
+        get
+        {
+            if (Document is not { } editor || !_selection.IsActive) return string.Empty;
+            var range = editor.Document.Clamp(editor.SelectionOf(_selection).Range);
+            if (range.Start == range.End) return string.Empty;
+            if (range.End.Line.Value - range.Start.Line.Value >= SelectedTextLines)
+                range = new Features.Editor.TextRange(range.Start, Features.Editor.TextPosition.At(range.Start.Line.Value + SelectedTextLines, 0));
+            return editor.Document.Slice(range);
+        }
+    }
+
     private void ApplyPendingScrollLine()
     {
         if (_pendingScrollLine is not { } line || _surface.LineHeight <= 0) return;
@@ -650,6 +797,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         EnsureMetrics(c);
         _scroll.ClampX();
         ApplyPendingScrollLine();
+        ApplyPendingCaret();
         ApplyPendingSearchReveal();
         _scroll.ReassertTarget();
         NotifyTopVisibleLine();
@@ -689,6 +837,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 Diagnostics = MarksOnRow(rowIndex),
                 Link = LinkOnRow(rowIndex),
                 Search = SearchOnRow(rowIndex),
+                Spotlit = SpotlitAt(rowIndex),
             };
         _surface.DrawRow(c, rowRect, rowIndex, z, composing?.Line ?? Recolored(rows[rowIndex]), paint);
 

@@ -65,7 +65,7 @@ public sealed class AgentConnectionServiceTests : IDisposable
             _dispatcher, new MessageBus(), registry, new SilentCommitEditor(), new IdleRemoteOperations(), new TestDocuments.Empty());
         var windows = new NoReviewWindows();
         _source = new AgentToolMcpSource(
-            new AgentToolExport(git, new UnparsedFiles(), new ReviewProgressStore(), windows, surface),
+            new AgentToolExport(git, new UnparsedFiles(), new ReviewProgressStore(), windows, surface, new NoPairingSessions()),
             registry, windows, surface, TimeProvider.System);
     }
 

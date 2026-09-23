@@ -1,4 +1,5 @@
 using GitBench.Features.Branches;
+using GitBench.Features.Pairing;
 using GitBench.Features.StatusBar;
 using GitBench.Features.Submodules;
 using GitBench.Features.Toolbar;
@@ -34,6 +35,7 @@ internal sealed record MainScreenWidget : Widget
                         {
                             North = new ActionsToolbar(),
                             Center = new MainContent(),
+                            East = new PairingPanelSlot(),
                         },
                     },
                 },

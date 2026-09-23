@@ -81,4 +81,5 @@ internal static class LucideIcons
     public const string Box = "";      // box (class, struct, record, interface, enum, type)
     public const string FunctionSquare = ""; // function-square (method, constructor, function)
     public const string Variable = ""; // variable (property, field, event, enum member)
+    public const string Users = "";   // users (start a pairing session)
 }

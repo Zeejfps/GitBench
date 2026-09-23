@@ -85,6 +85,7 @@ internal sealed record ActionsToolbar : Widget
         new SeparatorSpacer(),
         new ToolbarButton { Command = vm.Branch, Icon = LucideIcons.Branch, Label = L.T(s => s.ToolbarBranch) },
         new ToolbarButton { Command = vm.Review, Icon = LucideIcons.Search, Label = L.T(s => s.ToolbarReview) },
+        new ToolbarButton { Command = vm.Pair, Icon = LucideIcons.Users, Label = L.T(s => s.ToolbarPair) },
         new SeparatorSpacer(),
         new ToolbarButton { Command = vm.Stash, Icon = LucideIcons.Stash, Label = L.T(s => s.ToolbarStash) },
         new ToolbarButton { Command = vm.DiscardAll, Icon = LucideIcons.Trash, Label = L.T(s => s.ToolbarDiscard) },

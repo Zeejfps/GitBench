@@ -63,4 +63,11 @@ internal abstract record DiffRow
     /// </remarks>
     public sealed record Lens(
         FileLine At, string Id, int Indent, FileLine NameLine, RawColumn NameColumn) : DiffRow;
+
+    /// <summary>
+    /// A line of code suggested to the reader, drawn between the file's lines without being one of
+    /// them: it has no number, and nothing selects it, types into it, or searches it. Tabs are
+    /// already expanded.
+    /// </summary>
+    public sealed record Ghost(string Text) : DiffRow;
 }

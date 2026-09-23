@@ -55,6 +55,10 @@ public class AppExitGateTests
         public IReadable<TerminalTabs?> Tabs => _tabs;
         public bool HasLiveShell(Guid repoId) => Running.Contains(repoId);
         public IReadOnlyList<Guid> ReposWithLiveShells() => Running;
+
+        public TerminalInstance StartIn(GitBench.Git.Repo repo, ITerminalLaunch launch) => throw new NotSupportedException();
+
+        public void CloseIn(GitBench.Git.Repo repo, TerminalInstance terminal) { }
     }
 
     private sealed class CountingBus : IMessageBus

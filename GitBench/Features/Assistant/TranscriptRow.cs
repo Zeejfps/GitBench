@@ -90,6 +90,9 @@ internal sealed record TranscriptReplyRow : Widget
 {
     public required IReadable<string> Text { get; init; }
 
+    /// <summary>Who is speaking; the assistant unless told otherwise.</summary>
+    public Prop<string?> Speaker { get; init; } = L.T(s => s.AssistantTitle);
+
     protected override IWidget Build(Context ctx)
     {
         var text = Text;
@@ -100,7 +103,7 @@ internal sealed record TranscriptReplyRow : Widget
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                new TranscriptReplyHeader { GetText = () => text.Value },
+                new TranscriptReplyHeader { GetText = () => text.Value, Speaker = Speaker },
                 new TranscriptMarkdownBody { Text = text },
             ],
         };
@@ -112,6 +115,8 @@ internal sealed record TranscriptReplyHeader : Widget
 {
     public required Func<string> GetText { get; init; }
 
+    public Prop<string?> Speaker { get; init; } = L.T(s => s.AssistantTitle);
+
     protected override IWidget Build(Context ctx) => new Row
     {
         CrossAxis = CrossAxisAlignment.Center,
@@ -120,7 +125,7 @@ internal sealed record TranscriptReplyHeader : Widget
         [
             new Text
             {
-                Value = L.T(s => s.AssistantTitle),
+                Value = Speaker,
                 FontSize = FontSize.Caption,
                 Weight = FontWeight.Bold,
                 Color = Theme.Color(s => s.Palette.Accent),

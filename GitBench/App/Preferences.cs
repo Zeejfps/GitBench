@@ -37,6 +37,16 @@ public sealed record Preferences
     public float RepoBarWidth { get; init; } = 220f;
     public bool RepoBarCollapsed { get; init; }
     public float BranchesWidth { get; init; } = 220f;
+    public float PairingPanelWidth { get; init; } = 380f;
+
+    /// <summary>How much help a pairing stop opens with: 0 intent, 1 location, 2 shape, 3 draft.</summary>
+    public int PairingStartingHint { get; init; }
+
+    /// <summary>The command a terminal pairing session starts its agent with.</summary>
+    public string PairingTerminalCommand { get; init; } = Features.Pairing.TerminalAgentCommand.ClaudeCode;
+
+    /// <summary>Each repository's test command for pairing test stops, keyed by repository path.</summary>
+    public IReadOnlyList<PairingTestCommandPreference> PairingTestCommands { get; init; } = [];
     public float CommitDetailsWidth { get; init; } = 380f;
     public float CommitDetailsSplitFraction { get; init; } = 2f / 3f;
 
@@ -101,3 +111,6 @@ public sealed record AssistantModelPreference(string Role, string ProviderId, st
 
 /// <summary>The endpoint remembered for one assistant provider.</summary>
 public sealed record AssistantEndpointPreference(string ProviderId, string BaseUrl);
+
+/// <summary>A repository's test command, with <c>{test}</c> where a test's name goes.</summary>
+public sealed record PairingTestCommandPreference(string RepoPath, string Command);

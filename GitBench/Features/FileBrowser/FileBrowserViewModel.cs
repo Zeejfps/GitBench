@@ -66,6 +66,10 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly State<bool> _renderMarkdown = new(true);
     private readonly State<string?> _breadcrumb = new(null);
     private readonly State<FoldState> _folds = new(FoldState.Open(string.Empty));
+    private readonly State<CaretRequest?> _caretRequest = new(null);
+    private readonly State<EditorCaret?> _caret = new(null);
+    private readonly State<EditorHints?> _hints = new(null);
+    private readonly State<TakeGhostRequest?> _takeGhost = new(null);
 
     private readonly FileBrowserTabs _tabs;
     private readonly FileSearchViewModel _search;
@@ -293,6 +297,58 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         }
 
         _pendingReveal = _previewPath is { } path ? (path, line) : null;
+    }
+
+    /// <summary>A caret placement the editor body has yet to carry out. A state rather than an
+    /// event because the body may not be mounted yet when it is asked for — the Files pane swings
+    /// into view after the file is shown — and it takes the request when it is.</summary>
+    public IReadable<CaretRequest?> CaretRequest => _caretRequest;
+
+    /// <summary>Where the caret is in the file being edited, as the body last reported it.</summary>
+    public IReadable<EditorCaret?> Caret => _caret;
+
+    /// <summary>Opens a file and puts the caret at a place in it, with the keyboard, scrolled a
+    /// third of the way down — where a guided stop wants the reader to start typing.</summary>
+    public void PlaceCaret(string absolutePath, TextPosition at)
+    {
+        if (_disposed) return;
+        var path = PathKey.Normalize(absolutePath);
+        Travel(path, rowKey: null, at.Line.Value, pinned: true);
+        _caretRequest.Value = new CaretRequest(path, at);
+    }
+
+    /// <summary>What a guide has laid over a file: lit lines and suggested code. The body shows
+    /// them while it shows that file.</summary>
+    public IReadable<EditorHints?> Hints => _hints;
+
+    public void ShowHints(EditorHints? hints)
+    {
+        if (!_disposed) _hints.Value = hints;
+    }
+
+    /// <summary>A request to type the suggestion on screen into the file, for the body to carry out.</summary>
+    public IReadable<TakeGhostRequest?> TakeGhostRequested => _takeGhost;
+
+    public void TakeGhost(string absolutePath)
+    {
+        if (!_disposed) _takeGhost.Value = new TakeGhostRequest(PathKey.Normalize(absolutePath));
+    }
+
+    public void CompleteTakeGhost(TakeGhostRequest request)
+    {
+        if (ReferenceEquals(_takeGhost.Value, request)) _takeGhost.Value = null;
+    }
+
+    /// <summary>The body carried out <paramref name="request"/>.</summary>
+    public void CompleteCaretRequest(CaretRequest request)
+    {
+        if (ReferenceEquals(_caretRequest.Value, request)) _caretRequest.Value = null;
+    }
+
+    /// <summary>The body's caret moved.</summary>
+    public void PublishCaret(EditorCaret? caret)
+    {
+        if (!_disposed && _caret.Value != caret) _caret.Value = caret;
     }
 
     /// <summary>Opens a file the reader asked for by name rather than by pointing at it — a
@@ -1107,3 +1163,21 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _tabs.Dispose();
     }
 }
+
+/// <summary>A request to put the editor's caret somewhere. A class, so asking twice for the same
+/// place is two requests.</summary>
+internal sealed class CaretRequest(string path, TextPosition at)
+{
+    public string Path { get; } = path;
+    public TextPosition At { get; } = at;
+}
+
+/// <summary>A request to type the suggestion over a file into it. A class, so asking twice is two
+/// requests.</summary>
+internal sealed class TakeGhostRequest(string path)
+{
+    public string Path { get; } = path;
+}
+
+/// <summary>The editor's caret in a file, and whatever text is selected there.</summary>
+internal sealed record EditorCaret(string Path, TextPosition At, string SelectedText);

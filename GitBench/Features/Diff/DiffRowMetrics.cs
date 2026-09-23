@@ -20,6 +20,7 @@ internal static class DiffRowMetrics
         DiffRow.Tear => lineHeight,
         DiffRow.Line => lineHeight,
         DiffRow.Lens => lineHeight * LensHeightRatio,
+        DiffRow.Ghost => lineHeight,
         _ => throw new ArgumentOutOfRangeException(nameof(row), row, "Unhandled diff row kind."),
     };
 }

@@ -67,6 +67,27 @@ internal static class ShellCommand
     }
 
     /// <summary>
+    /// The same spawn running one command line in the user's shell: its rc files and PATH, so a CLI
+    /// the user installed is found. On Windows the shell stays open after the command, so what it
+    /// printed can still be read.
+    /// </summary>
+    public static PtySessionOptions ForCommand(string workingDirectory, PtySize size, TerminalRgb background, string commandLine)
+    {
+        var (executable, arguments, family) = Shell();
+        var shell = For(workingDirectory, size, background);
+        return shell with
+        {
+            Arguments = family switch
+            {
+                ShellFamily.PowerShell => [.. arguments, "-NoExit", "-Command", commandLine],
+                ShellFamily.CommandProcessor => [.. arguments, "/k", commandLine],
+                ShellFamily.Posix => ["-c", AcquireAndExec, executable, .. arguments, "-c", commandLine],
+                _ => throw new ArgumentOutOfRangeException(nameof(family), family, "Unknown shell family."),
+            },
+        };
+    }
+
+    /// <summary>
     /// The rxvt-era light/dark hint: two palette indices, foreground and background.
     /// </summary>
     /// <remarks>

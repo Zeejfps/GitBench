@@ -3,6 +3,7 @@ using GitBench.Features.Branches;
 using GitBench.Features.Editor;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Operations;
+using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
 using GitBench.Git;
@@ -33,6 +34,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     public Command Fetch { get; }
     public Command Branch { get; }
     public Command Review { get; }
+    public Command Pair { get; }
     public Command Stash { get; }
     public Command DiscardAll { get; }
     public Command OpenFolder { get; }
@@ -82,6 +84,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Review = new Command(DoReview, Slice(s =>
             s.HasActiveRepo && !s.Status.IsHeadInMotion
             && !s.Status.IsDetached && !string.IsNullOrEmpty(s.Status.CurrentBranchName)));
+        Pair = new Command(() => NewPairingSessionDialog.Show(_bus), Slice(s => s.HasActiveRepo));
         Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.Status.IsDirty));
         DiscardAll = new Command(DoDiscardAll, Slice(s => s.HasUnstaged));
         OpenFolder = new Command(DoOpenFolder, repoActionsEnabled);

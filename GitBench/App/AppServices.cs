@@ -14,6 +14,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
+using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Submodules;
@@ -229,6 +230,7 @@ internal static class AppServices
         // What keeps the colouring and the fold chevrons describing the buffer rather than the file
         // it was read from: one parse tree per open document, followed into by each edit.
         context.AddHostedService<DocumentAnnotations>();
+        context.AddHostedService<RepoDocumentSaver>();
         context.AddSingleton<IUnsavedEditsGuard, UnsavedEditsGuard>();
         context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
         // Registered after the browsers and terminals it follows: it points the content panel at
@@ -323,13 +325,43 @@ internal static class AppServices
             ctx.Require<LocalChangesViewModel>(),
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IDocumentStore>()));
+        // Pairing sessions run an agent the app starts itself, pointed at the same server.
+        context.AddSingleton(ctx => new AgentEndpoints(
+            ctx.Require<State<AgentConnectionSettings>>(),
+            ctx.Require<State<AgentConnectionState>>(),
+            ctx.Require<IUiDispatcher>()));
+        context.AddSingleton(ctx => new PairingSessions(
+            ctx.Require<IRepoRegistry>(),
+            PairingSessions.Factory(
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IFileBrowserStore>(),
+                ctx.Require<IFileTextSource>(),
+                ctx.Require<ISymbolExtractor>(),
+                ctx.Require<RepoDocumentSaver>(),
+                new WorkingTreeSnapshots(ctx.Require<IRepoActivityTracker>()),
+                new PairingTestCommands(ctx.Require<PreferencesService>()),
+                ctx.Require<AgentEndpoints>(),
+                new MapServerEnvironment(LoginShellEnvironment.ForChildProcess),
+                ctx.Require<ITerminalSessionStore>(),
+                (name, directory, command) => new CommandLaunch(
+                    name,
+                    directory,
+                    command,
+                    ctx.Require<IPtySessionFactory>(),
+                    ctx.Require<ITerminalEngineFactory>(),
+                    ctx.Require<ITerminalPalette>(),
+                    ctx.Require<IClipboard>()),
+                ctx.Require<IContentNavigator>(),
+                ctx.Require<IUiDispatcher>(),
+                TimeProvider.System)));
         context.AddSingleton(ctx => new AgentToolMcpSource(
             new AgentToolExport(
                 ctx.Require<IGitService>(),
                 ctx.Require<ISymbolExtractor>(),
                 ctx.Require<IReviewProgressStore>(),
                 ctx.Require<ReviewWindowsViewModel>(),
-                ctx.Require<AssistantWriteSurface>()),
+                ctx.Require<AssistantWriteSurface>(),
+                ctx.Require<PairingSessions>()),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<ReviewWindowsViewModel>(),
             ctx.Require<AssistantWriteSurface>(),

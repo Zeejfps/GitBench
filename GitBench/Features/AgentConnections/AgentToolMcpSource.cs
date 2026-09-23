@@ -97,6 +97,9 @@ internal sealed class AgentToolMcpSource : IMcpToolSource
                 if (Walkthrough(repo) is not { } store) return new Bound.Ready(tool);
                 agent.NoteNarrating(store);
                 return new Bound.ReadyNarrating(tool, store);
+            case AgentToolRole.Pairing:
+                agent.NoteDriving(repo);
+                return new Bound.Ready(tool);
             default:
                 throw new InvalidOperationException($"Unhandled tool role {role}.");
         }

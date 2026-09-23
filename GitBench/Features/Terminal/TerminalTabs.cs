@@ -59,11 +59,13 @@ internal sealed class TerminalTabs : IDisposable
     /// The spawn itself still waits for the new grid to report a viewport, since a shell has to be
     /// told how big it is. That is the only window in which one of these is not yet running.
     /// </remarks>
-    public TerminalInstance StartNew()
+    public TerminalInstance StartNew() => StartNew(_create());
+
+    /// <summary>Like <see cref="StartNew()"/>, for a terminal made with a launch of its own.</summary>
+    public TerminalInstance StartNew(TerminalInstance terminal)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        var terminal = _create();
         _terminals.Add(terminal);
         _active.Value = terminal;
         terminal.Start();
