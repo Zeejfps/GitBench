@@ -131,10 +131,14 @@ internal sealed class ChunkRecordingStream : Stream
     private readonly TaskCompletionSource _open = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Dictionary<int, TaskCompletionSource> _arrivals = [];
     private readonly bool _park;
+    private readonly bool _cancellable;
 
-    public ChunkRecordingStream(bool parkUntilReleased = false)
+    /// <param name="cancellable">Whether a parked write gives up when its caller's token is
+    /// cancelled, as a real pipe's does.</param>
+    public ChunkRecordingStream(bool parkUntilReleased = false, bool cancellable = false)
     {
         _park = parkUntilReleased;
+        _cancellable = cancellable;
         if (!parkUntilReleased) _open.TrySetResult();
     }
 
@@ -174,11 +178,19 @@ internal sealed class ChunkRecordingStream : Stream
 
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
     {
+        if (_park && _cancellable) return new ValueTask(RecordWhenOpen(buffer.ToArray(), ct));
         Record(buffer.ToArray());
         return _park ? new ValueTask(_open.Task) : ValueTask.CompletedTask;
     }
 
     public override void Write(byte[] buffer, int offset, int count) => Record(buffer.AsSpan(offset, count).ToArray());
+
+    // The header goes through at once and the body waits, so a cancellation lands between them.
+    private async Task RecordWhenOpen(byte[] chunk, CancellationToken ct)
+    {
+        if (Chunks.Count > 0) await _open.Task.WaitAsync(ct).ConfigureAwait(false);
+        Record(chunk);
+    }
 
     private void Record(byte[] chunk)
     {

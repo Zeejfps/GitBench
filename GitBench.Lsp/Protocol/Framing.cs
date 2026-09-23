@@ -215,11 +215,18 @@ public sealed class LspFrameReader(Stream stream, LspFrameLimits? limits = null)
     }
 }
 
-/// <summary>Writes Content-Length framed payloads. Frames from concurrent callers never interleave.</summary>
+/// <summary>Writes Content-Length framed payloads. Frames from concurrent callers never interleave,
+/// and a frame once started is never left half written.</summary>
 public sealed class LspFrameWriter(Stream stream) : IDisposable
 {
     private readonly SemaphoreSlim _turn = new(1, 1);
 
+    /// <summary>
+    /// Writes one frame. <paramref name="ct"/> only withdraws a frame still waiting its turn: once
+    /// the header is on the wire the payload follows whatever the caller does, because a header
+    /// promising bytes that never come makes the server read the next message as the rest of this
+    /// one — and a server that cannot parse what it reads exits.
+    /// </summary>
     public async ValueTask WriteAsync(ReadOnlyMemory<byte> payload, CancellationToken ct = default)
     {
         var header = Encoding.ASCII.GetBytes(
@@ -228,9 +235,9 @@ public sealed class LspFrameWriter(Stream stream) : IDisposable
         await _turn.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await stream.WriteAsync(header, ct).ConfigureAwait(false);
-            await stream.WriteAsync(payload, ct).ConfigureAwait(false);
-            await stream.FlushAsync(ct).ConfigureAwait(false);
+            await stream.WriteAsync(header, CancellationToken.None).ConfigureAwait(false);
+            await stream.WriteAsync(payload, CancellationToken.None).ConfigureAwait(false);
+            await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {

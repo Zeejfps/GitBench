@@ -214,6 +214,25 @@ public sealed class LspFramingTests
         Assert.Equal("""{"two":2}""", PayloadOf(await reader.ReadAsync()));
     }
 
+    // A caller that gives up after the header has gone out must not leave the frame half written:
+    // the server would read the next message as the rest of this one, fail to parse it, and exit.
+    [Fact]
+    public async Task A_frame_whose_caller_gives_up_midway_still_goes_out_whole()
+    {
+        var wire = new ChunkRecordingStream(parkUntilReleased: true, cancellable: true);
+        var writer = new LspFrameWriter(wire);
+        using var giveUp = new CancellationTokenSource();
+
+        var write = writer.WriteAsync(Bytes.Utf8("""{"whole":true}"""), giveUp.Token).AsTask();
+        await wire.Arrived(1);
+        giveUp.Cancel();
+        wire.Release();
+        await write;
+
+        var reader = new LspFrameReader(new MemoryStream(wire.All));
+        Assert.Equal("""{"whole":true}""", PayloadOf(await reader.ReadAsync()));
+    }
+
     [Fact]
     public async Task Frames_written_at_the_same_time_do_not_interleave()
     {
