@@ -3,6 +3,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Theming;
 
 namespace GitBench.Features.Editor;
 
@@ -181,6 +182,7 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 
         if (_document.Revision == _revision + 1 && Follows(undo) is { } landed)
         {
+            ShiftHighlight(undo, landed.First, landed.LastOld, landed.LastNew);
             Replace(landed.First, landed.LastOld, landed.LastNew);
             _revision = _document.Revision;
             return;
@@ -311,6 +313,59 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 
     private int Contribution(int index) =>
         _lines[index].Cells + FullFileRow.ChipCells(_plan.MarkAt(index + 1));
+
+    /// <summary>
+    /// Carries the colors of the last parse across an edit until the next parse replaces them. Lines
+    /// above the edit keep theirs and lines below move with it; inside it, a line that reads exactly
+    /// as some line of the replaced text did takes that line's colors, so a line pushed down by a
+    /// newline typed before it stays colored. A single line edited in place keeps its own, which are
+    /// close enough for the moment the parse takes. Anything else draws plain until the parse lands.
+    /// </summary>
+    /// <remarks>
+    /// Without this the table stays indexed by the old line numbers, and every line below an
+    /// inserted one is drawn in the colors of the line that used to stand at its number.
+    /// </remarks>
+    private void ShiftHighlight(TextEdit undo, int first, int lastOld, int lastNew)
+    {
+        if (_highlight is not { } highlight) return;
+
+        var replaced = ReplacedLines(undo);
+        var used = new bool[replaced.Length];
+        var shifted = new List<IReadOnlyList<TokenSpan>>(_document.LineCount);
+
+        for (var i = 0; i < first; i++) shifted.Add(highlight.NewSide(i + 1));
+
+        for (var i = first; i <= lastNew; i++)
+        {
+            var text = _document.Line(new FileLine(i + 1));
+            var match = -1;
+            for (var k = 0; k < replaced.Length && match < 0; k++)
+                if (!used[k] && replaced[k] == text) match = k;
+            if (match < 0 && replaced.Length == 1 && lastNew == first) match = 0;
+            if (match >= 0) used[match] = true;
+            shifted.Add(match >= 0 ? highlight.NewSide(first + match + 1) : []);
+        }
+
+        var delta = lastNew - lastOld;
+        for (var i = lastNew + 1; i < _document.LineCount; i++) shifted.Add(highlight.NewSide(i - delta + 1));
+
+        _highlight = highlight.WithNewSide(shifted);
+    }
+
+    /// <summary>The lines the edit replaced, read back out of the edit that would undo it: the text
+    /// around the change on its first and last lines, with what it removed between.</summary>
+    private string[] ReplacedLines(TextEdit undo)
+    {
+        var (start, end) = (undo.Range.Start, undo.Range.End);
+        var firstLine = _document.Line(start.Line);
+        var lastLine = _document.Line(end.Line);
+        var before = firstLine[..Math.Min(start.Column.Value, firstLine.Length)];
+        var after = lastLine[Math.Min(end.Column.Value, lastLine.Length)..];
+
+        var lines = (before + undo.Replacement + after).Split('\n');
+        for (var i = 0; i < lines.Length; i++) lines[i] = lines[i].TrimEnd('\r');
+        return lines;
+    }
 
     private void Replace(int first, int lastOld, int lastNew)
     {

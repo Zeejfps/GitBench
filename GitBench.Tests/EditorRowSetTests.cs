@@ -310,6 +310,59 @@ public sealed class EditorRowSetTests
         Assert.Equal(width, rows.MaxRowCells);
     }
 
+    private static IReadOnlyList<TokenSpan> Colored(TokenColorSlot slot, int length) =>
+        new[] { new TokenSpan(0, length, slot) };
+
+    private static (TextDocument Document, EditorRowSet Rows) Highlighted()
+    {
+        var (document, rows) = Document("int a;\nreturn b;\n// c");
+        rows.SetAnnotations(Parsed(document, new DiffHighlight(null, new[]
+        {
+            Colored(TokenColorSlot.Type, 3),
+            Colored(TokenColorSlot.Keyword, 6),
+            Colored(TokenColorSlot.Comment, 4),
+        })));
+        return (document, rows);
+    }
+
+    // Enter typed at the start of a line pushes that line down: it keeps its own colors rather than
+    // the empty line above it, and every line below keeps its own rather than its neighbour's.
+    [Fact]
+    public void ALinePushedDownByANewlineKeepsItsColorsUntilTheNextParse()
+    {
+        var (document, rows) = Highlighted();
+
+        rows.Reproject(document.Apply(Insert(2, 0, "\n")));
+
+        Assert.Equal(TokenColorSlot.Type, Line(rows, 0).Spans![0].Slot);
+        Assert.Empty(Line(rows, 1).Spans ?? []);
+        Assert.Equal(TokenColorSlot.Keyword, Line(rows, 2).Spans![0].Slot);
+        Assert.Equal(TokenColorSlot.Comment, Line(rows, 3).Spans![0].Slot);
+    }
+
+    [Fact]
+    public void LinesBelowADeletedLineMoveUpWithTheirColors()
+    {
+        var (document, rows) = Highlighted();
+
+        rows.Reproject(document.Apply(new TextEdit(
+            new TextRange(TextPosition.At(1, 6), TextPosition.At(2, 9)), string.Empty)));
+
+        Assert.Equal("int a;", Raw(rows, 0));
+        Assert.Equal(TokenColorSlot.Comment, Line(rows, 1).Spans![0].Slot);
+    }
+
+    [Fact]
+    public void ALineTypedIntoKeepsItsColorsUntilTheNextParse()
+    {
+        var (document, rows) = Highlighted();
+
+        rows.Reproject(document.Apply(Insert(2, 9, " ")));
+
+        Assert.Equal(TokenColorSlot.Keyword, Line(rows, 1).Spans![0].Slot);
+        Assert.Equal(TokenColorSlot.Comment, Line(rows, 2).Spans![0].Slot);
+    }
+
     private static (TextDocument Document, EditorRowSet Rows) Document(string text)
     {
         var document = TextDocument.FromText(text);

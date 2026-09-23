@@ -24,6 +24,13 @@ internal sealed class DiffHighlight
         _newLines = newLines;
     }
 
+    /// <summary>The new side's spans for one 1-based line, or empty.</summary>
+    public IReadOnlyList<TokenSpan> NewSide(int lineNumber) => Lookup(_newLines, lineNumber);
+
+    /// <summary>The same old side beside a replaced new side, for a new side that has moved under
+    /// an edit.</summary>
+    public DiffHighlight WithNewSide(IReadOnlyList<IReadOnlyList<TokenSpan>> newLines) => new(_oldLines, newLines);
+
     /// <summary>Spans for a rendered diff row: removed rows resolve against the old file, added
     /// and context rows against the new file. Returns empty when no spans apply.</summary>
     public IReadOnlyList<TokenSpan> ForLine(DiffLineKind kind, int? oldLineNumber, int? newLineNumber)
