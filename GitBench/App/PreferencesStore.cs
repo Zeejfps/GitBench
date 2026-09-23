@@ -44,7 +44,6 @@ public static class PreferencesStore
         public bool? RepoBarCollapsed { get; set; } = false;
         public float? BranchesWidth { get; set; } = 220f;
         public float? PairingPanelWidth { get; set; }
-        public int? PairingStartingHint { get; set; }
         public string? PairingTerminalCommand { get; set; }
         public List<PairingTestCommandShape>? PairingTestCommands { get; set; }
         public float? CommitDetailsWidth { get; set; } = 380f;
@@ -151,7 +150,6 @@ public static class PreferencesStore
                 RepoBarCollapsed = file.RepoBarCollapsed ?? defaults.RepoBarCollapsed,
                 BranchesWidth = file.BranchesWidth is > 0 ? file.BranchesWidth.Value : defaults.BranchesWidth,
                 PairingPanelWidth = file.PairingPanelWidth is > 0 ? file.PairingPanelWidth.Value : defaults.PairingPanelWidth,
-                PairingStartingHint = file.PairingStartingHint is >= 0 and <= 3 ? file.PairingStartingHint.Value : defaults.PairingStartingHint,
                 PairingTerminalCommand = string.IsNullOrWhiteSpace(file.PairingTerminalCommand) ? defaults.PairingTerminalCommand : file.PairingTerminalCommand,
                 PairingTestCommands = (file.PairingTestCommands ?? [])
                     .Where(c => !string.IsNullOrWhiteSpace(c.RepoPath) && !string.IsNullOrWhiteSpace(c.Command))
@@ -206,7 +204,6 @@ public static class PreferencesStore
             RepoBarCollapsed = preferences.RepoBarCollapsed,
             BranchesWidth = preferences.BranchesWidth,
             PairingPanelWidth = preferences.PairingPanelWidth,
-            PairingStartingHint = preferences.PairingStartingHint,
             PairingTerminalCommand = preferences.PairingTerminalCommand,
             PairingTestCommands = preferences.PairingTestCommands
                 .Select(c => new PairingTestCommandShape { RepoPath = c.RepoPath, Command = c.Command })

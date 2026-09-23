@@ -82,12 +82,12 @@ internal abstract record PairingStart
 internal sealed class PairingSessions : IPairingSessions, IDisposable
 {
     private readonly IRepoRegistry _repos;
-    private readonly Func<Repo, string, PairingHarness, HintLevel, PairingSession> _create;
+    private readonly Func<Repo, string, PairingHarness, PairingSession> _create;
     private readonly Dictionary<Guid, PairingSession> _sessions = new();
     private readonly State<PairingSession?> _active = new(null);
     private readonly IDisposable _following;
 
-    public PairingSessions(IRepoRegistry repos, Func<Repo, string, PairingHarness, HintLevel, PairingSession> create)
+    public PairingSessions(IRepoRegistry repos, Func<Repo, string, PairingHarness, PairingSession> create)
     {
         _repos = repos;
         _create = create;
@@ -99,7 +99,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
 
     public PairingStore? StoreFor(Guid repoId) => _sessions.TryGetValue(repoId, out var session) ? session.Store : null;
 
-    public PairingStart Start(Repo repo, string goal, PairingHarness harness, HintLevel startingHint)
+    public PairingStart Start(Repo repo, string goal, PairingHarness harness)
     {
         if (_sessions.TryGetValue(repo.Id, out var existing))
         {
@@ -108,7 +108,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
             _ = existing.DisposeAsync().AsTask();
         }
 
-        var session = _create(repo, goal.Trim(), harness, startingHint);
+        var session = _create(repo, goal.Trim(), harness);
         _sessions[repo.Id] = session;
         Refresh();
         return new PairingStart.Started(session);
@@ -137,7 +137,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
 
     /// <summary>The factory the app runs sessions with: the Files pane as the surface, git for the
     /// snapshots, and the harness's own driver.</summary>
-    public static Func<Repo, string, PairingHarness, HintLevel, PairingSession> Factory(
+    public static Func<Repo, string, PairingHarness, PairingSession> Factory(
         IRepoRegistry repos,
         IFileBrowserStore browsers,
         IFileTextSource texts,
@@ -152,10 +152,10 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         IContentNavigator navigator,
         IUiDispatcher dispatcher,
         TimeProvider clock) =>
-        (repo, goal, harness, startingHint) =>
+        (repo, goal, harness) =>
         {
             var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver);
-            var store = new PairingStore(goal, harness.Label, presentation, new GitPairingWorkspace(repo.Path, snapshots, testCommands), dispatcher, clock, startingHint);
+            var store = new PairingStore(goal, harness.Label, presentation, new GitPairingWorkspace(repo.Path, snapshots, testCommands), dispatcher, clock);
             IAsyncDisposable driver = harness switch
             {
                 PairingHarness.Acp acp => AcpPairingDriver.Start(store, repo, acp.Harness, endpoints, environment, dispatcher),

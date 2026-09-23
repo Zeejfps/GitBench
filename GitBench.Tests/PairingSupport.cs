@@ -1,3 +1,4 @@
+using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Pairing;
@@ -14,7 +15,8 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
     public State<EditorCaret?> CaretState { get; } = new(null);
 
     public Func<StopTarget, StopPlacement> Answer { get; set; } = target =>
-        new StopPlacement.Placed(new StopLocation.OnSymbol("C:/repo/" + target.Path, TextPosition.At(10, 4), "void " + target.Symbol + "()"));
+        new StopPlacement.Placed(new StopLocation.OnSymbol(
+            "C:/repo/" + target.Path, TextPosition.At(10, 4), "void " + target.Symbol + "()", new FileLine(14), 40));
 
     public List<string> SaveProblems { get; } = new();
 
@@ -28,20 +30,32 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
 
     public void Reveal(StopLocation location) => Calls.Add("reveal");
 
+    public void RevealDraft(StopLocation location, StopDraft draft) => Calls.Add("reveal draft");
+
     public bool ShowFile(string relativePath, int line)
     {
         Calls.Add($"show file {relativePath}:{line}");
         return relativePath != "missing.cs";
     }
 
-    public List<(IReadOnlyList<LineSpan> Spotlights, PairingHint? Code)> Hinted { get; } = new();
+    public List<StopDraft> Drafts { get; } = new();
 
-    public void ShowHints(StopLocation location, IReadOnlyList<LineSpan> spotlights, PairingHint? code) =>
-        Hinted.Add((spotlights, code));
+    public void ShowDraft(StopLocation location, StopDraft draft)
+    {
+        Calls.Add("show draft");
+        Drafts.Add(draft);
+    }
 
-    public void ClearHints() => Calls.Add("clear hints");
+    public void ClearDraft() => Calls.Add("clear draft");
 
-    public void TakeDraft(StopLocation location) => Calls.Add("take draft");
+    /// <summary>Whether the editor manages to put the agent's code in.</summary>
+    public bool TakeSucceeds { get; set; } = true;
+
+    public Task<bool> TakeDraftAsync(StopLocation location)
+    {
+        Calls.Add("take draft");
+        return Task.FromResult(TakeSucceeds);
+    }
 
     public IReadOnlyList<string> SaveUnsaved()
     {
@@ -94,6 +108,13 @@ internal sealed class ScriptedWorkspace : IPairingWorkspace
         var prior = Files.GetValueOrDefault(relativePath);
         Files[relativePath] = content;
         return new TestWrite.Written(new TestFileUndo(relativePath, prior is null ? null : System.Text.Encoding.UTF8.GetBytes(prior)));
+    });
+
+    public Task<FileCreation> CreateFileAsync(string relativePath, string content, CancellationToken ct) => Task.Run<FileCreation>(() =>
+    {
+        if (Files.ContainsKey(relativePath)) return new FileCreation.Refused($"{relativePath} exists.");
+        Files[relativePath] = content;
+        return new FileCreation.Created();
     });
 
     public Task RestoreAsync(TestFileUndo undo, CancellationToken ct) => Task.Run(() =>

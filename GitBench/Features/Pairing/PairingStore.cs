@@ -13,17 +13,22 @@ internal interface IPairingPresentation
     /// Moves nothing.</summary>
     Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct);
 
-    /// <summary>Lays hints over the stop's file: lit lines, suggested lines, or both.</summary>
-    void ShowHints(StopLocation location, IReadOnlyList<LineSpan> spotlights, PairingHint? code);
+    /// <summary>Draws the agent's code for the stop into its file where it goes.</summary>
+    void ShowDraft(StopLocation location, StopDraft draft);
 
-    /// <summary>Takes every hint off the editor.</summary>
-    void ClearHints();
+    /// <summary>Takes the agent's code off the editor.</summary>
+    void ClearDraft();
 
-    /// <summary>Types what is left of a draft into the file as one undo step.</summary>
-    void TakeDraft(StopLocation location);
+    /// <summary>Puts the agent's code into the stop's open file as one undo step, unsaved. Answers
+    /// whether it went in.</summary>
+    Task<bool> TakeDraftAsync(StopLocation location);
 
-    /// <summary>Puts the caret back where a stop landed.</summary>
+    /// <summary>Puts the caret on a place a stop or <c>pairing_show</c> found.</summary>
     void Reveal(StopLocation location);
+
+    /// <summary>Puts the caret where the agent's code for a stop goes: the first line it replaces,
+    /// or the end of the line it goes in after.</summary>
+    void RevealDraft(StopLocation location, StopDraft draft);
 
     /// <summary>Opens a repository file with the caret at the start of a line; false when there is
     /// no such file.</summary>
@@ -56,6 +61,9 @@ internal interface IPairingWorkspace
     /// <summary>Writes a test file, remembering what it held.</summary>
     Task<TestWrite> WriteTestAsync(string relativePath, string content, CancellationToken ct);
 
+    /// <summary>Creates a file the user accepted from the agent. Refused when it exists.</summary>
+    Task<FileCreation> CreateFileAsync(string relativePath, string content, CancellationToken ct);
+
     /// <summary>Puts a test file back the way it was before the agent wrote it.</summary>
     Task RestoreAsync(TestFileUndo undo, CancellationToken ct);
 
@@ -68,6 +76,14 @@ internal abstract record TestWrite
     public sealed record Written(TestFileUndo Undo) : TestWrite;
 
     public sealed record Refused(string Reason) : TestWrite;
+}
+
+/// <summary>How creating a file went.</summary>
+internal abstract record FileCreation
+{
+    public sealed record Created : FileCreation;
+
+    public sealed record Refused(string Reason) : FileCreation;
 }
 
 /// <summary>What <c>pairing_write_test</c> came to.</summary>
@@ -123,13 +139,10 @@ internal sealed class PairingStore : IDisposable
     private readonly State<IReadOnlyList<RoadmapEntry>> _roadmap = new(Array.Empty<RoadmapEntry>());
     private readonly State<OpenStop?> _stop = new(null);
     private readonly State<StopActivity> _activity = new(StopActivity.Idle);
-    private readonly State<HintLevel> _hintLevel;
-    private readonly State<IReadOnlyList<PairingHint>> _hints = new(Array.Empty<PairingHint>());
     private readonly State<State<string>?> _openNarration = new(null);
     private readonly ObservableList<PairingMessage> _messages = new();
     private readonly Queue<PairingAction> _queued = new();
     private readonly Derived<bool> _isComposing;
-    private readonly HintLevel _startingHint;
 
     private IReadOnlyList<Milestone> _milestones = Array.Empty<Milestone>();
     private int _stopsSent;
@@ -147,8 +160,7 @@ internal sealed class PairingStore : IDisposable
         IPairingPresentation presentation,
         IPairingWorkspace workspace,
         IUiDispatcher dispatcher,
-        TimeProvider clock,
-        HintLevel startingHint = HintLevel.Intent)
+        TimeProvider clock)
     {
         Goal = goal;
         Harness = harness;
@@ -156,8 +168,6 @@ internal sealed class PairingStore : IDisposable
         _workspace = workspace;
         _dispatcher = dispatcher;
         _clock = clock;
-        _startingHint = startingHint;
-        _hintLevel = new State<HintLevel>(startingHint);
         _isComposing = new Derived<bool>(() =>
             _phase.Value is PairingPhase.Starting or PairingPhase.Running { Waiting: false } && _openNarration.Value is null);
     }
@@ -177,12 +187,6 @@ internal sealed class PairingStore : IDisposable
 
     /// <summary>What Done is busy with.</summary>
     public IReadable<StopActivity> Activity => _activity;
-
-    /// <summary>How much the agent has been asked to show at the open stop.</summary>
-    public IReadable<HintLevel> Hint => _hintLevel;
-
-    /// <summary>What the agent has shown at the open stop above intent, one per level.</summary>
-    public IReadable<IReadOnlyList<PairingHint>> Hints => _hints;
 
     public ObservableList<PairingMessage> Messages => _messages;
 
@@ -218,10 +222,10 @@ internal sealed class PairingStore : IDisposable
         _milestones = milestones;
     }
 
-    /// <summary>Opens a stop: places it in the editor and captures the working tree it starts
-    /// from. Refused while another stop is open, unless <paramref name="replace"/>.</summary>
+    /// <summary>Opens a stop: places it and the agent's code for it in the editor, and captures the
+    /// working tree it starts from. Refused while another stop is open, unless <paramref name="replace"/>.</summary>
     public async Task<StopOpening> OpenStopAsync(
-        StopTarget target, string title, string reason, PairingStopKind kind, bool replace, CancellationToken ct)
+        StopTarget target, string title, string reason, PairingStopKind kind, DraftRequest draft, bool replace, CancellationToken ct)
     {
         ThrowIfDisposed();
         if (!IsLive) return new StopOpening.Refused("The session has ended.");
@@ -236,7 +240,7 @@ internal sealed class PairingStore : IDisposable
         _changingStop = true;
         try
         {
-            return await OpenStopLockedAsync(target, title, reason, kind, replace, ct);
+            return await OpenStopLockedAsync(target, title, reason, kind, draft, replace, ct);
         }
         finally
         {
@@ -246,7 +250,7 @@ internal sealed class PairingStore : IDisposable
     }
 
     private async Task<StopOpening> OpenStopLockedAsync(
-        StopTarget target, string title, string reason, PairingStopKind kind, bool replace, CancellationToken ct)
+        StopTarget target, string title, string reason, PairingStopKind kind, DraftRequest request, bool replace, CancellationToken ct)
     {
         StopLocation location;
         switch (await _presentation.LocateAsync(target, ct))
@@ -258,6 +262,19 @@ internal sealed class PairingStore : IDisposable
                 return new StopOpening.Refused(Describe(missed.Miss));
             default:
                 throw new InvalidOperationException("Unhandled stop placement.");
+        }
+
+        StopDraft draft;
+        switch (DraftPlacing.Place(location, request))
+        {
+            case DraftPlacement.Placed placed:
+                draft = placed.Draft;
+                break;
+            case DraftPlacement.Refused refused:
+                await OnUi();
+                return new StopOpening.Refused(refused.Message);
+            default:
+                throw new InvalidOperationException("Unhandled draft placement.");
         }
 
         await OnUi();
@@ -279,11 +296,10 @@ internal sealed class PairingStore : IDisposable
         if (_activity.Value != StopActivity.Idle || (_stop.Value is not null && !replace))
             return new StopOpening.Refused("The user moved on while the stop was being placed. Call pairing_wait.");
         var stop = new PairingStop(++_stopsSent, target, title, reason, kind);
-        var opened = new OpenStop(stop, location, baseline, Test: null);
+        var opened = new OpenStop(stop, location, baseline, Test: null, draft, DraftTaken: false);
         _stop.Value = opened;
-        _hintLevel.Value = _startingHint;
-        ClearHints();
-        _presentation.Reveal(location);
+        _presentation.RevealDraft(location, draft);
+        _presentation.ShowDraft(location, draft);
         CloseNarration();
         return new StopOpening.Opened(opened);
     }
@@ -362,32 +378,6 @@ internal sealed class PairingStore : IDisposable
     /// <summary>The agent's turn ended; its next prose is a message of its own.</summary>
     public void CloseNarration() => _openNarration.Value = null;
 
-    /// <summary>Shows the agent's hint at the open stop. Only at a level the user has asked for:
-    /// hints never go up on the agent's own say.</summary>
-    public string? ShowHint(PairingHint hint)
-    {
-        ThrowIfDisposed();
-        if (_stop.Value is not { } open) return "No stop is open.";
-        if (hint.Level > _hintLevel.Value)
-            return $"The user has asked for help up to {PairingTools.LevelName(_hintLevel.Value)} only. Hints go up a level when they ask.";
-
-        var shown = new List<PairingHint>(_hints.Value.Where(h => h.Level != hint.Level)) { hint };
-        shown.Sort((a, b) => a.Level.CompareTo(b.Level));
-        _hints.Value = shown;
-        var spotlights = shown.OfType<PairingHint.Location>().SelectMany(h => h.Lines).ToArray();
-        var code = shown.LastOrDefault(h => h is PairingHint.Shape or PairingHint.Draft);
-        _presentation.ShowHints(open.Location, spotlights, code);
-        return null;
-    }
-
-    /// <summary>Types the draft hint into the file as one undo step.</summary>
-    public void TakeDraft()
-    {
-        if (_disposed || _stop.Value is not { } open) return;
-        if (!_hints.Value.Any(h => h is PairingHint.Draft)) return;
-        _presentation.TakeDraft(open.Location);
-    }
-
     // Moving on from a stop starts the conversation afresh: what was said about one stop is noise
     // under the next. The agent keeps its own memory of it. A question still waiting on the user
     // stays, since the agent is blocked on the answer.
@@ -397,12 +387,6 @@ internal sealed class PairingStore : IDisposable
         var waiting = _messages.OfType<PairingMessage.Approval>().Where(a => a.Pending.IsPending.Value).ToList();
         _messages.Clear();
         foreach (var approval in waiting) _messages.Add(approval);
-    }
-
-    private void ClearHints()
-    {
-        _hints.Value = Array.Empty<PairingHint>();
-        _presentation.ClearHints();
     }
 
     /// <summary>Puts a tool call the write guard has no rule for in front of the user.</summary>
@@ -469,6 +453,56 @@ internal sealed class PairingStore : IDisposable
         await CloseAsync(open.Stop.Number, red.Run, forced: true);
     }
 
+    /// <summary>Puts the agent's code for the open stop into the file and finishes the stop, as Done
+    /// would: the code is the user's to accept. A test stop still has to go green.</summary>
+    public async Task AcceptAsync()
+    {
+        if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle || !CanFinish(open)) return;
+        if (open.DraftTaken)
+        {
+            await DoneAsync();
+            return;
+        }
+
+        _activity.Value = StopActivity.Accepting;
+        string? failure;
+        if (open.Draft.Place is DraftPlace.NewFile)
+        {
+            var created = await _workspace.CreateFileAsync(open.Stop.Target.Path, open.Draft.Code + "\n", _lifetime.Token);
+            await OnUi();
+            failure = created switch
+            {
+                FileCreation.Created => null,
+                FileCreation.Refused refused => refused.Reason,
+                _ => throw new InvalidOperationException("Unhandled file creation."),
+            };
+        }
+        else
+        {
+            _presentation.RevealDraft(open.Location, open.Draft);
+            var taken = await _presentation.TakeDraftAsync(open.Location);
+            await OnUi();
+            failure = taken ? null : $"The agent's code could not be put into {open.Stop.Target.Path}. Open the file and accept again.";
+        }
+
+        _activity.Value = StopActivity.Idle;
+        if (!StillOn(open.Stop.Number)) return;
+        if (failure is not null)
+        {
+            AddNotice(failure, NoticeTone.Error);
+            return;
+        }
+
+        _stop.Value = _stop.Value! with { DraftTaken = true };
+        _presentation.ClearDraft();
+        await DoneAsync();
+    }
+
+    /// <summary>Whether Done can close the stop now: an edit stop any time, a test stop once its
+    /// test has gone red.</summary>
+    public static bool CanFinish(OpenStop open) =>
+        open.Stop.Kind == PairingStopKind.Edit || open.Test?.State is TestState.Red;
+
     // Saves, takes the diff since the stop's baseline, and hands it over as Done.
     private async Task CloseAsync(int number, TestRun? test, bool forced, IReadOnlyList<string>? saved = null)
     {
@@ -513,11 +547,12 @@ internal sealed class PairingStore : IDisposable
                 throw new InvalidOperationException("Unhandled snapshot result.");
         }
 
+        var accepted = _stop.Value!.DraftTaken;
         _activity.Value = StopActivity.Idle;
         _stop.Value = null;
-        ClearHints();
+        _presentation.ClearDraft();
         ClearConversation();
-        Deliver(new PairingAction.Done(number, diff, test, forced, problems));
+        Deliver(new PairingAction.Done(number, diff, accepted, test, forced, problems));
     }
 
     // ── test stops ───────────────────────────────────────────────────────────────────────────
@@ -679,7 +714,7 @@ internal sealed class PairingStore : IDisposable
     {
         if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return;
         _stop.Value = null;
-        ClearHints();
+        _presentation.ClearDraft();
         ClearConversation();
         Deliver(new PairingAction.Skipped(open.Stop.Number));
     }
@@ -694,15 +729,6 @@ internal sealed class PairingStore : IDisposable
         CloseNarration();
         _messages.Add(new PairingMessage.FromUser(said));
         Deliver(new PairingAction.Message(StopNumber, said, _presentation.Caret.Value));
-    }
-
-    /// <summary>Asks the agent for one more level of help at the open stop.</summary>
-    public void RequestHint()
-    {
-        if (_disposed || !IsLive || _stop.Value is null || _hintLevel.Value == HintLevel.Draft) return;
-        var next = _hintLevel.Value + 1;
-        _hintLevel.Value = next;
-        Deliver(new PairingAction.Hint(StopNumber, next));
     }
 
     /// <summary>The user ends the session. The agent's wait answers <c>ended</c>.</summary>
@@ -721,7 +747,7 @@ internal sealed class PairingStore : IDisposable
     }
 
     /// <summary>Takes the user to a place the agent points at while they talk: a declaration, or a
-    /// line. The open stop, its card and its hints stay as they are; the card brings the user back.</summary>
+    /// line. The open stop, its card and its draft stay as they are; the card brings the user back.</summary>
     public async Task<Showing> ShowAsync(string path, string? symbol, int? line, CancellationToken ct)
     {
         ThrowIfDisposed();
@@ -753,10 +779,10 @@ internal sealed class PairingStore : IDisposable
         }
     }
 
-    /// <summary>Puts the caret back on the open stop.</summary>
+    /// <summary>Puts the caret back where the open stop's code goes.</summary>
     public void RevealStop()
     {
-        if (_stop.Value is { } open) _presentation.Reveal(open.Location);
+        if (_stop.Value is { } open) _presentation.RevealDraft(open.Location, open.Draft);
     }
 
     public void Dispose()
@@ -775,7 +801,7 @@ internal sealed class PairingStore : IDisposable
     private void Finish(PairingPhase phase, PairingAction? lastWord = null)
     {
         _stop.Value = null;
-        ClearHints();
+        _presentation.ClearDraft();
         _activity.Value = StopActivity.Idle;
         CloseNarration();
         _phase.Value = phase;
@@ -799,7 +825,7 @@ internal sealed class PairingStore : IDisposable
 
     private static bool IsMove(PairingAction action) => action switch
     {
-        PairingAction.Done or PairingAction.Message or PairingAction.Skipped or PairingAction.Hint
+        PairingAction.Done or PairingAction.Message or PairingAction.Skipped
             or PairingAction.TestRan or PairingAction.TestUndone => true,
         PairingAction.Ended or PairingAction.Pending or PairingAction.Cancelled => false,
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action."),

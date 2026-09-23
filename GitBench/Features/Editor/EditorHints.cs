@@ -8,13 +8,22 @@ internal readonly record struct LineSpan(int From, int To)
     public bool Contains(int line) => From <= line && line <= To;
 }
 
-/// <summary>What a guide has laid over one file in the editor: lines lit up, and suggested lines
-/// drawn after a line of it.</summary>
-internal sealed record EditorHints(string Path, IReadOnlyList<LineSpan> Spotlights, EditorGhost? Ghost);
+/// <summary>Suggested code a guide has laid over one file in the editor.</summary>
+internal sealed record EditorHints(string Path, EditorGhost Ghost);
 
-/// <summary>Suggested code drawn after a line. A draft shrinks as the reader types it: each of its
-/// lines goes once a line reading the same is in the file just below where it hangs.</summary>
-internal sealed record EditorGhost(FileLine After, IReadOnlyList<string> Lines, bool ShrinksAsTyped);
+/// <summary>Suggested code, and where in the file it goes.</summary>
+internal sealed record EditorGhost(GhostPlace Place, IReadOnlyList<string> Lines);
+
+/// <summary>Where suggested code goes in a file.</summary>
+internal abstract record GhostPlace
+{
+    /// <summary>In after a line. It shrinks as the reader types it: each of its lines goes once a
+    /// line reading the same is in the file just below where it hangs.</summary>
+    public sealed record Insert(FileLine After) : GhostPlace;
+
+    /// <summary>In place of a run of lines, which are lit up with the suggestion drawn under them.</summary>
+    public sealed record Replace(FileLine From, FileLine To) : GhostPlace;
+}
 
 /// <summary>Which lines of a draft the reader has not typed yet, and where the rest now hangs.</summary>
 internal static class GhostMatch
@@ -23,19 +32,17 @@ internal static class GhostMatch
     private const int Slack = 8;
 
     /// <param name="line">Reads a file line, 1-based.</param>
-    public static GhostLines Remaining(EditorGhost ghost, FileLine anchor, int lineCount, Func<int, string> line)
+    public static GhostLines Remaining(IReadOnlyList<string> draft, FileLine anchor, int lineCount, Func<int, string> line)
     {
-        if (!ghost.ShrinksAsTyped) return new GhostLines(anchor, ghost.Lines);
-
         // Typed means inside the run the reader has written: from the anchor down to the last line
         // with real content that reads as a line of the draft. A lone brace below it is the file's
         // own, not theirs.
-        var end = Math.Min(lineCount, anchor.Value + ghost.Lines.Count * 2 + Slack);
+        var end = Math.Min(lineCount, anchor.Value + draft.Count * 2 + Slack);
         var lastTyped = anchor.Value;
         for (var i = end; i > anchor.Value; i--)
         {
             var text = line(i).Trim();
-            if (!text.Any(char.IsLetterOrDigit) || !Contains(ghost.Lines, text)) continue;
+            if (!text.Any(char.IsLetterOrDigit) || !Contains(draft, text)) continue;
             lastTyped = i;
             break;
         }
@@ -48,17 +55,17 @@ internal static class GhostMatch
             typed[text] = typed.GetValueOrDefault(text) + 1;
         }
 
-        var remaining = new List<string>(ghost.Lines.Count);
-        foreach (var draft in ghost.Lines)
+        var remaining = new List<string>(draft.Count);
+        foreach (var suggested in draft)
         {
-            var key = draft.Trim();
+            var key = suggested.Trim();
             if (key.Length > 0 && typed.TryGetValue(key, out var count) && count > 0)
             {
                 typed[key] = count - 1;
                 continue;
             }
 
-            remaining.Add(draft);
+            remaining.Add(suggested);
         }
 
         while (remaining.Count > 0 && remaining[0].Trim().Length == 0) remaining.RemoveAt(0);

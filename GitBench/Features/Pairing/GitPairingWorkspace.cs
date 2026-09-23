@@ -78,6 +78,26 @@ internal sealed class GitPairingWorkspace : IPairingWorkspace
         }
     }, ct);
 
+    public Task<FileCreation> CreateFileAsync(string relativePath, string content, CancellationToken ct) => Task.Run<FileCreation>(() =>
+    {
+        if (Absolute(relativePath) is not { } path) return new FileCreation.Refused($"{relativePath} is outside the repository.");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
+            file.Write(Utf8.GetBytes(content));
+            return new FileCreation.Created();
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            return new FileCreation.Refused($"{relativePath} exists now. Write it yourself, or skip the stop.");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new FileCreation.Refused($"{relativePath} could not be created: {e.Message}");
+        }
+    }, ct);
+
     public Task RestoreAsync(TestFileUndo undo, CancellationToken ct) => Task.Run(() =>
     {
         if (Absolute(undo.RelativePath) is not { } path) return;

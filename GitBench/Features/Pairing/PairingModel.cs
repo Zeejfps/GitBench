@@ -1,4 +1,5 @@
 using GitBench.Features.Assistant;
+using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using ZGF.Observable;
@@ -57,11 +58,12 @@ internal abstract record PairingPhase
 /// <summary>Where a stop landed in the editor.</summary>
 internal abstract record StopLocation
 {
-    /// <summary>On the declaration's name.</summary>
-    public sealed record OnSymbol(string AbsolutePath, TextPosition At, string LineText) : StopLocation;
+    /// <summary>On the declaration's name. <paramref name="LastLine"/> is where the declaration
+    /// ends; <paramref name="LineCount"/> is the file's.</summary>
+    public sealed record OnSymbol(string AbsolutePath, TextPosition At, string LineText, FileLine LastLine, int LineCount) : StopLocation;
 
     /// <summary>A declaration still to be written: the end of the one it goes after.</summary>
-    public sealed record Insertion(string AbsolutePath, TextPosition At, string After) : StopLocation;
+    public sealed record Insertion(string AbsolutePath, TextPosition At, string After, int LineCount) : StopLocation;
 
     /// <summary>The file doesn't exist yet: the user creates it.</summary>
     public sealed record NewFile(string AbsolutePath) : StopLocation;
@@ -97,8 +99,40 @@ internal abstract record TestRun
     public sealed record Unrunnable(string Reason) : TestRun;
 }
 
-/// <summary>The stop the user is on, and what it has come to.</summary>
-internal sealed record OpenStop(PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test);
+/// <summary>Where the agent asked its code for a stop to go, before it is checked against the file.</summary>
+internal abstract record DraftSpan
+{
+    /// <summary>In place of the stop's declaration, after the one it names, or as the new file.</summary>
+    public sealed record Declaration : DraftSpan;
+
+    /// <summary>In place of these lines, 1-based and inclusive.</summary>
+    public sealed record Lines(int From, int To) : DraftSpan;
+
+    /// <summary>In after this line, 1-based.</summary>
+    public sealed record After(int Line) : DraftSpan;
+}
+
+/// <summary>The agent's code for a stop, as it sent it.</summary>
+internal sealed record DraftRequest(string Code, DraftSpan Span);
+
+/// <summary>Where the agent's code for a stop goes in the file.</summary>
+internal abstract record DraftPlace
+{
+    public sealed record Replace(LineSpan Lines) : DraftPlace;
+
+    public sealed record InsertAfter(FileLine Line) : DraftPlace;
+
+    /// <summary>The whole of a file that doesn't exist yet.</summary>
+    public sealed record NewFile : DraftPlace;
+}
+
+/// <summary>The agent's code for one stop — one block — and where it goes. The user accepts it
+/// or types it themselves.</summary>
+internal sealed record StopDraft(string Code, DraftPlace Place);
+
+/// <summary>The stop the user is on, and what it has come to. <paramref name="DraftTaken"/>: the
+/// user accepted the agent's code into the file.</summary>
+internal sealed record OpenStop(PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test, StopDraft Draft, bool DraftTaken);
 
 /// <summary>A test stop's test: the file the agent wrote, how to put it back, the test to run,
 /// and where it stands.</summary>
@@ -131,38 +165,17 @@ internal enum StopActivity
     Idle,
     Checking,
     RunningTest,
-}
-
-/// <summary>How far the user has asked the agent to go at the open stop.</summary>
-internal enum HintLevel
-{
-    Intent = 0,
-    Location = 1,
-    Shape = 2,
-    Draft = 3,
-}
-
-/// <summary>What the agent showed at a hint level above intent.</summary>
-internal abstract record PairingHint(HintLevel Level)
-{
-    /// <summary>The lines to change, lit up in the editor.</summary>
-    public sealed record Location(IReadOnlyList<LineSpan> Lines) : PairingHint(HintLevel.Location);
-
-    /// <summary>A signature or pseudocode, drawn as suggested lines at the stop.</summary>
-    public sealed record Shape(string Code) : PairingHint(HintLevel.Shape);
-
-    /// <summary>The agent's code for this stop only, drawn as suggested lines that go as the user
-    /// types them.</summary>
-    public sealed record Draft(string Code) : PairingHint(HintLevel.Draft);
+    Accepting,
 }
 
 /// <summary>What a wait on the user came back with. <c>Stop</c> is the number of the stop it was
 /// about, or 0 when none was open.</summary>
 internal abstract record PairingAction(int Stop)
 {
-    /// <summary>The user finished the stop: their diff since it was shown, and for a test stop the
-    /// run that closed it. Anything they wanted to say about it they said in the conversation.</summary>
-    public sealed record Done(int Stop, string Diff, TestRun? Test, bool Forced, IReadOnlyList<string> Problems)
+    /// <summary>The user finished the stop: their diff since it was shown, whether they accepted the
+    /// agent's code into it, and for a test stop the run that closed it. Anything they wanted to say
+    /// about it they said in the conversation.</summary>
+    public sealed record Done(int Stop, string Diff, bool Accepted, TestRun? Test, bool Forced, IReadOnlyList<string> Problems)
         : PairingAction(Stop);
 
     /// <summary>The user said something to the agent — a question, or what they did instead — with
@@ -171,9 +184,6 @@ internal abstract record PairingAction(int Stop)
 
     /// <summary>The user passed on the stop without changing anything for it.</summary>
     public sealed record Skipped(int Stop) : PairingAction(Stop);
-
-    /// <summary>The user asked for the next hint level at the open stop.</summary>
-    public sealed record Hint(int Stop, HintLevel Level) : PairingAction(Stop);
 
     /// <summary>The test written for the stop was run before the user wrote anything. Red opens
     /// the stop; green means the test proves nothing, and it was taken back out.</summary>

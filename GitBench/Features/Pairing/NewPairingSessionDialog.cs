@@ -51,9 +51,6 @@ internal sealed record NewPairingSessionDialog : Widget
         var agent = new State<PairingAgentChoice>(PairingAgentChoice.ClaudeCode);
         var preferences = ctx.Require<PreferencesService>();
         var terminalCommand = new State<string>(preferences.Current.PairingTerminalCommand);
-        var help = new State<HintLevel>(Enum.IsDefined((HintLevel)preferences.Current.PairingStartingHint)
-            ? (HintLevel)preferences.Current.PairingStartingHint
-            : HintLevel.Intent);
         var error = new State<string?>(repos.Active.Value is null ? s.PairingNoRepo : null);
         var canStart = new Derived<bool>(() => goal.Value.Trim().Length > 0 && repos.Active.Value is not null
             && (agent.Value != PairingAgentChoice.Terminal || terminalCommand.Value.Trim().Length > 0));
@@ -64,12 +61,11 @@ internal sealed record NewPairingSessionDialog : Widget
             PairingHarness harness = agent.Value == PairingAgentChoice.Terminal
                 ? new PairingHarness.Terminal(loc.Strings.Value.PairingAgentTerminal, terminalCommand.Value.Trim())
                 : new PairingHarness.Acp(HarnessOf(agent.Value));
-            switch (sessions.Start(repo, goal.Value, harness, help.Value))
+            switch (sessions.Start(repo, goal.Value, harness))
             {
                 case PairingStart.Started:
                     preferences.Update(p => p with
                     {
-                        PairingStartingHint = (int)help.Value,
                         PairingTerminalCommand = agent.Value == PairingAgentChoice.Terminal ? terminalCommand.Value.Trim() : p.PairingTerminalCommand,
                     });
                     mode.Value = MainViewMode.Files;
@@ -130,21 +126,6 @@ internal sealed record NewPairingSessionDialog : Widget
                             Hint = s.PairingTerminalCommandHint(prompt: "{prompt}", promptFile: "{promptFile}", mcpUrl: "{mcpUrl}", mcpConfigFile: "{mcpConfigFile}", cwd: "{cwd}"),
                         },
                         new DialogBodyText { Value = s.PairingNoWriteGuard },
-                    ],
-                },
-            },
-            new LabeledRow
-            {
-                Label = s.PairingStartingHelp,
-                Value = new OptionDropdown<HintLevel>
-                {
-                    Selected = help,
-                    Options =
-                    [
-                        (HintLevel.Intent, s.PairingStartingHelpIntent, s.PairingLevelIntent),
-                        (HintLevel.Location, s.PairingStartingHelpLocation, s.PairingLevelLocation),
-                        (HintLevel.Shape, s.PairingStartingHelpShape, s.PairingLevelShape),
-                        (HintLevel.Draft, s.PairingStartingHelpDraft, s.PairingLevelDraft),
                     ],
                 },
             },

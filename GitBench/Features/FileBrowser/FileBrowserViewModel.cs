@@ -329,13 +329,20 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// <summary>A request to type the suggestion on screen into the file, for the body to carry out.</summary>
     public IReadable<TakeGhostRequest?> TakeGhostRequested => _takeGhost;
 
-    public void TakeGhost(string absolutePath)
+    /// <summary>Asks the body to type the suggestion into the file; answers whether it did, once
+    /// the body has carried the request out.</summary>
+    public Task<bool> TakeGhost(string absolutePath)
     {
-        if (!_disposed) _takeGhost.Value = new TakeGhostRequest(PathKey.Normalize(absolutePath));
+        if (_disposed) return Task.FromResult(false);
+        _takeGhost.Value?.Complete(false);
+        var request = new TakeGhostRequest(PathKey.Normalize(absolutePath));
+        _takeGhost.Value = request;
+        return request.Taken;
     }
 
-    public void CompleteTakeGhost(TakeGhostRequest request)
+    public void CompleteTakeGhost(TakeGhostRequest request, bool taken)
     {
+        request.Complete(taken);
         if (ReferenceEquals(_takeGhost.Value, request)) _takeGhost.Value = null;
     }
 
@@ -1182,7 +1189,13 @@ internal sealed class CaretRequest(string path, TextPosition at)
 /// requests.</summary>
 internal sealed class TakeGhostRequest(string path)
 {
+    private readonly TaskCompletionSource<bool> _taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public string Path { get; } = path;
+
+    public Task<bool> Taken => _taken.Task;
+
+    public void Complete(bool taken) => _taken.TrySetResult(taken);
 }
 
 /// <summary>The editor's caret in a file, and whatever text is selected there.</summary>

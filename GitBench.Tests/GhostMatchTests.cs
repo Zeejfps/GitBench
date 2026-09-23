@@ -8,13 +8,11 @@ namespace GitBench.Tests;
 /// left hangs under the last line they typed.</summary>
 public sealed class GhostMatchTests
 {
-    private static readonly EditorGhost Draft = new(
-        new FileLine(2),
-        ["public int Multiply(int a, int b)", "{", "    return a * b;", "}"],
-        ShrinksAsTyped: true);
+    private static readonly IReadOnlyList<string> Draft =
+        ["public int Multiply(int a, int b)", "{", "    return a * b;", "}"];
 
-    private static GhostLines Match(EditorGhost ghost, params string[] file) =>
-        GhostMatch.Remaining(ghost, ghost.After, file.Length, n => file[n - 1]);
+    private static GhostLines Match(IReadOnlyList<string> draft, params string[] file) =>
+        GhostMatch.Remaining(draft, new FileLine(2), file.Length, n => file[n - 1]);
 
     [Fact]
     public void NothingTyped_TheWholeDraftHangsUnderTheAnchor()
@@ -22,7 +20,7 @@ public sealed class GhostMatchTests
         var left = Match(Draft, "class Calc", "{", "}");
 
         Assert.Equal(new FileLine(2), left.After);
-        Assert.Equal(Draft.Lines, left.Lines);
+        Assert.Equal(Draft, left.Lines);
     }
 
     [Fact]
@@ -41,14 +39,6 @@ public sealed class GhostMatchTests
 
         Assert.Equal(new FileLine(3), left.After);
         Assert.Equal(["{", "    return a * b;", "}"], left.Lines);
-    }
-
-    [Fact]
-    public void AShape_NeverShrinks()
-    {
-        var shape = Draft with { ShrinksAsTyped = false };
-
-        Assert.Equal(shape.Lines, Match(shape, "class Calc", "{", "public int Multiply(int a, int b)").Lines);
     }
 
     [Fact]

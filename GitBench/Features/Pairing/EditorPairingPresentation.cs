@@ -1,4 +1,5 @@
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
@@ -92,6 +93,24 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         }
     }
 
+    public void RevealDraft(StopLocation location, StopDraft draft)
+    {
+        if (PathOf(location) is not { } path) return;
+        switch (draft.Place)
+        {
+            case DraftPlace.Replace replace:
+                Browser()?.PlaceCaret(path, TextPosition.At(replace.Lines.From, 0));
+                break;
+            case DraftPlace.InsertAfter insert:
+                Browser()?.PlaceCaret(path, TextPosition.At(insert.Line.Value, int.MaxValue));
+                break;
+            case DraftPlace.NewFile:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place.");
+        }
+    }
+
     public bool ShowFile(string relativePath, int line)
     {
         if (Absolute(relativePath) is not { } path || !File.Exists(path) || Browser() is not { } browser) return false;
@@ -99,41 +118,53 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         return true;
     }
 
-    public void ShowHints(StopLocation location, IReadOnlyList<LineSpan> spotlights, PairingHint? code)
+    public void ShowDraft(StopLocation location, StopDraft draft)
     {
-        if (Placed(location) is not var (path, at) || Browser() is not { } browser) return;
-        EditorGhost? ghost = code switch
+        GhostPlace? place = draft.Place switch
         {
-            PairingHint.Shape shape => new EditorGhost(at.Line, CodeLines(shape.Code), ShrinksAsTyped: false),
-            PairingHint.Draft draft => new EditorGhost(at.Line, CodeLines(draft.Code), ShrinksAsTyped: true),
-            _ => null,
+            DraftPlace.Replace replace => new GhostPlace.Replace(new FileLine(replace.Lines.From), new FileLine(replace.Lines.To)),
+            DraftPlace.InsertAfter insert => new GhostPlace.Insert(insert.Line),
+            DraftPlace.NewFile => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place."),
         };
-        ClearHints();
+        if (place is null || PathOf(location) is not { } path || Browser() is not { } browser) return;
+        ClearDraft();
         _hinted = browser;
-        browser.ShowHints(new EditorHints(path, spotlights, ghost));
+        browser.ShowHints(new EditorHints(path, new EditorGhost(place, CodeLines(draft.Code))));
     }
 
-    public void ClearHints()
+    public void ClearDraft()
     {
         _hinted?.ShowHints(null);
         _hinted = null;
     }
 
-    public void TakeDraft(StopLocation location)
+    public async Task<bool> TakeDraftAsync(StopLocation location)
     {
-        if (Placed(location) is var (path, _)) Browser()?.TakeGhost(path);
+        if (PathOf(location) is not { } path || Browser() is not { } browser) return false;
+        try
+        {
+            return await browser.TakeGhost(path).WaitAsync(TakeTimeout);
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
     }
 
-    private static (string Path, TextPosition At)? Placed(StopLocation location) => location switch
+    // The Files pane may swing into view after the stop's file is shown; past this it isn't coming.
+    private static readonly TimeSpan TakeTimeout = TimeSpan.FromSeconds(3);
+
+    private static string? PathOf(StopLocation location) => location switch
     {
-        StopLocation.OnSymbol symbol => (symbol.AbsolutePath, symbol.At),
-        StopLocation.Insertion insertion => (insertion.AbsolutePath, insertion.At),
+        StopLocation.OnSymbol symbol => symbol.AbsolutePath,
+        StopLocation.Insertion insertion => insertion.AbsolutePath,
         StopLocation.NewFile => null,
         _ => throw new ArgumentOutOfRangeException(nameof(location), location, "Unknown location."),
     };
 
     private static IReadOnlyList<string> CodeLines(string code) =>
-        code.Replace("\r\n", "\n").TrimEnd('\n').Split('\n');
+        code.Length == 0 ? [] : code.Replace("\r\n", "\n").TrimEnd('\n').Split('\n');
 
     public IReadOnlyList<string> SaveUnsaved() => _saver.SaveUnsaved(_repo.Id);
 
@@ -177,7 +208,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
 
     public void Dispose()
     {
-        ClearHints();
+        ClearDraft();
         _following.Dispose();
         _caretSubscription?.Dispose();
     }

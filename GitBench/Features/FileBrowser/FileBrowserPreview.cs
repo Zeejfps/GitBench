@@ -135,8 +135,7 @@ internal sealed record FileBrowserTextBody : Widget
         content.Bind(browser.TakeGhostRequested, request =>
         {
             if (request is null) return;
-            content.TakeGhost(request.Path);
-            browser.CompleteTakeGhost(request);
+            content.RequestTakeGhost(request.Path, taken => browser.CompleteTakeGhost(request, taken));
         });
 
         content.Bind(browser.CaretRequest, request =>

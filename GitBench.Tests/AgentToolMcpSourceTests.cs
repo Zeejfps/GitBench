@@ -393,6 +393,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
         var stop = Await(_client.Call("pairing_stop", new
         {
             repo = _dir.Path, path = "src/Client.cs", symbol = "Fetch", title = "Retry the fetch", reason = "It fails transiently.",
+            code = "public void Fetch() => Retry(Send);",
         }), "the stop");
         Assert.False(McpTestClient.IsError(stop));
         using (var json = JsonDocument.Parse(McpTestClient.TextOf(stop)))

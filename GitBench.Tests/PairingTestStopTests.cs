@@ -35,7 +35,7 @@ public sealed class PairingTestStopTests : IDisposable
 
     private void OpenTestStop()
     {
-        var opening = Await(_store.OpenStopAsync(new StopTarget("src/Calc.cs", "Calc", null), "Test Multiply", "r", PairingStopKind.Test, false, CancellationToken.None), "the stop");
+        var opening = Await(_store.OpenStopAsync(new StopTarget("src/Calc.cs", "Calc", null), "Test Multiply", "r", PairingStopKind.Test, new DraftRequest("return a * b;", new DraftSpan.Declaration()), false, CancellationToken.None), "the stop");
         Assert.IsType<StopOpening.Opened>(opening);
     }
 
@@ -101,7 +101,7 @@ public sealed class PairingTestStopTests : IDisposable
     [Fact]
     public void ATestFor_AnEditStop_IsRefused()
     {
-        Await(_store.OpenStopAsync(new StopTarget("src/Calc.cs", "Calc", null), "t", "r", PairingStopKind.Edit, false, CancellationToken.None), "the stop");
+        Await(_store.OpenStopAsync(new StopTarget("src/Calc.cs", "Calc", null), "t", "r", PairingStopKind.Edit, new DraftRequest("return a * b;", new DraftSpan.Declaration()), false, CancellationToken.None), "the stop");
 
         Assert.IsType<TestWriting.Refused>(Write());
     }

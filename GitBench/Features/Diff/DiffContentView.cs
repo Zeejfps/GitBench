@@ -202,10 +202,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private FileLine? _pendingScrollLine;
     private (string Path, Features.Editor.TextPosition At)? _pendingCaret;
 
-    // A guide's hints over the file: the lines it lit up, and the suggested lines with the line
-    // they hang from as edits have moved it. The buffer is the one the suggestion was drawn into.
+    // A guide's suggestion over the file, with the line it hangs from and, when it replaces lines,
+    // the first of them, as edits have moved them. The buffer is the one it was drawn into.
     private Features.Editor.EditorHints? _hints;
     private FileLine? _ghostAnchor;
+    private FileLine? _ghostFrom;
+    private (string Path, Action<bool> Done)? _pendingTake;
     private Features.Editor.EditorBuffer? _ghostBuffer;
     private bool _ghostRefreshPosted;
     private FileSpan? _pendingSearchReveal;
@@ -606,28 +608,73 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         NoteCaretMoved();
     }
 
-    /// <summary>Lays a guide's hints over the file, or takes them away: lines lit up, and suggested
-    /// lines drawn after a line — a draft shrinking as the reader types it. Only over the file they
-    /// name; another file on screen shows none.</summary>
+    /// <summary>Lays a guide's suggestion over the file, or takes it away: lines drawn after a line
+    /// — shrinking as the reader types them — or in place of lines, which are lit up. Only over the
+    /// file it names; another file on screen shows none.</summary>
     public void SetHints(Features.Editor.EditorHints? hints)
     {
         _hints = hints;
-        _ghostAnchor = hints?.Ghost?.After;
+        (_ghostFrom, _ghostAnchor) = hints?.Ghost.Place switch
+        {
+            null => (null, null),
+            Features.Editor.GhostPlace.Insert insert => ((FileLine?)null, (FileLine?)insert.After),
+            Features.Editor.GhostPlace.Replace replace => (replace.From, replace.To),
+            _ => throw new InvalidOperationException("Unknown ghost place."),
+        };
         ApplyGhost();
         SetDirty();
     }
 
-    /// <summary>Types what is left of the suggestion into the file after the line it hangs from, as
-    /// one undo step. Answers whether there was anything to take.</summary>
+    /// <summary>Types the suggestion into the file as <see cref="TakeGhost"/> does, once
+    /// <paramref name="path"/> is the document on screen, so it can be asked for while the file is
+    /// still loading. A newer request answers the one before it false.</summary>
+    public void RequestTakeGhost(string path, Action<bool> done)
+    {
+        _pendingTake?.Done(false);
+        _pendingTake = null;
+        if (Document is { } editor && IsHinted(editor.Path, path))
+        {
+            done(TakeGhost(path));
+            return;
+        }
+
+        _pendingTake = (path, done);
+    }
+
+    private void RunPendingTake()
+    {
+        if (_pendingTake is not { } pending || Document is not { } editor || !IsHinted(editor.Path, pending.Path)) return;
+        _pendingTake = null;
+        pending.Done(TakeGhost(pending.Path));
+    }
+
+    /// <summary>Types the suggestion into the file as one undo step: what is left of it after the
+    /// line it hangs from, or all of it in place of the lines it replaces. Answers whether there was
+    /// anything to take.</summary>
     public bool TakeGhost(string path)
     {
         if (Document is not { } editor || !IsHinted(editor.Path, path)) return false;
-        if (editor.Rows.Ghost is not { Lines.Count: > 0 } ghost) return false;
+        if (_hints?.Ghost is not { } ghost || _ghostAnchor is not { } anchor) return false;
 
-        var line = editor.Document.Line(ghost.After);
-        var at = new Features.Editor.TextPosition(ghost.After, new RawColumn(line.Length));
-        var text = "\n" + string.Join("\n", ghost.Lines);
-        var pasted = editor.Session.Paste(Features.Editor.SelectionRange.At(at), text);
+        Features.Editor.SelectionRange range;
+        string text;
+        if (_ghostFrom is { } from)
+        {
+            var start = editor.Document.Clamp(Features.Editor.TextPosition.At(from.Value, 0));
+            var last = new FileLine(Math.Max(from.Value, anchor.Value));
+            var end = editor.Document.Clamp(new Features.Editor.TextPosition(last, new RawColumn(editor.Document.Line(last).Length)));
+            range = new Features.Editor.SelectionRange(start, end);
+            text = string.Join("\n", ghost.Lines);
+        }
+        else
+        {
+            if (editor.Rows.Ghost is not { Lines.Count: > 0 } left) return false;
+            var line = editor.Document.Line(left.After);
+            range = Features.Editor.SelectionRange.At(new Features.Editor.TextPosition(left.After, new RawColumn(line.Length)));
+            text = "\n" + string.Join("\n", left.Lines);
+        }
+
+        var pasted = editor.Session.Paste(range, text);
         editor.Write(_selection, pasted, null);
         ReconcileRows();
         ((Features.Editor.IEditorSurface)this).RevealCaret();
@@ -639,20 +686,16 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private bool SpotlitAt(int rowIndex)
     {
-        if (_hints is not { Spotlights.Count: > 0 } hints || Document is not { } editor) return false;
-        if (!IsHinted(editor.Path, hints.Path)) return false;
-        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } line) return false;
-        foreach (var span in hints.Spotlights)
-            if (span.Contains(line.Value))
-                return true;
-        return false;
+        if (_ghostFrom is not { } from || _ghostAnchor is not { } to || _hints is not { } hints) return false;
+        if (Document is not { } editor || !IsHinted(editor.Path, hints.Path)) return false;
+        return RowSource.NewLineAt(new RowIndex(rowIndex)) is { } line && from.Value <= line.Value && line.Value <= to.Value;
     }
 
     // Draws the suggestion into the buffer on screen when it is the hinted file, and takes it out of
     // whichever buffer had it before.
     private void ApplyGhost()
     {
-        var target = Document is { } editor && _hints is { Ghost: not null } hints && IsHinted(editor.Path, hints.Path)
+        var target = Document is { } editor && _hints is { } hints && IsHinted(editor.Path, hints.Path)
             ? editor
             : null;
         if (!ReferenceEquals(_ghostBuffer, target))
@@ -669,15 +712,18 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         if (target is null || _hints?.Ghost is not { } ghost || _ghostAnchor is not { } anchor) return;
         var document = target.Document;
-        target.Rows.SetGhost(Features.Editor.GhostMatch.Remaining(
-            ghost, anchor, document.LineCount, n => document.Line(new FileLine(n))));
+        target.Rows.SetGhost(_ghostFrom is null
+            ? Features.Editor.GhostMatch.Remaining(ghost.Lines, anchor, document.LineCount, n => document.Line(new FileLine(n)))
+            : new Features.Editor.GhostLines(anchor, ghost.Lines));
         ReconcileRows();
+        if (_pendingTake is not null) _dispatcher?.Post(RunPendingTake);
     }
 
     // Mid-edit the rows are the editor's; the suggestion is re-matched once the keystroke is done.
     private void OnGhostedEdit(Features.Editor.DocumentEdit edit)
     {
         if (_ghostAnchor is { } anchor) _ghostAnchor = Features.Editor.GhostMatch.Shift(anchor, edit.Inverse);
+        if (_ghostFrom is { } from) _ghostFrom = Features.Editor.GhostMatch.Shift(from, edit.Inverse);
         if (_ghostRefreshPosted || _dispatcher is null) return;
         _ghostRefreshPosted = true;
         _dispatcher.Post(() =>

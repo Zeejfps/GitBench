@@ -23,7 +23,8 @@ internal static class StopResolver
         // to go by and a place to put it, a bare mention of its name is not where it is.
         var byText = outline is null || target.After is not { Length: > 0 };
         if (Find(target.Symbol, lines, outline, byText) is { } found)
-            return new StopPlacement.Placed(new StopLocation.OnSymbol(absolutePath, found.At, LineAt(lines, found.At.Line.Value)));
+            return new StopPlacement.Placed(new StopLocation.OnSymbol(
+                absolutePath, found.At, LineAt(lines, found.At.Line.Value), new FileLine(Math.Clamp(found.EndLine, found.At.Line.Value, lines.Length)), lines.Length));
 
         if (target.After is not { Length: > 0 } after)
             return new StopPlacement.Missed(new StopMiss.NoSuchSymbol(target.Path, target.Symbol, Known(outline)));
@@ -33,7 +34,7 @@ internal static class StopResolver
 
         // The end of the declaration it follows: Enter from there is where the new one starts.
         var line = Math.Clamp(anchor.EndLine, 1, lines.Length);
-        return new StopPlacement.Placed(new StopLocation.Insertion(absolutePath, TextPosition.At(line, LineAt(lines, line).Length), after));
+        return new StopPlacement.Placed(new StopLocation.Insertion(absolutePath, TextPosition.At(line, LineAt(lines, line).Length), after, lines.Length));
     }
 
     private readonly record struct Found(TextPosition At, int EndLine);
@@ -152,4 +153,59 @@ internal static class StopResolver
 
         return names;
     }
+}
+
+/// <summary>How the agent's code for a stop was placed in the stop's file.</summary>
+internal abstract record DraftPlacement
+{
+    public sealed record Placed(StopDraft Draft) : DraftPlacement;
+
+    public sealed record Refused(string Message) : DraftPlacement;
+}
+
+/// <summary>
+/// Where the agent's code for a stop goes: in place of the stop's declaration, after the one a new
+/// declaration follows, or as the whole of a new file — unless the agent named the lines itself.
+/// </summary>
+internal static class DraftPlacing
+{
+    public static DraftPlacement Place(StopLocation location, DraftRequest request)
+    {
+        var code = request.Code.Replace("\r\n", "\n").TrimEnd('\n');
+        switch (location, request.Span)
+        {
+            case (StopLocation.NewFile, DraftSpan.Declaration):
+                return Placed(code, new DraftPlace.NewFile());
+            case (StopLocation.NewFile, _):
+                return new DraftPlacement.Refused("The file doesn't exist yet: send the whole new file as code, without lines or after_line.");
+            case (StopLocation.OnSymbol symbol, DraftSpan.Declaration):
+                return Placed(code, new DraftPlace.Replace(new LineSpan(symbol.At.Line.Value, symbol.LastLine.Value)));
+            case (StopLocation.Insertion insertion, DraftSpan.Declaration):
+                return Placed(code, new DraftPlace.InsertAfter(insertion.At.Line));
+            case (_, DraftSpan.Lines lines):
+                if (lines.From < 1 || lines.To < lines.From || lines.To > LineCount(location))
+                    return new DraftPlacement.Refused(
+                        $"lines {lines.From}-{lines.To} are not in the file, which has {LineCount(location)} lines.");
+                return Placed(code, new DraftPlace.Replace(new LineSpan(lines.From, lines.To)));
+            case (_, DraftSpan.After after):
+                if (after.Line < 1 || after.Line > LineCount(location))
+                    return new DraftPlacement.Refused($"after_line {after.Line} is not in the file, which has {LineCount(location)} lines.");
+                return Placed(code, new DraftPlace.InsertAfter(new FileLine(after.Line)));
+            default:
+                throw new ArgumentOutOfRangeException(nameof(request), request.Span, "Unknown draft span.");
+        }
+    }
+
+    private static DraftPlacement Placed(string code, DraftPlace place) =>
+        code.Length == 0 && place is not DraftPlace.Replace
+            ? new DraftPlacement.Refused("code is empty. Send the code for this stop; an empty code only deletes the lines it replaces.")
+            : new DraftPlacement.Placed(new StopDraft(code, place));
+
+    private static int LineCount(StopLocation location) => location switch
+    {
+        StopLocation.OnSymbol symbol => symbol.LineCount,
+        StopLocation.Insertion insertion => insertion.LineCount,
+        StopLocation.NewFile => 0,
+        _ => throw new ArgumentOutOfRangeException(nameof(location), location, "Unknown location."),
+    };
 }

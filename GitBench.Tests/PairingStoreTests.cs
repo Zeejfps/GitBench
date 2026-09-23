@@ -1,3 +1,4 @@
+using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Pairing;
@@ -30,22 +31,45 @@ public sealed class PairingStoreTests : IDisposable
         return task.Result;
     }
 
-    private OpenStop Open(string symbol = "Fetch", bool replace = false)
+    private static readonly DraftRequest Draft = new("public void Fetch() => Retry(Send);", new DraftSpan.Declaration());
+
+    private OpenStop Open(string symbol = "Fetch", bool replace = false, DraftRequest? draft = null)
     {
         var opening = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", symbol, null), "Retry " + symbol, "Because.", PairingStopKind.Edit, replace, CancellationToken.None),
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", symbol, null), "Retry " + symbol, "Because.", PairingStopKind.Edit, draft ?? Draft, replace, CancellationToken.None),
             "the stop to open");
         return Assert.IsType<StopOpening.Opened>(opening).Stop;
     }
 
     [Fact]
-    public void OpenStop_PlacesItInTheEditor_AndNumbersIt()
+    public void OpenStop_PlacesItAndTheAgentsCodeInTheEditor_AndNumbersIt()
     {
         var stop = Open();
 
         Assert.Equal(1, stop.Stop.Number);
-        Assert.Equal(["show src/Client.cs#Fetch", "clear hints", "reveal"], _presentation.Calls);
+        Assert.Equal(["show src/Client.cs#Fetch", "reveal draft", "show draft"], _presentation.Calls);
         Assert.Same(stop, _store.Stop.Value);
+        Assert.Equal(new DraftPlace.Replace(new LineSpan(10, 14)), Assert.Single(_presentation.Drafts).Place);
+    }
+
+    [Fact]
+    public void TheAgentsCode_GoesOnTheLinesItNames()
+    {
+        var stop = Open(draft: new DraftRequest("retry();", new DraftSpan.After(12)));
+
+        Assert.Equal(new StopDraft("retry();", new DraftPlace.InsertAfter(new FileLine(12))), stop.Draft);
+    }
+
+    [Fact]
+    public void TheAgentsCode_OnLinesTheFileDoesNotHave_IsRefused()
+    {
+        var opening = Await(
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Fetch", null), "t", "r", PairingStopKind.Edit,
+                new DraftRequest("x", new DraftSpan.Lines(38, 45)), false, CancellationToken.None),
+            "the refusal");
+
+        Assert.Contains("40 lines", Assert.IsType<StopOpening.Refused>(opening).Message);
+        Assert.Null(_store.Stop.Value);
     }
 
     [Fact]
@@ -54,7 +78,7 @@ public sealed class PairingStoreTests : IDisposable
         Open();
 
         var second = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Send", null), "t", "r", PairingStopKind.Edit, false, CancellationToken.None),
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Send", null), "t", "r", PairingStopKind.Edit, Draft, false, CancellationToken.None),
             "the refusal");
 
         var refused = Assert.IsType<StopOpening.Refused>(second);
@@ -79,7 +103,7 @@ public sealed class PairingStoreTests : IDisposable
         _presentation.Answer = t => new StopPlacement.Missed(new StopMiss.NoSuchSymbol(t.Path, t.Symbol, ["Client", "Client.Send"]));
 
         var opening = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Nope", null), "t", "r", PairingStopKind.Edit, false, CancellationToken.None),
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Nope", null), "t", "r", PairingStopKind.Edit, Draft, false, CancellationToken.None),
             "the refusal");
 
         var refused = Assert.IsType<StopOpening.Refused>(opening);
@@ -208,21 +232,65 @@ public sealed class PairingStoreTests : IDisposable
     }
 
     [Fact]
-    public void Hints_GoUpOneLevelAtATime_AndResetAtTheNextStop()
+    public void Accept_PutsTheAgentsCodeIn_AndFinishesTheStopAsDone()
+    {
+        _workspace.Current = "before";
+        Open();
+        _presentation.Calls.Clear();
+        var wait = _store.WaitAsync(CancellationToken.None);
+
+        _workspace.Current = "after";
+        var accept = _store.AcceptAsync();
+        Pump.WaitFor(_dispatcher, () => accept.IsCompleted && wait.IsCompleted, "Accept to reach the agent");
+
+        var done = Assert.IsType<PairingAction.Done>(wait.Result);
+        Assert.True(done.Accepted);
+        Assert.Equal("diff before..after", done.Diff);
+        Assert.True(_presentation.Calls.IndexOf("take draft") < _presentation.Calls.IndexOf("save"));
+        Assert.Null(_store.Stop.Value);
+    }
+
+    [Fact]
+    public void Accept_ThatCannotPutTheCodeIn_LeavesTheStopOpen()
+    {
+        Open();
+        _presentation.TakeSucceeds = false;
+        var wait = _store.WaitAsync(CancellationToken.None);
+
+        Await(_store.AcceptAsync().ContinueWith(_ => true), "Accept to give up");
+
+        Assert.False(wait.IsCompleted);
+        Assert.NotNull(_store.Stop.Value);
+        Assert.Equal(StopActivity.Idle, _store.Activity.Value);
+        Assert.Equal(NoticeTone.Error, Assert.IsType<PairingMessage.Notice>(Assert.Single(_store.Messages)).Tone);
+    }
+
+    [Fact]
+    public void Accept_ForAFileStillToBeCreated_CreatesIt()
+    {
+        _presentation.Answer = t => new StopPlacement.Placed(new StopLocation.NewFile("C:/repo/" + t.Path));
+        Open(draft: new DraftRequest("class Retry {}", new DraftSpan.Declaration()));
+        var wait = _store.WaitAsync(CancellationToken.None);
+
+        var accept = _store.AcceptAsync();
+        Pump.WaitFor(_dispatcher, () => accept.IsCompleted && wait.IsCompleted, "Accept to reach the agent");
+
+        Assert.Equal("class Retry {}\n", _workspace.Files["src/Client.cs"]);
+        Assert.True(Assert.IsType<PairingAction.Done>(wait.Result).Accepted);
+        Assert.DoesNotContain("take draft", _presentation.Calls);
+    }
+
+    [Fact]
+    public void Done_WithoutAccepting_SaysTheUserTypedIt()
     {
         Open();
         var wait = _store.WaitAsync(CancellationToken.None);
 
-        _store.RequestHint();
+        var done = _store.DoneAsync();
+        Pump.WaitFor(_dispatcher, () => done.IsCompleted && wait.IsCompleted, "Done to reach the agent");
 
-        Assert.Equal(new PairingAction.Hint(1, HintLevel.Location), wait.Result);
-        _store.RequestHint();
-        _store.RequestHint();
-        _store.RequestHint();
-        Assert.Equal(HintLevel.Draft, _store.Hint.Value);
-
-        Open("Send", replace: true);
-        Assert.Equal(HintLevel.Intent, _store.Hint.Value);
+        Assert.False(Assert.IsType<PairingAction.Done>(wait.Result).Accepted);
+        Assert.Contains("clear draft", _presentation.Calls);
     }
 
     [Fact]
@@ -252,44 +320,6 @@ public sealed class PairingStoreTests : IDisposable
                 new RoadmapEntry("Store", false, RoadmapChange.Removed),
             ],
             _store.Roadmap.Value);
-    }
-
-    [Fact]
-    public void AHint_AboveTheLevelAskedFor_IsRefused()
-    {
-        Open();
-
-        Assert.NotNull(_store.ShowHint(new PairingHint.Shape("int Multiply(int a, int b)")));
-
-        _store.RequestHint();
-        _store.RequestHint();
-        Assert.Null(_store.ShowHint(new PairingHint.Shape("int Multiply(int a, int b)")));
-        Assert.IsType<PairingHint.Shape>(Assert.Single(_presentation.Hinted).Code);
-    }
-
-    [Fact]
-    public void Hints_Accumulate_AndGoWhenTheStopCloses()
-    {
-        Open();
-        _store.RequestHint();
-        _store.RequestHint();
-        _store.RequestHint();
-
-        _store.ShowHint(new PairingHint.Location([new LineSpan(10, 12)]));
-        _store.ShowHint(new PairingHint.Draft("return a * b;"));
-
-        var last = _presentation.Hinted[^1];
-        Assert.Equal([new LineSpan(10, 12)], last.Spotlights);
-        Assert.IsType<PairingHint.Draft>(last.Code);
-        Assert.Equal(2, _store.Hints.Value.Count);
-
-        _store.TakeDraft();
-        Assert.Contains("take draft", _presentation.Calls);
-
-        _presentation.Calls.Clear();
-        _store.Skip();
-        Assert.Contains("clear hints", _presentation.Calls);
-        Assert.Empty(_store.Hints.Value);
     }
 
     [Fact]

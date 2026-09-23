@@ -273,7 +273,7 @@ this says so and why.
   through a throwaway index when the stop opens and again at Done, so new files count and the
   user's staging area is never touched.
 - **The stop card is part of the Pairing panel**, docked beside the content panel: the stop's text,
-  test and hints scroll with the roadmap and the conversation, and Done, Skip and More help stay
+  test and draft note scroll with the roadmap and the conversation, and Accept, Done and Skip stay
   pinned above the message field.
 - **No note on Done.** The field under the conversation is the one place to talk to the agent, for
   questions and for "I did this instead" alike: the agent keeps the conversation, so what was said
@@ -285,10 +285,10 @@ this says so and why.
   the user hears it. Streamed prose is still shown when it does arrive.
 - **`pairing_show` points at code without a stop.** Asked "show me the test", an agent with only
   `pairing_stop` refused, since a stop was already open. `pairing_show` opens a file on a
-  declaration or a line and touches nothing else: the open stop, its card and its hints stay, and
+  declaration or a line and touches nothing else: the open stop, its card and its draft stay, and
   the card's link takes the user back.
 - **The panel follows the conversation**: a new message or a streaming reply scrolls it to the end,
-  and a new stop takes it back to the top, where the stop card is. Done, Skip and More help sit
+  and a new stop takes it back to the top, where the stop card is. Accept, Done and Skip sit
   under the message field.
 - **Top down, not bottom up.** The agent starts where the change is used and creates each
   function or type only once the code written so far needs it; the plan's "definitions before
@@ -316,7 +316,22 @@ this says so and why.
 
 ### Step 4
 
-- The starting level is chosen in the New pairing session dialog and remembered.
+**Hint levels were replaced by a draft on every stop.** In use, More help was a round trip per
+level before the useful thing — the code — showed up. Now:
+
+- `pairing_stop` carries `code`: the agent's code for that one stop, one block. It is drawn in the
+  editor where it goes as soon as the stop opens.
+- Where it goes is resolved by the app, not guessed from the stop's caret line: by default it
+  replaces the declaration from its name line to its last line (`OnSymbol.LastLine`), goes in
+  after the `after` declaration for a new one, or is the whole of a new file. The agent can narrow
+  it with `lines {from,to}` (replace) or `after_line` (insert), checked against the file. The old
+  draft hung after the declaration's *name* line, i.e. inside the signature.
+- A replacement lights up the lines it replaces with the code drawn under them, and doesn't shrink
+  as the user types; an insertion shrinks as before. Both anchors follow edits above them.
+- **Accept** puts the code in as one undo step (a new file is created) and then does exactly what
+  Done does; the `done` action says `accepted: true`. A test stop still has to go green. If the
+  editor can't take it (the file never came on screen), the stop stays open with a notice.
+- A different draft for the open stop is a `pairing_stop` with `replace: true`.
 - A draft line counts as typed when a line reading the same (trimmed) is in the run the user has
   written below the anchor — down to the last typed line with real content — so a lone brace of
   the file's own doesn't swallow the draft's.
@@ -333,11 +348,12 @@ this says so and why.
 ### Verified by hand
 
 Claude Code over ACP, in a scratch repository: a session start to finish with a correction stop;
-hint levels up to draft with the draft shrinking as it was typed; a test stop red, still red after
+(before hint levels were removed) a draft shrinking as it was typed; a test stop red, still red after
 a wrong edit, then green and closed; End from the panel. Claude Code in a terminal tab from the
 preset. Codex and Gemini are covered by the spike, not yet by a session in the app.
 
 ### Open
 
-- Take this draft is unit-tested through the store but was not clicked in the running app.
+- Accept and the per-stop draft are unit-tested (store, placement, editor take) but have not been
+  run against a live agent.
 - Untracked build output (`__pycache__`, `bin/`) that isn't ignored shows up in Done's diff.

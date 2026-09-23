@@ -40,7 +40,7 @@ internal sealed record PairingStopSlot : Widget
 
 /// <summary>
 /// The stop the user is on, at the top of what the panel scrolls: its number and kind, the title,
-/// where it is — a click goes back there — and why, then its test and the hints shown for it.
+/// where it is — a click goes back there — and why, then its test and where the agent's code is.
 /// </summary>
 internal sealed record PairingStopCard : Widget
 {
@@ -94,13 +94,6 @@ internal sealed record PairingStopCard : Widget
                                             FontSize = FontSize.Caption,
                                             Color = Theme.Color(s => s.Palette.TextSecondary),
                                         },
-                                        new Grow { Child = Empty.Widget },
-                                        new Text
-                                        {
-                                            Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingHelpLevel(LevelName(loc.Strings.Value, store.Hint.Value))),
-                                            FontSize = FontSize.Caption,
-                                            Color = Theme.Color(s => s.Palette.TextMuted),
-                                        },
                                     ],
                                 },
                                 new Text
@@ -139,7 +132,7 @@ internal sealed record PairingStopCard : Widget
                                         Case = test => new PairingTestSection { Store = store, Test = test },
                                     }
                                     : Empty.Widget,
-                                new PairingHintsView { Store = store },
+                                new PairingDraftNote { Draft = open.Draft },
                             ],
                         },
                     ],
@@ -150,33 +143,33 @@ internal sealed record PairingStopCard : Widget
 
     private static string Where(Strings s, OpenStop open) => open.Location switch
     {
-        StopLocation.OnSymbol symbol => $"{open.Stop.Target.Path}:{symbol.At.Line.Value} · {open.Stop.Target.Symbol}",
+        StopLocation.OnSymbol => $"{open.Stop.Target.Path}:{DraftLine(open.Draft)} · {open.Stop.Target.Symbol}",
         StopLocation.Insertion insertion =>
-            $"{open.Stop.Target.Path}:{insertion.At.Line.Value} · {s.PairingStopAfter(insertion.After)}",
+            $"{open.Stop.Target.Path}:{DraftLine(open.Draft)} · {s.PairingStopAfter(insertion.After)}",
         StopLocation.NewFile => s.PairingStopNewFile(open.Stop.Target.Path),
         _ => throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location."),
     };
 
-    internal static string LevelName(Strings s, HintLevel level) => level switch
+    private static int DraftLine(StopDraft draft) => draft.Place switch
     {
-        HintLevel.Intent => s.PairingLevelIntent,
-        HintLevel.Location => s.PairingLevelLocation,
-        HintLevel.Shape => s.PairingLevelShape,
-        HintLevel.Draft => s.PairingLevelDraft,
-        _ => throw new ArgumentOutOfRangeException(nameof(level), level, "Unknown level."),
+        DraftPlace.Replace replace => replace.Lines.From,
+        DraftPlace.InsertAfter insert => insert.Line.Value,
+        DraftPlace.NewFile => 1,
+        _ => throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place."),
     };
 }
 
 /// <summary>
-/// The open stop's controls, pinned under what the panel scrolls: what Done is busy with, and Done —
-/// which saves what was typed and hands the agent the change — Skip, and More help, which asks the
-/// agent for the next hint level. Anything to tell the agent goes in the conversation below.
+/// The open stop's controls, pinned under what the panel scrolls: what they are busy with, Accept —
+/// which puts the agent's code into the file and finishes the stop — Done, which finishes it with
+/// what the user typed, and Skip. Anything to tell the agent goes in the conversation below.
 /// </summary>
 internal sealed record PairingStopActions : Widget
 {
+    public const string AcceptId = "pairing-accept";
     public const string DoneId = "pairing-done";
     public const string SkipId = "pairing-skip";
-    public const string HelpId = "pairing-help";
+    public const string ShowChangeId = "pairing-show-change";
 
     public required PairingStore Store { get; init; }
     public required OpenStop Stop { get; init; }
@@ -184,14 +177,12 @@ internal sealed record PairingStopActions : Widget
     protected override IWidget Build(Context ctx)
     {
         var store = Store;
-        var stop = Stop.Stop;
         var loc = ctx.Localization();
 
         var idle = new Derived<bool>(() => store.Activity.Value == StopActivity.Idle);
-        var canFinish = new Derived<bool>(() => idle.Value
-            && (stop.Kind == PairingStopKind.Edit || store.Stop.Value?.Test?.State is TestState.Red));
-        var canHelp = new Derived<bool>(() => idle.Value && store.Hint.Value != HintLevel.Draft);
+        var canFinish = new Derived<bool>(() => idle.Value && store.Stop.Value is { } open && PairingStore.CanFinish(open));
 
+        void Accept() => _ = store.AcceptAsync();
         void Done() => _ = store.DoneAsync();
 
         IWidget bar = new Box
@@ -217,6 +208,7 @@ internal sealed record PairingStopActions : Widget
                                     {
                                         StopActivity.Checking => loc.Strings.Value.PairingChecking,
                                         StopActivity.RunningTest => loc.Strings.Value.PairingRunningTest,
+                                        StopActivity.Accepting => loc.Strings.Value.PairingAccepting,
                                         StopActivity.Idle => null,
                                         _ => throw new InvalidOperationException("Unknown activity."),
                                     }),
@@ -232,11 +224,22 @@ internal sealed record PairingStopActions : Widget
                                     [
                                         new ButtonWidget
                                         {
-                                            Id = DoneId,
+                                            Id = AcceptId,
                                             Style = ButtonStyle.Filled(static s => s.Palette.Accent),
+                                            Command = new Command(Accept, canFinish),
+                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingAccept) }],
+                                        }
+                                        .WithTooltip(L.T(s => s.PairingAcceptTooltip))
+                                        .WithController<KbmController>(),
+                                        new ButtonWidget
+                                        {
+                                            Id = DoneId,
+                                            Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
                                             Command = new Command(Done, canFinish),
                                             Children = [new ButtonLabel { Value = L.T(s => s.PairingDone) }],
-                                        }.WithController<KbmController>(),
+                                        }
+                                        .WithTooltip(L.T(s => s.PairingDoneTooltip))
+                                        .WithController<KbmController>(),
                                         new ButtonWidget
                                         {
                                             Id = SkipId,
@@ -247,11 +250,13 @@ internal sealed record PairingStopActions : Widget
                                         new Grow { Child = Empty.Widget },
                                         new ButtonWidget
                                         {
-                                            Id = HelpId,
+                                            Id = ShowChangeId,
                                             Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                            Command = new Command(store.RequestHint, canHelp),
-                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingMoreHelp) }],
-                                        }.WithController<KbmController>(),
+                                            Command = new Command(store.RevealStop),
+                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingShowChange) }],
+                                        }
+                                        .WithTooltip(L.T(s => s.PairingGoToStop))
+                                        .WithController<KbmController>(),
                                     ],
                                 },
                             ],
@@ -266,7 +271,6 @@ internal sealed record PairingStopActions : Widget
             var gates = new SubscriptionGroup();
             gates.Add(idle);
             gates.Add(canFinish);
-            gates.Add(canHelp);
             return gates;
         });
     }

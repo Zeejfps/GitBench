@@ -39,9 +39,6 @@ public sealed record Preferences
     public float BranchesWidth { get; init; } = 220f;
     public float PairingPanelWidth { get; init; } = 380f;
 
-    /// <summary>How much help a pairing stop opens with: 0 intent, 1 location, 2 shape, 3 draft.</summary>
-    public int PairingStartingHint { get; init; }
-
     /// <summary>The command a terminal pairing session starts its agent with.</summary>
     public string PairingTerminalCommand { get; init; } = Features.Pairing.TerminalAgentCommand.ClaudeCode;
 

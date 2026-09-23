@@ -30,7 +30,6 @@ internal static class PairingTools
             new PairingWaitTool(target),
             new PairingStateTool(target),
             new PairingWriteTestTool(target),
-            new PairingHintTool(target),
             new PairingSayTool(target),
             new PairingShowTool(target),
             new PairingEndTool(target),
@@ -45,7 +44,6 @@ internal static class PairingTools
             PairingAction.Done => "done",
             PairingAction.Message => "message",
             PairingAction.Skipped => "skipped",
-            PairingAction.Hint => "hint",
             PairingAction.TestRan => "test_ran",
             PairingAction.TestUndone => "test_undone",
             PairingAction.Ended => "ended",
@@ -59,6 +57,7 @@ internal static class PairingTools
         {
             case PairingAction.Done done:
                 writer.WriteString("diff", done.Diff.Length == 0 ? "(no changes)" : done.Diff);
+                if (done.Accepted) writer.WriteBoolean("accepted", true);
                 if (done.Test is { } test) WriteTest(writer, test);
                 if (done.Forced) writer.WriteBoolean("closed_red", true);
                 if (done.Problems.Count > 0)
@@ -74,17 +73,6 @@ internal static class PairingTools
                 if (message.Caret is { } caret) WriteCaret(writer, caret, relative);
                 break;
             case PairingAction.Skipped:
-                break;
-            case PairingAction.Hint hint:
-                writer.WriteString("level", LevelName(hint.Level));
-                writer.WriteString("meaning", hint.Level switch
-                {
-                    HintLevel.Location => "Light up the lines to change: pairing_hint level \"location\" with lines.",
-                    HintLevel.Shape => "Show the signature or pseudocode: pairing_hint level \"shape\" with code. Not the implementation.",
-                    HintLevel.Draft => "Show your code for this stop only: pairing_hint level \"draft\" with code.",
-                    HintLevel.Intent => "No hint is needed.",
-                    _ => throw new ArgumentOutOfRangeException(nameof(action), hint.Level, "Unknown level."),
-                });
                 break;
             case PairingAction.TestRan ran:
                 WriteTest(writer, ran.Run);
@@ -144,15 +132,6 @@ internal static class PairingTools
         if (caret.SelectedText.Length > 0) writer.WriteString("selection", caret.SelectedText);
         writer.WriteEndObject();
     }
-
-    internal static string LevelName(HintLevel level) => level switch
-    {
-        HintLevel.Intent => "intent",
-        HintLevel.Location => "location",
-        HintLevel.Shape => "shape",
-        HintLevel.Draft => "draft",
-        _ => throw new ArgumentOutOfRangeException(nameof(level), level, "Unknown hint level."),
-    };
 }
 
 /// <summary>A repository's live pairing session, reached on the UI thread.</summary>
@@ -247,17 +226,24 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
 
     public string Description =>
         "Takes the user to the next place to change: opens the file in DiffDino's editor with the "
-        + "caret on the named declaration, and shows a card with the title and the reason. Returns "
-        + "at once with where it landed (read line_text back and correct yourself if it is not the "
-        + "place you meant); then call pairing_wait. Name the declaration, never a line number: "
-        + "\"Class.Method\" or \"Method\". For a declaration that doesn't exist yet, name it in "
-        + "symbol and pass the declaration it goes after in after. Fails while another stop is open, "
-        + "unless replace is true. kind \"test\" is for a stop that starts with a test you write with "
-        + "pairing_write_test; use \"edit\" otherwise. Explain why here, not the code to type.";
+        + "caret on the named declaration, shows a card with the title and the reason, and draws "
+        + "your code for this stop into the file as grey suggested lines. The user accepts it with "
+        + "one click or types it themselves; either way it comes back as done. code is ONE block for "
+        + "this stop only. By default it replaces the whole declaration from the line with its name "
+        + "to its last line (so it starts with the signature, without doc comments or attributes "
+        + "above it); for a declaration that doesn't exist yet it goes in after the one named in "
+        + "after; for a file that doesn't exist yet it is the whole file. For a small edit inside a "
+        + "large declaration, pass lines (the lines code replaces) or after_line (the line code goes "
+        + "in after) instead, as numbered in the file now. Returns at once with where it landed and "
+        + "the lines the code replaces (read them back and correct yourself with replace: true if "
+        + "they are not what you meant); then call pairing_wait. Name the declaration, never a line "
+        + "number: \"Class.Method\" or \"Method\". Fails while another stop is open, unless replace "
+        + "is true. kind \"test\" is for a stop that starts with a test you write with "
+        + "pairing_write_test; use \"edit\" otherwise.";
 
     public string JsonSchema =>
         """
-        {"type":"object","properties":{"path":{"type":"string","description":"Repo-relative path of the file."},"symbol":{"type":"string","description":"The declaration to put the user on, e.g. Client.Fetch."},"after":{"type":"string","description":"For a declaration that doesn't exist yet: the declaration it goes after."},"title":{"type":"string","description":"One line: what to do here."},"reason":{"type":"string","description":"Markdown: why this is the next place, and what the change has to achieve. No code."},"kind":{"type":"string","enum":["edit","test"],"description":"Default edit."},"replace":{"type":"boolean","description":"Take back the open stop and open this one instead. Default false."}},"required":["path","symbol","title","reason"],"additionalProperties":false}
+        {"type":"object","properties":{"path":{"type":"string","description":"Repo-relative path of the file."},"symbol":{"type":"string","description":"The declaration to put the user on, e.g. Client.Fetch."},"after":{"type":"string","description":"For a declaration that doesn't exist yet: the declaration it goes after."},"title":{"type":"string","description":"One line: what to do here."},"reason":{"type":"string","description":"Markdown: why this is the next place, and what the change has to achieve. No code: the code goes in code."},"code":{"type":"string","description":"Your code for this stop: one block, exactly as it should read in the file, indented to fit."},"lines":{"type":"object","properties":{"from":{"type":"integer","minimum":1},"to":{"type":"integer","minimum":1}},"required":["from","to"],"additionalProperties":false,"description":"The lines code replaces, 1-based and inclusive, when not the whole declaration."},"after_line":{"type":"integer","minimum":1,"description":"The line code goes in after, when it replaces nothing."},"kind":{"type":"string","enum":["edit","test"],"description":"Default edit."},"replace":{"type":"boolean","description":"Take back the open stop and open this one instead. Default false."}},"required":["path","symbol","title","reason","code"],"additionalProperties":false}
         """;
 
     public bool IsWrite => false;
@@ -275,6 +261,29 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
             _ => (PairingStopKind?)null,
         };
         if (kind is not { } stopKind) return Task.FromResult(ToolInvocation.Error("kind must be \"edit\" or \"test\"."));
+        if (ToolJson.String(args, "code") is not { } code) return Task.FromResult(ToolInvocation.Error("code must be a string."));
+
+        DraftSpan span;
+        var hasLines = args.TryGetProperty("lines", out var linesArg);
+        var hasAfter = args.TryGetProperty("after_line", out var afterArg);
+        if (hasLines && hasAfter) return Task.FromResult(ToolInvocation.Error("Pass lines or after_line, not both."));
+        if (hasLines)
+        {
+            if (linesArg.ValueKind != JsonValueKind.Object
+                || !linesArg.TryGetProperty("from", out var fromArg) || !fromArg.TryGetInt32(out var from)
+                || !linesArg.TryGetProperty("to", out var toArg) || !toArg.TryGetInt32(out var to))
+                return Task.FromResult(ToolInvocation.Error("lines needs integers from and to."));
+            span = new DraftSpan.Lines(from, to);
+        }
+        else if (hasAfter)
+        {
+            if (!afterArg.TryGetInt32(out var afterLine)) return Task.FromResult(ToolInvocation.Error("after_line must be an integer."));
+            span = new DraftSpan.After(afterLine);
+        }
+        else
+        {
+            span = new DraftSpan.Declaration();
+        }
 
         var path = ToolJson.String(args, "path")!.Trim().Replace('\\', '/').TrimStart('/');
         var stopTarget = new StopTarget(path, ToolJson.String(args, "symbol")!.Trim(), ToolJson.String(args, "after")?.Trim());
@@ -284,10 +293,10 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
 
         return target.OnStoreAsync(async store =>
         {
-            switch (await store.OpenStopAsync(stopTarget, title, reason, stopKind, replace, ct))
+            switch (await store.OpenStopAsync(stopTarget, title, reason, stopKind, new DraftRequest(code, span), replace, ct))
             {
                 case StopOpening.Opened opened:
-                    return ToolInvocation.Ok(Describe(opened.Stop, stopTarget.Path, store.Hint.Value));
+                    return ToolInvocation.Ok(Describe(opened.Stop, stopTarget.Path));
                 case StopOpening.Refused refused:
                     return ToolInvocation.Error(refused.Message);
                 default:
@@ -296,7 +305,7 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
         }, ct);
     }
 
-    private static string Describe(OpenStop open, string path, HintLevel help) => ToolJson.Write(writer =>
+    private static string Describe(OpenStop open, string path) => ToolJson.Write(writer =>
     {
         writer.WriteNumber("stop", open.Stop.Number);
         writer.WriteString("path", path);
@@ -319,10 +328,24 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
                 throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location.");
         }
 
-        writer.WriteString("hint_level", PairingTools.LevelName(help));
-        writer.WriteString("next", help == HintLevel.Intent
-            ? open.Stop.Kind == PairingStopKind.Test ? "Write the test with pairing_write_test, then call pairing_wait." : "Call pairing_wait."
-            : $"The user wants help up to {PairingTools.LevelName(help)} at every stop: send pairing_hint for each level up to it, then call pairing_wait.");
+        switch (open.Draft.Place)
+        {
+            case DraftPlace.Replace replace:
+                writer.WriteString("code_replaces", $"lines {replace.Lines.From}-{replace.Lines.To}");
+                break;
+            case DraftPlace.InsertAfter insert:
+                writer.WriteString("code_goes", $"after line {insert.Line.Value}");
+                break;
+            case DraftPlace.NewFile:
+                writer.WriteString("code_goes", "as the new file");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(open), open.Draft.Place, "Unknown draft place.");
+        }
+
+        writer.WriteString("next", open.Stop.Kind == PairingStopKind.Test
+            ? "Write the test with pairing_write_test, then call pairing_wait."
+            : "Call pairing_wait.");
     });
 }
 
@@ -334,11 +357,12 @@ internal sealed class PairingWaitTool(PairingTarget target) : IAssistantTool
     public string Description =>
         $"Waits for the user, for at most {(int)PairingStore.WaitTimeout.TotalSeconds} seconds. Returns "
         + "{action:\"done\", stop, diff, test?} when they finish a stop — diff is exactly what they "
-        + "changed since the stop was shown; read it, with what they told you in the conversation, "
-        + "before deciding what's next. {action:\"message\", text, caret?} when they say something — a "
+        + "changed since the stop was shown, and accepted: true when they took your code as it was; "
+        + "read it, with what they told you in the conversation, before deciding what's next. "
+        + "{action:\"message\", text, caret?} when they say something — a "
         + "question, or what they did instead of what you suggested: answer with pairing_say, keep it "
         + "in mind, then wait again. {action:\"skipped\"} when they pass on the stop. "
-        + "{action:\"hint\", level} when they want more help at the open stop. {action:\"pending\"} "
+        + "{action:\"pending\"} "
         + "when the wait ran out: call pairing_wait again. {action:\"ended\"} when the user ended the "
         + "session: stop calling tools. {action:\"cancelled\"} when a newer wait took over.";
 
@@ -400,7 +424,6 @@ internal sealed class PairingStateTool(PairingTarget target) : IAssistantTool
                 writer.WriteString("path", open.Stop.Target.Path);
                 writer.WriteString("symbol", open.Stop.Target.Symbol);
                 writer.WriteString("kind", open.Stop.Kind == PairingStopKind.Test ? "test" : "edit");
-                writer.WriteString("hint_level", PairingTools.LevelName(store.Hint.Value));
                 if (open.Test is { } test)
                 {
                     writer.WriteString("test_path", test.Path);
@@ -493,70 +516,6 @@ internal sealed class PairingWriteTestTool(PairingTarget target) : IAssistantToo
     }
 }
 
-/// <summary>Answers a hint request at the open stop, at the level the user asked for.</summary>
-internal sealed class PairingHintTool(PairingTarget target) : IAssistantTool
-{
-    public string Name => "pairing_hint";
-
-    public string Description =>
-        "Answers {action:\"hint\", level} from pairing_wait with help at the open stop, at that level "
-        + "and never above it. location: lines, the line ranges to change in the stop's file, lit up "
-        + "in the editor. shape: code, a signature or pseudocode, drawn as grey suggested lines at the "
-        + "stop. draft: code, your code for this stop only, drawn as grey lines that disappear as the "
-        + "user types them; the user can take it into the file. Then call pairing_wait.";
-
-    public string JsonSchema =>
-        """
-        {"type":"object","properties":{"level":{"type":"string","enum":["location","shape","draft"],"description":"The level the user asked for."},"lines":{"type":"array","items":{"type":"object","properties":{"from":{"type":"integer","minimum":1,"description":"First line, 1-based."},"to":{"type":"integer","minimum":1,"description":"Last line, inclusive."}},"required":["from","to"],"additionalProperties":false},"description":"For location: the lines to change."},"code":{"type":"string","description":"For shape and draft: the code to show."}},"required":["level"],"additionalProperties":false}
-        """;
-
-    public bool IsWrite => false;
-
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        PairingHint hint;
-        switch (ToolJson.String(args, "level"))
-        {
-            case "location":
-                var lines = new List<LineSpan>();
-                if (args.TryGetProperty("lines", out var list) && list.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in list.EnumerateArray())
-                    {
-                        if (item.ValueKind != JsonValueKind.Object
-                            || !item.TryGetProperty("from", out var from) || !from.TryGetInt32(out var first)
-                            || !item.TryGetProperty("to", out var to) || !to.TryGetInt32(out var last)
-                            || first < 1 || last < first)
-                            return Task.FromResult(ToolInvocation.Error("Each of lines needs integers from and to, with 1 <= from <= to."));
-                        lines.Add(new LineSpan(first, last));
-                    }
-                }
-
-                if (lines.Count == 0) return Task.FromResult(ToolInvocation.Error("location needs lines."));
-                hint = new PairingHint.Location(lines);
-                break;
-            case "shape":
-                if (ToolJson.String(args, "code") is not { Length: > 0 } shape) return Task.FromResult(ToolInvocation.Error("shape needs code."));
-                hint = new PairingHint.Shape(shape);
-                break;
-            case "draft":
-                if (ToolJson.String(args, "code") is not { Length: > 0 } draft) return Task.FromResult(ToolInvocation.Error("draft needs code."));
-                hint = new PairingHint.Draft(draft);
-                break;
-            default:
-                return Task.FromResult(ToolInvocation.Error("level must be \"location\", \"shape\" or \"draft\"."));
-        }
-
-        return target.OnStoreAsync(store => store.ShowHint(hint) is { } refused
-            ? ToolInvocation.Error(refused)
-            : ToolInvocation.Ok(ToolJson.Write(writer =>
-            {
-                writer.WriteString("shown", PairingTools.LevelName(hint.Level));
-                writer.WriteString("next", "Call pairing_wait.");
-            })), ct);
-    }
-}
-
 /// <summary>Says something to the user in the Pairing panel's conversation.</summary>
 internal sealed class PairingSayTool(PairingTarget target) : IAssistantTool
 {
@@ -565,8 +524,8 @@ internal sealed class PairingSayTool(PairingTarget target) : IAssistantTool
     public string Description =>
         "Says something to the user in the Pairing panel's conversation: the answer to a message, or "
         + "a short remark about their diff. The user reads only what you send here — prose outside the "
-        + "tools may never reach them. Markdown; keep it brief, and no code beyond the hint level they "
-        + "asked for. Returns at once; then call pairing_wait.";
+        + "tools may never reach them. Markdown; keep it brief: the stop's code goes in pairing_stop, "
+        + "not here. Returns at once; then call pairing_wait.";
 
     public string JsonSchema =>
         """
