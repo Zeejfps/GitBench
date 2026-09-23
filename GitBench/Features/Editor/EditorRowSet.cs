@@ -209,6 +209,17 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         Replan();
     }
 
+    /// <summary>
+    /// Raised either side of a reshape nobody holding a row asked for: a fresh parse arriving from
+    /// the worker with different declarations, and with them different usages rows. Whoever keeps
+    /// positions as rows names them on the first and finds them again on the second — a caret left
+    /// pointing at a row index would otherwise sit on whatever row now has that index.
+    /// </summary>
+    public event Action? Reshaping;
+
+    /// <inheritdoc cref="Reshaping"/>
+    public event Action? Reshaped;
+
     /// <summary>Re-colors and re-folds the projection from a fresh parse, or refuses one that
     /// describes an earlier revision. Returns whether it was applied.</summary>
     public bool SetAnnotations(Revised<DiffAnnotations> annotations)
@@ -216,9 +227,11 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         AssertThread();
         if (!annotations.TryReadFor(_document, out var value)) return false;
 
+        Reshaping?.Invoke();
         _highlight = value.Highlight;
         _outline = value.NewSide;
         Replan();
+        Reshaped?.Invoke();
         return true;
     }
 

@@ -5,7 +5,7 @@ namespace GitBench.Lsp.Documents.Tests;
 
 /// <summary>
 /// The one open document the Files pane holds: opened on preview, closed when the selection moves,
-/// never edited. Everything a server sends is checked against the document that is open now —
+/// changed in place as it is edited where the server follows edits. Everything a server sends is checked against the document that is open now —
 /// diagnostics arrive in waves seconds apart and replace what came before, and an answer that
 /// outlived its file is dropped rather than drawn on the next one.
 /// </summary>
@@ -113,8 +113,8 @@ public sealed class PreviewSessionTests : IDisposable
         Assert.Equal(new[] { "mismatched types" }, Messages(Open().Diagnostics));
     }
 
-    // The file watcher and the selection take the same path: new content for the file on screen is
-    // a close and a reopen at a new version, because we never send an edit.
+    // A server that does not follow edits is shown new content for the file on screen as a close
+    // and a reopen at a new version.
     [Fact]
     public void AFileThatChangedOnDiskIsReopenedAtANewVersion()
     {
@@ -128,6 +128,85 @@ public sealed class PreviewSessionTests : IDisposable
         Assert.NotEqual(before, Open().Version);
         Assert.IsType<DiagnosticsState.Waiting>(Open().Diagnostics);
     }
+
+    [Fact]
+    public void AnEditedFileIsChangedInPlaceWhereTheServerFollowsEdits()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        var before = Open().Version;
+
+        _session.Preview(File(_a, "fn main() { typed(); }"));
+
+        Assert.Single(_client.Opened);
+        Assert.Empty(_client.Closed);
+        var change = Assert.Single(_client.Changed);
+        Assert.Equal("fn main() { typed(); }", change.Text);
+        Assert.True(change.Version.Value > before.Value);
+        Assert.Equal(change.Version, Open().Version);
+    }
+
+    // Dropping them to "waiting" on every keystroke would blink every squiggle off and back on.
+    [Fact]
+    public void AnEditKeepsTheDiagnosticsShownUntilTheNextWave()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        _client.Publish(_a, Problem("mismatched types"));
+
+        _session.Preview(File(_a, "fn main() { typed(); }"));
+        Assert.Equal(new[] { "mismatched types" }, Messages(Open().Diagnostics));
+
+        _client.Publish(_a, ResultVersion.At(Open().Version), Problem("unresolved name"));
+        Assert.Equal(new[] { "unresolved name" }, Messages(Open().Diagnostics));
+    }
+
+    [Fact]
+    public void AWaveRecordsTheTextItsPositionsAreIn()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        _session.Preview(File(_a, "fn main() { typed(); }"));
+
+        _client.Publish(_a, Problem("unresolved name"));
+
+        var received = Assert.IsType<DiagnosticsState.Received>(Open().Diagnostics);
+        Assert.Equal("fn main() { typed(); }", received.DescribedText);
+    }
+
+    [Fact]
+    public void AWaveForTheTextBeforeAnEditIsDropped()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        var before = Open().Version;
+        _session.Preview(File(_a, "fn main() { typed(); }"));
+
+        _client.Publish(_a, ResultVersion.At(before), Problem("stale"));
+
+        Assert.IsType<DiagnosticsState.Waiting>(Open().Diagnostics);
+    }
+
+    [Fact]
+    public async Task AnEditCancelsQuestionsAboutTheTextBeforeIt()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        var hover = _session.HoverAsync(Somewhere);
+        var asked = Assert.Single(_client.Hovers);
+
+        _session.Preview(File(_a, "fn main() { typed(); }"));
+        asked.Answer(Plain("about the old text"));
+
+        Assert.True(asked.Cancel.IsCancellationRequested);
+        Assert.Null(await hover);
+    }
+
+    private static ServerCapabilities Syncing() =>
+        new("fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: true, SupportsReferences: true)
+        {
+            TextSync = TextSync.Full,
+        };
 
     // Over 2 MB the preview drops the tail and the last partial line, so what is on screen is not
     // the file. A server asked about it would answer about text that does not exist.

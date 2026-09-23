@@ -205,11 +205,13 @@ public sealed class ProcessLanguageServer : ILanguageServerSession, ILspServerMe
         return response;
     }
 
-    /// <summary>Tells the server about a file, at the text on disk. There is no counterpart that
-    /// sends an edit: this client only ever reads, so the server's copy cannot fall behind ours.</summary>
+    /// <summary>Tells the server about a file, at the text the reader is looking at.</summary>
     public Task OpenAsync(
         DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken ct) =>
         _connection.Notify(LspNotices.DidOpen(uri, language, version, text), ct);
+
+    public Task ChangeAsync(DocumentUri uri, DocumentVersion version, string text, CancellationToken ct) =>
+        _connection.Notify(LspNotices.DidChange(uri, version, text), ct);
 
     public Task CloseAsync(DocumentUri uri, CancellationToken ct) =>
         _connection.Notify(LspNotices.DidClose(uri), ct);

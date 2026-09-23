@@ -23,6 +23,26 @@ public sealed class DiffDiagnosticOverlayTests
 
     private static DiffDiagnosticOverlay Overlay(params Diagnostic[] items) => new("/repo/main.rs", items);
 
+    [Fact]
+    public void ALineStillDescribedIsOneThatReadsAsItDidInTheTextTheServerSaw()
+    {
+        var overlay = new DiffDiagnosticOverlay("/repo/main.rs", [], "fn main() {\r\n    let x = 1;\r\n}");
+
+        Assert.True(overlay.KnowsItsText);
+        Assert.True(overlay.StillDescribes(new FileLine(2), "    let x = 1;"));
+        Assert.False(overlay.StillDescribes(new FileLine(2), "    let x = 12;"));
+        Assert.False(overlay.StillDescribes(new FileLine(4), ""));
+    }
+
+    [Fact]
+    public void AnOverlayThatDoesNotKnowItsTextDescribesNoLine()
+    {
+        var overlay = Overlay();
+
+        Assert.False(overlay.KnowsItsText);
+        Assert.False(overlay.StillDescribes(new FileLine(1), ""));
+    }
+
     // The whole zero-versus-one crossing, on its own: the server's first line is the gutter's line
     // one, and an overlay that skipped the conversion would mark line zero, which is no line.
     [Fact]

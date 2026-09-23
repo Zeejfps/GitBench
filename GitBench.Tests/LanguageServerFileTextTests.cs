@@ -117,14 +117,30 @@ public sealed class LanguageServerFileTextTests : IDisposable
     }
 
     [Fact]
-    public async Task TheDebounceIsHalfASecond()
+    public async Task TheDebounceIsThreeTenthsOfASecond()
     {
         using var connection = Connect();
         await Hover(connection);
 
         _text.Edit(_file, "edited");
 
-        Assert.Equal(TimeSpan.FromMilliseconds(500), Assert.Single(_delays.Delays));
+        Assert.Equal(TimeSpan.FromMilliseconds(300), Assert.Single(_delays.Delays));
+    }
+
+    [Fact]
+    public async Task AServerThatFollowsEditsIsSentTheEditRatherThanAReopen()
+    {
+        _server.Capabilities = _server.Capabilities! with { TextSync = TextSync.Incremental };
+        using var connection = Connect();
+        await Hover(connection);
+
+        _text.Edit(_file, "fn main() { edited(); }");
+        var hover = await Hover(connection);
+
+        Assert.Single(_server.Opened);
+        Assert.Empty(_server.Closed);
+        Assert.Equal("fn main() { edited(); }", Assert.Single(_server.Changed).Text);
+        Assert.Equal("fn main() { edited(); }", hover!.Markdown);
     }
 
     [Fact]
@@ -435,13 +451,15 @@ public sealed class LanguageServerFileTextTests : IDisposable
 
         public List<DocumentUri> Closed { get; } = [];
 
+        public List<(DocumentUri Uri, DocumentVersion Version, string Text)> Changed { get; } = [];
+
         public event Action<ServerReadiness>? ReadinessChanged;
 
         public event Action<ServerExit>? Exited;
 
         public event Action<PublishedDiagnostics>? DiagnosticsPublished;
 
-        public ServerCapabilities? Capabilities { get; } = new(
+        public ServerCapabilities? Capabilities { get; set; } = new(
             ServerName: "fake",
             ServerCapabilities.Utf16,
             SupportsHover: true,
@@ -455,6 +473,13 @@ public sealed class LanguageServerFileTextTests : IDisposable
             DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken cancel)
         {
             Opened.Add((uri, version, text));
+            _documents[uri] = text;
+            return Task.CompletedTask;
+        }
+
+        public Task ChangeAsync(DocumentUri uri, DocumentVersion version, string text, CancellationToken cancel)
+        {
+            Changed.Add((uri, version, text));
             _documents[uri] = text;
             return Task.CompletedTask;
         }

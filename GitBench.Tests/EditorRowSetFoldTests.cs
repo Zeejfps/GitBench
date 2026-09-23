@@ -182,6 +182,30 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
         Assert.All(rows.Rows, row => Assert.Null(Assert.IsType<DiffRow.Line>(row).Fold));
     }
 
+    // A parse lands from the worker between keystrokes, and its usages rows move every row below
+    // them. Whoever holds a caret as a row index has to be told on both sides of that, or the next
+    // keystroke lands on whatever row now has the caret's old index.
+    [Fact]
+    public void AParseThatAddsUsagesRowsAnnouncesTheReshapeOnBothSides()
+    {
+        var document = TextDocument.FromText(string.Join('\n', Source));
+        var rows = new EditorRowSet(document, Loc()) { UsageLensRows = true };
+        var seen = new List<string>();
+        var countBefore = -1;
+        rows.Reshaping += () =>
+        {
+            seen.Add("reshaping");
+            countBefore = rows.Rows.Count;
+        };
+        rows.Reshaped += () => seen.Add("reshaped");
+
+        rows.SetAnnotations(Annotations(document));
+
+        Assert.Equal(["reshaping", "reshaped"], seen);
+        Assert.Equal(document.LineCount, countBefore);
+        Assert.True(rows.Rows.Count > countBefore);
+    }
+
     [Fact]
     public void AFoldFollowsTheLinesAnEditAboveItMoved()
     {

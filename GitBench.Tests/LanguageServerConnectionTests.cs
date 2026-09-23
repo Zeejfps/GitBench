@@ -610,6 +610,9 @@ public sealed class LanguageServerConnectionTests : IDisposable
 
         public void RequestShutdown() => ShutdownRequests++;
 
+        public Task ChangeAsync(DocumentUri uri, DocumentVersion version, string text, CancellationToken cancel) =>
+            Task.CompletedTask;
+
         public Task CloseAsync(DocumentUri uri, CancellationToken cancel)
         {
             Closed.Add(uri);

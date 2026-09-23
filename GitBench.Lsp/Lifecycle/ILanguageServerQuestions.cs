@@ -24,6 +24,9 @@ public interface ILanguageServerQuestions
     Task OpenAsync(
         DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken cancel);
 
+    /// <summary>Replaces an open document's text with what it now says, at a new version.</summary>
+    Task ChangeAsync(DocumentUri uri, DocumentVersion version, string text, CancellationToken cancel);
+
     Task<LspResponse<T>> AskAsync<T>(LspRequest<T> request, TimeSpan timeout, CancellationToken cancel);
 
     /// <summary>Tells the server the file is no longer on screen, so it stops publishing about

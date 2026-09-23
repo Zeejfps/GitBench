@@ -137,6 +137,24 @@ public sealed class HandshakeTests
         await sent;
     }
 
+    [Fact]
+    public void TextSyncIsReadAsAKindOrFromAnOptionsObject()
+    {
+        Assert.Equal(TextSync.Full, Read("""{"capabilities":{"textDocumentSync":1}}""").TextSync);
+        Assert.Equal(
+            TextSync.Incremental,
+            Read("""{"capabilities":{"textDocumentSync":{"openClose":true,"change":2}}}""").TextSync);
+        Assert.Equal(TextSync.None, Read("""{"capabilities":{"textDocumentSync":{"openClose":true}}}""").TextSync);
+        Assert.Equal(TextSync.None, Read("""{"capabilities":{}}""").TextSync);
+    }
+
+    [Fact]
+    public void OnlyAServerThatSyncsFollowsEdits()
+    {
+        Assert.True(Read("""{"capabilities":{"textDocumentSync":2}}""").FollowsEdits);
+        Assert.False(Read("""{"capabilities":{"textDocumentSync":0}}""").FollowsEdits);
+    }
+
     private static ServerCapabilities Read(string json)
     {
         using var document = JsonDocument.Parse(json);

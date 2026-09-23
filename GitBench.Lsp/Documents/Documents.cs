@@ -70,7 +70,10 @@ public abstract record DiagnosticsState
 
     public sealed record Waiting : DiagnosticsState;
 
-    public sealed record Received(IReadOnlyList<Diagnostic> Diagnostics) : DiagnosticsState;
+    /// <param name="DescribedText">The text the server had been sent when this wave arrived — what
+    /// its ranges are positions in — or null where that is not known.</param>
+    public sealed record Received(IReadOnlyList<Diagnostic> Diagnostics, string? DescribedText = null)
+        : DiagnosticsState;
 }
 
 /// <summary>
@@ -131,8 +134,8 @@ public abstract record SemanticTokensReply
 
 /// <summary>
 /// One open document at a time: the handle the Files pane holds for the file on screen. Previewing
-/// a file opens it, previewing another closes it first, and a file the preview truncated is never
-/// sent at all. Everything a server sends back is checked against the document that is open now,
+/// a file opens it, previewing another closes it first, previewing it again with new text changes it
+/// in place where the server follows edits, and a file the preview truncated is never sent at all. Everything a server sends back is checked against the document that is open now,
 /// so a late answer for the file that was on screen a moment ago is dropped rather than drawn.
 /// </summary>
 public sealed class PreviewSession : IDisposable
@@ -172,16 +175,22 @@ public sealed class PreviewSession : IDisposable
     /// fresh wave of diagnostics for the file already open.</summary>
     public event Action<DocumentState>? StateChanged;
 
-    /// <summary>Shows a file. Also the way a file that changed on disk is handled: same call, new
-    /// content, so the watcher and the selection take one path rather than two.</summary>
+    /// <summary>Shows a file. Also the way a file that was typed into or changed on disk is handled:
+    /// same call, new content, so the editor, the watcher and the selection take one path.</summary>
     public void Preview(PreviewFile file)
     {
         if (_state is DocumentState.Open open
             && open.Uri == file.Uri
             && file.Content is PreviewContent.Complete same
-            && _sent is { } sent
-            && same.Text == sent.Text)
-            return;
+            && _sent is { } sent)
+        {
+            if (same.Text == sent.Text) return;
+            if (_server.Capabilities is { FollowsEdits: true })
+            {
+                Change(open, same.Text);
+                return;
+            }
+        }
 
         CloseOpenDocument();
 
@@ -197,6 +206,30 @@ public sealed class PreviewSession : IDisposable
         _requests = new CancellationTokenSource();
         _ = _server.OpenAsync(file.Uri, _entry.Language, version, complete.Text, _closing.Token);
         Publish(new DocumentState.Open(file.Uri, version, DiagnosticsState.Pending));
+    }
+
+    /// <summary>
+    /// Sends the open document's new text at the next version. The diagnostics already shown stay
+    /// until the server's next wave replaces them — dropping them on every keystroke would blink the
+    /// squiggles off and on — and questions still out about the old text are cancelled, since their
+    /// answers would be about text that is gone.
+    /// </summary>
+    private void Change(DocumentState.Open open, string text)
+    {
+        var version = _nextVersion;
+        _nextVersion = _nextVersion.Next();
+        _sent = new SentText(version, text);
+
+        var stale = _requests;
+        _requests = new CancellationTokenSource();
+        if (stale is not null)
+        {
+            stale.Cancel();
+            stale.Dispose();
+        }
+
+        _ = _server.ChangeAsync(open.Uri, version, text, _closing.Token);
+        Publish(open with { Version = version });
     }
 
     /// <summary>The selection moved to something that is not a file.</summary>
@@ -318,7 +351,10 @@ public sealed class PreviewSession : IDisposable
         if (published.Uri != open.Uri) return;
         if (published.Version is ResultVersion.Tagged tagged && tagged.Version.Value < open.Version.Value) return;
 
-        Publish(open with { Diagnostics = new DiagnosticsState.Received(published.Diagnostics.ToArray()) });
+        Publish(open with
+        {
+            Diagnostics = new DiagnosticsState.Received(published.Diagnostics.ToArray(), _sent?.Text),
+        });
     }
 
     private void Publish(DocumentState state)

@@ -10,7 +10,7 @@ namespace GitBench.Features.LanguageServers;
 internal sealed class LanguageServerConnection : ILanguageServerProcess
 {
     /// <summary>How long the text has to sit still before the server is told about it again.</summary>
-    private static readonly TimeSpan ResyncDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan ResyncDelay = TimeSpan.FromMilliseconds(300);
 
     private readonly ILanguageServerSession _server;
     private readonly LanguageServerEntry _entry;
@@ -233,7 +233,7 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
         _ = ResyncAsync(absolutePath, generation);
     }
 
-    /// <summary>Reopens the document against the text as it now stands, once the edits stop.</summary>
+    /// <summary>Brings the server's copy up to the text as it now stands, once the edits stop.</summary>
     private async Task ResyncAsync(string absolutePath, int generation)
     {
         try

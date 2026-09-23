@@ -799,6 +799,9 @@ public sealed class LanguageServerStoreTests : IDisposable
             Exited?.Invoke(new ServerExit(0));
         }
 
+        public Task ChangeAsync(DocumentUri uri, DocumentVersion version, string text, CancellationToken cancel) =>
+            Task.CompletedTask;
+
         public Task CloseAsync(DocumentUri uri, CancellationToken cancel) => Task.CompletedTask;
 
         public void Publish(PublishedDiagnostics published) => DiagnosticsPublished?.Invoke(published);

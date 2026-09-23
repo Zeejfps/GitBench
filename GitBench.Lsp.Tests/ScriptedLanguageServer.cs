@@ -16,6 +16,8 @@ public sealed class ScriptedLanguageServer : ILanguageServerQuestions
 
     public List<DocumentUri> Closed { get; } = [];
 
+    public List<OpenCall> Changed { get; } = [];
+
     public IReadOnlyList<Pending<Hover>> Hovers => Asked<Hover>();
 
     public IReadOnlyList<Pending<Definition>> Definitions => Asked<Definition>();
@@ -24,7 +26,7 @@ public sealed class ScriptedLanguageServer : ILanguageServerQuestions
 
     public event Action<PublishedDiagnostics>? DiagnosticsPublished;
 
-    public ServerCapabilities? Capabilities => null;
+    public ServerCapabilities? Capabilities { get; set; }
 
     public Task<string?> HandshakeAsync(TimeSpan timeout, CancellationToken cancel) =>
         Task.FromResult<string?>(null);
@@ -33,6 +35,12 @@ public sealed class ScriptedLanguageServer : ILanguageServerQuestions
         DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken cancel)
     {
         Opened.Add(new OpenCall(uri, language, version, text));
+        return Task.CompletedTask;
+    }
+
+    public Task ChangeAsync(DocumentUri uri, DocumentVersion version, string text, CancellationToken cancel)
+    {
+        Changed.Add(new OpenCall(uri, LanguageId.Of("changed"), version, text));
         return Task.CompletedTask;
     }
 

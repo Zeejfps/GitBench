@@ -11,6 +11,15 @@ namespace GitBench.Lsp;
 /// client is a UTF-16 offset, so a server that insists on something else is refused rather than
 /// silently mis-addressed — clangd, for one, prefers UTF-8.
 /// </param>
+/// <summary>Whether a server follows a document's edits, as its <c>textDocumentSync</c> says. A
+/// server that says nothing follows none, so the document is reopened rather than changed.</summary>
+public enum TextSync
+{
+    None,
+    Full,
+    Incremental,
+}
+
 public sealed record ServerCapabilities(
     string? ServerName,
     string PositionEncoding,
@@ -21,6 +30,11 @@ public sealed record ServerCapabilities(
     public const string Utf16 = "utf-16";
 
     public SemanticTokensSupport SemanticTokens { get; init; } = SemanticTokensSupport.Unsupported;
+
+    public TextSync TextSync { get; init; } = TextSync.None;
+
+    /// <summary>Whether an edited document is sent as a change rather than closed and reopened.</summary>
+    public bool FollowsEdits => TextSync is TextSync.Full or TextSync.Incremental;
 
     public bool CountsPositionsAsWeDo =>
         string.Equals(PositionEncoding, Utf16, StringComparison.OrdinalIgnoreCase);
@@ -50,6 +64,26 @@ public sealed record ServerCapabilities(
                 SupportsReferences: Advertises(capabilities, "referencesProvider"))
             {
                 SemanticTokens = SemanticTokensSupport.Read(capabilities),
+                TextSync = ReadTextSync(capabilities),
+            };
+        }
+
+        // Either the kind itself, or an options object carrying it as "change".
+        private static TextSync ReadTextSync(JsonElement capabilities)
+        {
+            if (capabilities.ValueKind != JsonValueKind.Object
+                || !capabilities.TryGetProperty("textDocumentSync", out var sync))
+                return TextSync.None;
+
+            var kind = sync.ValueKind == JsonValueKind.Object && sync.TryGetProperty("change", out var change)
+                ? change
+                : sync;
+            if (kind.ValueKind != JsonValueKind.Number || !kind.TryGetInt32(out var value)) return TextSync.None;
+            return value switch
+            {
+                1 => TextSync.Full,
+                2 => TextSync.Incremental,
+                _ => TextSync.None,
             };
         }
 

@@ -306,6 +306,24 @@ public static class LspNotices
             writer.WriteEndObject();
         });
 
+    /// <summary>The document's whole new text at a new version. Whole rather than as ranges: one
+    /// shape every syncing server accepts, and nothing to drift out of step.</summary>
+    public static LspNotice DidChange(DocumentUri uri, DocumentVersion version, string text) =>
+        new(LspMethod.DidChange, writer =>
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("textDocument");
+            writer.WriteString("uri", uri.Value);
+            writer.WriteNumber("version", version.Value);
+            writer.WriteEndObject();
+            writer.WriteStartArray("contentChanges");
+            writer.WriteStartObject();
+            writer.WriteString("text", text);
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        });
+
     public static LspNotice DidClose(DocumentUri uri) =>
         new(LspMethod.DidClose, writer =>
         {

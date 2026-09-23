@@ -21,6 +21,10 @@ internal sealed record FileDiagnostics(string Path, DocumentState Document)
     public IReadOnlyList<Diagnostic> Items =>
         Open is { Diagnostics: DiagnosticsState.Received received } ? received.Diagnostics : [];
 
+    /// <summary>The text the diagnostics' positions are in, or null where that is not known.</summary>
+    public string? DescribedText =>
+        Open is { Diagnostics: DiagnosticsState.Received received } ? received.DescribedText : null;
+
     /// <summary>True once a server has answered for this file, whatever it said. An empty list with
     /// this false is a spinner; with it true, a clean file.</summary>
     public bool Answered => Open is { Diagnostics: DiagnosticsState.Received };

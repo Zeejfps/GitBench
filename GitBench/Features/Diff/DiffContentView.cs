@@ -127,6 +127,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private Features.Editor.EditorBuffer? Document =>
         _body is DiffBody.Edited edited ? edited.Buffer : null;
+
+    // The rows whose reshapes this view follows, and the selection named on the way into one.
+    private Features.Editor.EditorRowSet? _followedRows;
+    private Func<DiffTextPos, DiffTextPos?>? _reshapeRemap;
     private float _caretPhase;
     private bool _focused;
     private DiffTextPos _lastCaret;
@@ -280,6 +284,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _body = document is null
             ? new DiffBody.Viewer(DiffRowSet.Build(state, _loc, FoldsFor(state), _usageLensRows))
             : Opened(document, state);
+        Follow(document?.Rows);
         _surface.Rows = RowSource;
         if (state is DiffRenderState.Loaded loaded)
         {
@@ -344,6 +349,35 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (topLine is { } line) ScrollToNewLine(line, leadIn: 0);
         _editorController.SyncIme();
         SetDirty();
+    }
+
+    /// <summary>Follows the reshapes of the rows on screen, and stops following the ones that
+    /// left.</summary>
+    private void Follow(Features.Editor.EditorRowSet? rows)
+    {
+        if (ReferenceEquals(_followedRows, rows)) return;
+        if (_followedRows is { } previous)
+        {
+            previous.Reshaping -= OnRowsReshaping;
+            previous.Reshaped -= OnRowsReshaped;
+        }
+
+        _followedRows = rows;
+        _reshapeRemap = null;
+        if (rows is null) return;
+        rows.Reshaping += OnRowsReshaping;
+        rows.Reshaped += OnRowsReshaped;
+    }
+
+    private void OnRowsReshaping() => _reshapeRemap = SelectionRemap();
+
+    private void OnRowsReshaped()
+    {
+        if (_reshapeRemap is { } remap) _selection.Remap(remap);
+        _reshapeRemap = null;
+        _surface.ClearHover();
+        ReconcileRows();
+        _editorController.SyncIme();
     }
 
     /// <summary>How the selection's endpoints read once the rows are rebuilt. Named before anything
@@ -458,7 +492,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _searchApplies = DescribeState(_renderState).Path is { } path && _search.IsFor(path);
 
     /// <summary>Whether what was computed from the file as it was read still describes what is on
-    /// screen — the find bar's hits, and the server's diagnostics.</summary>
+    /// screen — the find bar's hits, and diagnostics that do not say what text they are about.</summary>
     private bool ReadStillDescribesTheDocument => Document is not { ReadIsCurrent: false };
 
     /// <summary>
@@ -660,7 +694,21 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
-    public IReadOnlyList<Lsp.Diagnostic> DiagnosticsOn(FileLine line) => _diagnostics.On(line);
+    public IReadOnlyList<Lsp.Diagnostic> DiagnosticsOn(FileLine line) =>
+        DiagnosticsApplyTo(line) ? _diagnostics.On(line) : [];
+
+    /// <summary>
+    /// Whether the diagnostics on a line are still about what it says. Where the overlay knows the
+    /// text the server was shown, that is a question about this one line, so typing elsewhere leaves
+    /// a line's marks alone; where it does not, only a document nobody has typed into qualifies.
+    /// </summary>
+    private bool DiagnosticsApplyTo(FileLine line)
+    {
+        if (!_diagnostics.KnowsItsText) return ReadStillDescribesTheDocument;
+        if (Document is not { } editor) return true;
+        return line.Value <= editor.Document.LineCount
+            && _diagnostics.StillDescribes(line, editor.Document.Line(line));
+    }
 
     /// <summary>
     /// Replaces what a language server says the file's types are. Not through
@@ -773,9 +821,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private IReadOnlyList<DiagnosticMark>? MarksOnRow(int rowIndex)
     {
-        if (_diagnostics.IsEmpty || !ReadStillDescribesTheDocument) return null;
+        if (_diagnostics.IsEmpty) return null;
         if (RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
         if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
+        if (!DiagnosticsApplyTo(fileLine)) return null;
 
         var marks = _diagnostics.MarksOn(fileLine, line.Text);
         return marks.Count == 0 ? null : marks;

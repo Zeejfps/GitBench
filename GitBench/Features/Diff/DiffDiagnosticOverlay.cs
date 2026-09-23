@@ -14,16 +14,25 @@ internal readonly record struct DiagnosticMark(CharRange Range, DiagnosticSeveri
 /// repeatedly for minutes while the same rows stay on screen, and folding them in would mean
 /// rebuilding every row on each wave.
 /// </summary>
+/// <remarks>
+/// Knows, where it can, the text the server was looking at, so a file being typed into keeps the
+/// marks on every line that still reads the same and drops them from a line that does not — a
+/// range on an edited line is a position in text that is no longer there.
+/// </remarks>
 internal sealed class DiffDiagnosticOverlay
 {
     public static readonly DiffDiagnosticOverlay Empty = new(string.Empty, []);
 
     private readonly Dictionary<int, List<Diagnostic>> _byLine = [];
+    private readonly string[]? _describedLines;
 
-    public DiffDiagnosticOverlay(string path, IReadOnlyList<Diagnostic> diagnostics)
+    /// <param name="describedText">The text the diagnostics were computed against, or null where
+    /// that is not known.</param>
+    public DiffDiagnosticOverlay(string path, IReadOnlyList<Diagnostic> diagnostics, string? describedText = null)
     {
         Path = path;
         Count = diagnostics.Count;
+        _describedLines = describedText?.Split('\n');
 
         foreach (var diagnostic in diagnostics)
         {
@@ -89,6 +98,23 @@ internal sealed class DiffDiagnosticOverlay
         }
 
         return marks;
+    }
+
+    /// <summary>Whether this knows the text its diagnostics were computed against, and so can say
+    /// line by line which of them still apply.</summary>
+    public bool KnowsItsText => _describedLines is not null;
+
+    /// <summary>Whether a line reads now as it did in the text the diagnostics describe. Always
+    /// false for an overlay that does not know that text.</summary>
+    public bool StillDescribes(FileLine line, string raw)
+    {
+        if (_describedLines is not { } lines) return false;
+        var index = line.Value - 1;
+        if (index < 0 || index >= lines.Length) return false;
+
+        var described = lines[index].AsSpan();
+        if (described.EndsWith("\r")) described = described[..^1];
+        return described.SequenceEqual(raw);
     }
 
     /// <summary>Every diagnostic touching a line, for the card that shows what they say.</summary>

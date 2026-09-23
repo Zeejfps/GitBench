@@ -294,7 +294,7 @@ internal sealed record FileBrowserTextBody : Widget
     {
         if (servers?.Diagnostics.Value is not { } diagnostics || !diagnostics.IsFor(path))
             return DiffDiagnosticOverlay.Empty;
-        return new DiffDiagnosticOverlay(diagnostics.Path, diagnostics.Items);
+        return new DiffDiagnosticOverlay(diagnostics.Path, diagnostics.Items, diagnostics.DescribedText);
     }
 
     /// <summary>The same file as something the reader can put a caret in, or null where it must
