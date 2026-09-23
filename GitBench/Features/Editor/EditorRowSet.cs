@@ -432,7 +432,22 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
     }
 
     private static FileOutline Shifted(FileOutline outline, int after, int delta) =>
-        new(Shifted(outline.Roots, after, delta));
+        new(Shifted(outline.Roots, after, delta), Shifted(outline.Regions, after, delta));
+
+    private static IReadOnlyList<FoldRegion> Shifted(IReadOnlyList<FoldRegion> regions, int after, int delta)
+    {
+        var shifted = new FoldRegion[regions.Count];
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var region = regions[i];
+            shifted[i] = region with
+            {
+                StartLine = Move(region.StartLine, after, delta),
+                EndLine = Move(region.EndLine, after, delta),
+            };
+        }
+        return shifted;
+    }
 
     private static IReadOnlyList<OutlineNode> Shifted(
         IReadOnlyList<OutlineNode> nodes, int after, int delta)

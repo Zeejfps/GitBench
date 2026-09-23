@@ -153,6 +153,11 @@ internal static class CodeLanguages
     public static string InjectionQueryResourceName(this CodeLanguage language) =>
         $"injections.{language.GrammarName()}.scm";
 
+    /// <summary>The embedded <c>folds.scm</c>, which only a language folding more than its
+    /// declarations has.</summary>
+    public static string FoldQueryResourceName(this CodeLanguage language) =>
+        $"folds.{language.GrammarName()}.scm";
+
     /// <summary>
     /// The grammar an injection names, or null where we bundle none — which is not an error, the
     /// region simply stays uncolored. Aliased because what follows the backticks is whatever the

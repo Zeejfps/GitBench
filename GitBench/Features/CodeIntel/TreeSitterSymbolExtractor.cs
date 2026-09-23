@@ -35,8 +35,8 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
         try
         {
             return grammar.Pool.Use(
-                (outline, input),
-                static (session, s) => Walk(session, s.outline, s.input.Normalized, s.input.Utf8));
+                (outline, folds: grammar.Folds, input),
+                static (session, s) => Walk(session, s.outline, s.folds, s.input.Normalized, s.input.Utf8));
         }
         catch (Exception error)
         {
@@ -60,8 +60,8 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
         try
         {
             return grammar.Pool.Use(
-                (outline, normalized, byteCount: utf8.Length, root),
-                static (session, s) => WalkTree(session, s.outline, s.normalized, s.byteCount, s.root.RootNode));
+                (outline, folds: grammar.Folds, normalized, byteCount: utf8.Length, root),
+                static (session, s) => WalkTree(session, s.outline, s.folds, s.normalized, s.byteCount, s.root.RootNode));
         }
         catch (Exception error)
         {
@@ -75,13 +75,21 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
         if (Interlocked.Exchange(ref _parseFailureLogged, 1) == 0) _log?.Invoke(message);
     }
 
-    private static FileOutline? Walk(ParseSession session, OutlineQuery compiled, string text, byte[] utf8)
+    private static FileOutline? Walk(ParseSession session, OutlineQuery compiled, FoldQuery? folds, string text, byte[] utf8)
     {
         using var tree = session.Parser.Parse(utf8);
-        return WalkTree(session, compiled, text, utf8.Length, tree.RootNode);
+        return WalkTree(session, compiled, folds, text, utf8.Length, tree.RootNode);
     }
 
     private static FileOutline? WalkTree(
+        ParseSession session, OutlineQuery compiled, FoldQuery? folds, string text, int byteCount, Node root)
+    {
+        var roots = Declarations(session, compiled, text, byteCount, root);
+        var regions = folds is null ? [] : Regions(session, folds, text, root, roots);
+        return roots.Count == 0 && regions.Count == 0 ? null : new FileOutline(roots, regions);
+    }
+
+    private static IReadOnlyList<OutlineNode> Declarations(
         ParseSession session, OutlineQuery compiled, string text, int byteCount, Node root)
     {
         var found = new List<Pending>();
@@ -126,7 +134,7 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
                 ColumnOf(name, offsets)));
         });
 
-        if (found.Count == 0) return null;
+        if (found.Count == 0) return [];
 
         found.Sort(static (a, b) =>
         {
@@ -154,7 +162,78 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
             open.Push(draft);
         }
 
-        return new FileOutline(Freeze(roots));
+        return Freeze(roots);
+    }
+
+    /// <summary>
+    /// The folds the fold query finds, less the ones a declaration already provides: one per starting
+    /// line, the widest, and none that starts on a declaration's chevron line or folds its body again.
+    /// </summary>
+    private static IReadOnlyList<FoldRegion> Regions(
+        ParseSession session, FoldQuery folds, string text, Node root, IReadOnlyList<OutlineNode> declarations)
+    {
+        var widest = new SortedDictionary<int, int>();
+        session.Cursor.ForEachMatch(folds.Query, root, match =>
+        {
+            for (var i = 0; i < match.CaptureCount; i++)
+            {
+                var node = match.NodeAt(i);
+                var start = (int)node.StartPoint.Row + 1;
+                // A node that swallows its line's newline — a line comment, in some grammars — ends
+                // at the start of the next line, which is not a line it covers.
+                var endRow = node.EndPoint.Column == 0 && node.EndPoint.Row > node.StartPoint.Row
+                    ? node.EndPoint.Row - 1
+                    : node.EndPoint.Row;
+                var end = (int)endRow + 1;
+                if (end - start < 2) continue;
+                if (!widest.TryGetValue(start, out var known) || end > known) widest[start] = end;
+            }
+        });
+        if (widest.Count == 0) return [];
+
+        var outline = new FileOutline(declarations);
+        var claimedStarts = new HashSet<int>();
+        var claimedBodies = new HashSet<(int Line, int End)>();
+        foreach (var node in outline.Flatten())
+        {
+            if (node.SignatureEndLine >= node.EndLine) continue;
+            claimedStarts.Add(node.StartLine);
+            for (var line = node.StartLine; line <= node.SignatureEndLine; line++) claimedBodies.Add((line, node.EndLine));
+        }
+
+        var lineStarts = LineStarts(text);
+        var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+        var regions = new List<FoldRegion>();
+        foreach (var (start, end) in widest)
+        {
+            if (claimedStarts.Contains(start) || claimedBodies.Contains((start, end))) continue;
+
+            string? scope = null;
+            foreach (var node in outline.EnclosingPathAt(start)) scope = FileOutline.PathOf(scope, node);
+
+            var key = $"{scope}/{LineAt(text, lineStarts, start).Trim()}";
+            var occurrence = occurrences.TryGetValue(key, out var seen) ? seen + 1 : 0;
+            occurrences[key] = occurrence;
+            regions.Add(new FoldRegion($"{key}#{occurrence}", start, end));
+        }
+
+        return regions;
+    }
+
+    private static List<int> LineStarts(string text)
+    {
+        var starts = new List<int> { 0 };
+        for (var i = 0; i < text.Length; i++)
+            if (text[i] == '\n') starts.Add(i + 1);
+        return starts;
+    }
+
+    private static string LineAt(string text, List<int> lineStarts, int line)
+    {
+        if (line < 1 || line > lineStarts.Count) return string.Empty;
+        var from = lineStarts[line - 1];
+        var to = line < lineStarts.Count ? lineStarts[line] - 1 : text.Length;
+        return text[from..to];
     }
 
     private static IReadOnlyList<OutlineNode> Freeze(List<Draft> drafts)

@@ -1066,7 +1066,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     }
 
     /// <summary>
-    /// Opens every collapsed declaration hiding <paramref name="line"/>, before anything tries to
+    /// Opens every collapsed declaration and region hiding <paramref name="line"/>, before anything tries to
     /// scroll to it. A jump into a folded body would otherwise land on the fold that swallowed it —
     /// the row stream has no row for a hidden line, so the scroll falls back to the nearest one
     /// above — and arriving somewhere other than where you asked is worse than not moving.
@@ -1094,6 +1094,12 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
             // already a jump to something on screen.
             if (line >= Math.Max(node.StartLine + 1, node.SignatureEndLine) && opened.IsCollapsed(path))
                 opened = opened.Toggled(path);
+        }
+
+        foreach (var region in outline.Regions)
+        {
+            if (region.StartLine >= line) break;
+            if (line < region.EndLine && opened.IsCollapsed(region.Id)) opened = opened.Toggled(region.Id);
         }
 
         if (!ReferenceEquals(opened, folds)) _folds.Value = opened;

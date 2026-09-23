@@ -117,6 +117,10 @@
         <EmbeddedResource Include="Assets\Queries\Injections\*.scm">
             <LogicalName>injections.%(Filename)%(Extension)</LogicalName>
         </EmbeddedResource>
+        <!-- Fold queries: the constructs besides declarations that fold, one @fold capture each. -->
+        <EmbeddedResource Include="Assets\Queries\Folds\*.scm">
+            <LogicalName>folds.%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
     </ItemGroup>
 
     <Import Project="..\external\cs_tree_sitter\native\Native.props" />

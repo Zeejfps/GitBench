@@ -49,17 +49,19 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
             outlines.OrderBy(n => n, StringComparer.Ordinal),
             embedded.Where(n => !n.StartsWith("highlights.", StringComparison.Ordinal))
                 .Where(n => !n.StartsWith("injections.", StringComparison.Ordinal))
+                .Where(n => !n.StartsWith("folds.", StringComparison.Ordinal))
                 .OrderBy(n => n, StringComparer.Ordinal));
 
-        // Highlight and injection queries: a language may have neither — no highlights query is
+        // Highlight, injection and fold queries: a language may have none — no highlights query is
         // what routes a language to TextMate — but a file that matches no language at all would
         // embed and never load.
         var known = CodeLanguages.Bundled
-            .SelectMany(l => new[] { l.HighlightQueryResourceName(), l.InjectionQueryResourceName() })
+            .SelectMany(l => new[] { l.HighlightQueryResourceName(), l.InjectionQueryResourceName(), l.FoldQueryResourceName() })
             .ToHashSet(StringComparer.Ordinal);
         Assert.Empty(embedded
             .Where(n => n.StartsWith("highlights.", StringComparison.Ordinal)
-                     || n.StartsWith("injections.", StringComparison.Ordinal))
+                     || n.StartsWith("injections.", StringComparison.Ordinal)
+                     || n.StartsWith("folds.", StringComparison.Ordinal))
             .Where(n => !known.Contains(n)));
     }
 

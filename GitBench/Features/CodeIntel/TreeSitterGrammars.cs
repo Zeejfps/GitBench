@@ -22,12 +22,14 @@ internal sealed class TreeSitterGrammars : IDisposable
         int? poolCapacity = null,
         Func<CodeLanguage, string>? outlineQueryText = null,
         Func<CodeLanguage, string?>? highlightQueryText = null,
-        Func<CodeLanguage, string?>? injectionQueryText = null)
+        Func<CodeLanguage, string?>? injectionQueryText = null,
+        Func<CodeLanguage, string?>? foldQueryText = null)
     {
         var capacity = poolCapacity ?? Environment.ProcessorCount;
         var readOutline = outlineQueryText ?? ReadEmbeddedOutlineQuery;
         var readHighlights = highlightQueryText ?? ReadEmbeddedHighlightQuery;
         var readInjections = injectionQueryText ?? ReadEmbeddedInjectionQuery;
+        var readFolds = foldQueryText ?? ReadEmbeddedFoldQuery;
 
         foreach (var language in CodeLanguages.Bundled)
         {
@@ -72,7 +74,22 @@ internal sealed class TreeSitterGrammars : IDisposable
                 }
             }
 
-            _grammars.Add(language, new CompiledGrammar(language, new ParseSessionPool(grammar, capacity), outline, highlights));
+            FoldQuery? folds = null;
+            if (outline is not null && readFolds(language) is { } foldText)
+            {
+                try
+                {
+                    folds = FoldQuery.Compile(language, grammar, foldText);
+                }
+                catch (Exception error)
+                {
+                    log?.Invoke($"Folding beyond declarations unavailable for {language}: {error}");
+                }
+            }
+
+            _grammars.Add(
+                language,
+                new CompiledGrammar(language, new ParseSessionPool(grammar, capacity), outline, highlights, folds));
         }
     }
 
@@ -112,6 +129,9 @@ internal sealed class TreeSitterGrammars : IDisposable
     private static string? ReadEmbeddedInjectionQuery(CodeLanguage language) =>
         ReadEmbedded(language.InjectionQueryResourceName());
 
+    private static string? ReadEmbeddedFoldQuery(CodeLanguage language) =>
+        ReadEmbedded(language.FoldQueryResourceName());
+
     private static string? ReadEmbedded(string resource)
     {
         using var stream = typeof(TreeSitterGrammars).Assembly.GetManifestResourceStream(resource);
@@ -130,12 +150,14 @@ internal sealed class TreeSitterGrammars : IDisposable
 /// <summary>One language's parser pool beside the queries compiled against its grammar.</summary>
 internal sealed class CompiledGrammar : IDisposable
 {
-    public CompiledGrammar(CodeLanguage language, ParseSessionPool pool, OutlineQuery? outline, HighlightQuery? highlights)
+    public CompiledGrammar(
+        CodeLanguage language, ParseSessionPool pool, OutlineQuery? outline, HighlightQuery? highlights, FoldQuery? folds)
     {
         Language = language;
         Pool = pool;
         Outline = outline;
         Highlights = highlights;
+        Folds = folds;
     }
 
     public CodeLanguage Language { get; }
@@ -146,8 +168,13 @@ internal sealed class CompiledGrammar : IDisposable
 
     public HighlightQuery? Highlights { get; }
 
+    /// <summary>What folds besides declarations; only ever present beside an outline query, whose
+    /// walk it rides on.</summary>
+    public FoldQuery? Folds { get; }
+
     public void Dispose()
     {
+        Folds?.Dispose();
         Highlights?.Dispose();
         Outline?.Dispose();
         Pool.Dispose();

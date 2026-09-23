@@ -169,7 +169,7 @@ public sealed class DiffRowCoordinateTests(CodeIntelFixture fixture)
         Assert.Null(collapsed.RowForNewLine(body));
         var chip = collapsed.RowNearestNewLine(body);
         Assert.NotNull(chip);
-        Assert.True(collapsed.Rows[chip.Value.Value] is DiffRow.Line { Fold.Chip: true });
+        Assert.True(collapsed.Rows[chip.Value.Value] is DiffRow.Line { Fold.Chip: not null });
     }
 
     [Fact]

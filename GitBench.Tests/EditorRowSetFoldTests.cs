@@ -35,7 +35,7 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
 
         Assert.Equal(Source.Length - 4, rows.Rows.Count);
         Assert.Equal("    void Login(string user)", Raw(rows, 2));
-        Assert.True(Line(rows, 2).Fold is { Chip: true });
+        Assert.True(Line(rows, 2).Fold is { Chip: not null });
         Assert.Equal(string.Empty, Raw(rows, 3));
         Assert.Equal(new FileLine(8), Line(rows, 3).NewNumber.Line!.Value);
     }
@@ -217,7 +217,7 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
 
         Assert.Equal("// a comment", Raw(rows, 0));
         Assert.Equal("    void Login(string user)", Raw(rows, 3));
-        Assert.True(Line(rows, 3).Fold is { Chip: true });
+        Assert.True(Line(rows, 3).Fold is { Chip: not null });
         Assert.Equal(string.Empty, Raw(rows, 4));
         Assert.Null(rows.RowForNewLine(new FileLine(6)));
     }
@@ -233,7 +233,7 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
 
         Assert.Equal(before, rows.Rows.Count);
         Assert.Equal("class AuthServiceBase", Raw(rows, 0));
-        Assert.True(Line(rows, 0).Fold is { Chip: true });
+        Assert.True(Line(rows, 0).Fold is { Chip: not null });
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
             new TextRange(TextPosition.At(3, 5), TextPosition.At(6, 0)), string.Empty)));
 
         Assert.Equal(4, rows.Rows.Count);
-        Assert.True(Line(rows, 2).Fold is { Chip: true });
+        Assert.True(Line(rows, 2).Fold is { Chip: not null });
         Assert.Equal(
             string.Join('\n', Enumerable.Range(4, 3).Select(n => document.Line(new FileLine(n)))),
             rows.HiddenText!(new RowIndex(2)));
@@ -261,7 +261,7 @@ public sealed class EditorRowSetFoldTests(CodeIntelFixture fixture)
         rows.SetFolds(Collapsed("Login(string)"));
 
         Assert.Equal("    void Login(string user)", Raw(rows, 4));
-        Assert.True(Line(rows, 4).Fold is { Chip: true });
+        Assert.True(Line(rows, 4).Fold is { Chip: not null });
         Assert.Equal(string.Empty, Raw(rows, 5));
         Assert.Equal(
             "    {\n        Check(user);\n        Issue(user);\n    }",

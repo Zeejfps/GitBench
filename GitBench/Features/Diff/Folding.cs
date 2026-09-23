@@ -1,4 +1,5 @@
 using GitBench.Features.CodeIntel;
+using GitBench.Theming;
 
 namespace GitBench.Features.Diff;
 
@@ -9,8 +10,41 @@ namespace GitBench.Features.Diff;
 /// </summary>
 /// <param name="Id">The declaration's containment chain, which is what a fold is remembered by.</param>
 /// <param name="Chevron">This row carries the toggle: the declaration's signature.</param>
-/// <param name="Chip">This row ends a collapsed fold and shows the continuation.</param>
-internal readonly record struct FoldMark(string Id, bool Collapsed, bool Chevron, bool Chip);
+/// <param name="Chip">Set where this row ends a collapsed fold: what it shows in place of the
+/// lines the fold hides.</param>
+internal readonly record struct FoldMark(string Id, bool Collapsed, bool Chevron, FoldChip? Chip);
+
+/// <summary>What a collapsed fold's row shows after its own text, which follows from what the fold
+/// hides.</summary>
+internal abstract record FoldChip
+{
+    private FoldChip() { }
+
+    /// <summary>A declaration's body opening on a line of its own, braces and all: the declaration
+    /// reads as one line.</summary>
+    public sealed record Body : FoldChip
+    {
+        public static readonly Body Instance = new();
+    }
+
+    /// <summary>A region's lines between its first and its last, where the last stays on a row of
+    /// its own because another fold starts on it — the <c>} else {</c> of a folded <c>if</c>.</summary>
+    public sealed record Interior : FoldChip
+    {
+        public static readonly Interior Instance = new();
+    }
+
+    /// <summary>A fold's lines after its first, with its closing line pulled up behind the chip, so
+    /// a folded element reads <c>&lt;header&gt;...&lt;/header&gt;</c> and a declaration whose body
+    /// opens on its signature's line reads <c>const theme = {...};</c>.</summary>
+    /// <param name="Closing">The line pulled up.</param>
+    /// <param name="Indent">How many tab-expanded cells of leading space were trimmed off it — what
+    /// its syntax spans are shifted by.</param>
+    /// <param name="Text">The closing line, tab-expanded, without its indent.</param>
+    /// <param name="Spans">Its syntax spans in <paramref name="Text"/>'s own columns; resolved when
+    /// the row is built, since only the row builder holds the highlight.</param>
+    public sealed record Joined(FileLine Closing, int Indent, string Text, IReadOnlyList<TokenSpan>? Spans) : FoldChip;
+}
 
 /// <summary>
 /// Which declarations the reader has folded shut in one file. Keyed by containment chain rather
@@ -68,6 +102,7 @@ internal sealed class FoldPlan
 
         var plan = new FoldPlan(usageLens);
         plan.Walk(outline.Roots, parentPath: null, folds, lines, insideBody: false);
+        if (folds is not null) plan.PlanRegions(outline.Regions, folds, lines);
         plan.Normalize();
         return plan;
     }
@@ -146,7 +181,7 @@ internal sealed class FoldPlan
             }
 
             var collapsed = folds.IsCollapsed(path);
-            Mark(node.StartLine, path, collapsed, chevron: true, chip: false);
+            Mark(node.StartLine, path, collapsed, chevron: true, chip: null);
             if (!collapsed)
             {
                 Walk(node.Children, path, folds, lines, childrenInsideBody);
@@ -162,10 +197,72 @@ internal sealed class FoldPlan
             var last = Math.Min(node.EndLine, lines.Count);
             if (last < hideFrom) continue;
 
-            Mark(chipLine, path, collapsed: true, chevron: false, chip: true);
+            // Where they share it the brace is already on screen, so a chip standing for the braces
+            // too would draw a second one; the closing line comes up behind the chip instead.
+            var chip = node.SignatureEndLine == node.StartLine && node.EndLine <= lines.Count
+                ? ClosingOf(lines, node.EndLine)
+                : (FoldChip)FoldChip.Body.Instance;
+            Mark(chipLine, path, collapsed: true, chevron: false, chip);
             _hidden.Add((hideFrom, last));
             _swallowed[chipLine] = JoinLines(lines, hideFrom, last);
         }
+    }
+
+    // Planned after every declaration, so a line a declaration folds from — or hides — is already
+    // spoken for. Regions come in source order, which puts an outer one's hidden range in place
+    // before any region it contains is reached.
+    private void PlanRegions(IReadOnlyList<FoldRegion> regions, FoldState folds, IReadOnlyList<string> lines)
+    {
+        HashSet<int>? starts = null;
+        foreach (var region in regions)
+        {
+            if (_marks.ContainsKey(region.StartLine) || Covered(region.StartLine)) continue;
+
+            if (!folds.IsCollapsed(region.Id))
+            {
+                Mark(region.StartLine, region.Id, collapsed: false, chevron: true, chip: null);
+                continue;
+            }
+
+            var hideFrom = region.StartLine + 1;
+            if (region.EndLine > lines.Count || region.EndLine - 1 < hideFrom)
+            {
+                Mark(region.StartLine, region.Id, collapsed: true, chevron: true, chip: null);
+                continue;
+            }
+
+            starts ??= regions.Select(r => r.StartLine).ToHashSet();
+            var chip = FoldsFrom(region.EndLine, starts)
+                ? (FoldChip)FoldChip.Interior.Instance
+                : ClosingOf(lines, region.EndLine);
+            var last = chip is FoldChip.Joined ? region.EndLine : region.EndLine - 1;
+
+            Mark(region.StartLine, region.Id, collapsed: true, chevron: true, chip);
+            _hidden.Add((hideFrom, last));
+            _swallowed[region.StartLine] = JoinLines(lines, hideFrom, last);
+        }
+    }
+
+    // A line another fold starts on keeps its row, or pulling it up would take that fold's
+    // chevron with it.
+    private bool FoldsFrom(int line, HashSet<int> regionStarts) =>
+        regionStarts.Contains(line) || _marks.TryGetValue(line, out var mark) && mark.Chevron;
+
+    private static FoldChip.Joined ClosingOf(IReadOnlyList<string> lines, int line)
+    {
+        var expanded = DiffText.ExpandTabs(lines[line - 1]);
+        var indent = 0;
+        while (indent < expanded.Length && expanded[indent] == ' ') indent++;
+        return new FoldChip.Joined(new FileLine(line), indent, expanded[indent..].TrimEnd(), Spans: null);
+    }
+
+    // Linear, because it runs while the hidden ranges are still unsorted: only collapsed folds add
+    // one, and there are only ever a handful.
+    private bool Covered(int line)
+    {
+        foreach (var (from, to) in _hidden)
+            if (line >= from && line <= to) return true;
+        return false;
     }
 
     // Ordered and disjoint, which is what IsHidden's binary search needs. Ranges that merely touch
@@ -231,15 +328,15 @@ internal sealed class FoldPlan
 
     // A signature and its opening brace share a row in some styles, so the two marks merge
     // rather than one overwriting the other.
-    private void Mark(int line, string path, bool collapsed, bool chevron, bool chip)
+    private void Mark(int line, string path, bool collapsed, bool chevron, FoldChip? chip)
     {
-        var existing = _marks.TryGetValue(line, out var m) ? m : new FoldMark(path, collapsed, false, false);
+        var existing = _marks.TryGetValue(line, out var m) ? m : new FoldMark(path, collapsed, false, null);
         _marks[line] = existing with
         {
             Id = path,
             Collapsed = collapsed,
             Chevron = existing.Chevron || chevron,
-            Chip = existing.Chip || chip,
+            Chip = existing.Chip ?? chip,
         };
     }
 

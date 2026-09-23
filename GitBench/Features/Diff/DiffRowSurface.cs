@@ -186,7 +186,7 @@ internal sealed class DiffRowSurface
         if (fold.Chevron && DiffRowPainter.FoldHit(point.X - ContentLeft, GutterWidth, Rows.SingleGutter))
             return (row, fold.Id);
 
-        if (!fold.Chip) return null;
+        if (fold.Chip is null) return null;
         var (chipX, chipWidth) = _painter.FoldChipBounds(line, TextOriginX());
         return point.X >= chipX && point.X <= chipX + chipWidth ? (row, fold.Id) : null;
     }

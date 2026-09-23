@@ -452,8 +452,8 @@ internal sealed class DiffRowPainter
 
         // After the text and outside it: the chip is chrome standing in for the body, not part of
         // the row's characters, so nothing selects it and nothing measures a caret against it.
-        if (l.Fold is { Chip: true })
-            DrawFoldChip(c, l, textLeft, p);
+        if (l.Fold is { Chip: { } chip })
+            DrawFoldChip(c, l, chip, textLeft, p);
     }
 
     /// <summary>The wash a line lit up for the reader is drawn under; set from the theme by the
@@ -558,7 +558,7 @@ internal sealed class DiffRowPainter
     private static float TextOriginOf(in DiffRowPaint p) =>
         LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter, p.FoldColumn, p.GlyphColumn);
 
-    private void DrawFoldChip(ICanvas c, DiffRow.Line l, float textLeft, in DiffRowPaint p)
+    private void DrawFoldChip(ICanvas c, DiffRow.Line l, FoldChip chip, float textLeft, in DiffRowPaint p)
     {
         var (x, width) = FoldChipBounds(l, textLeft);
         c.DrawRect(new DrawRectInputs
@@ -572,14 +572,17 @@ internal sealed class DiffRowPainter
             ZIndex = p.Z + 2,
         });
         DrawMonoText(
-            c, FullFileRow.FoldChipText, x, p.Bottom, width,
+            c, FullFileRow.ChipText(chip), x, p.Bottom, width,
             Styles.LineNumberText, TextAlignment.Start, p.Z + 3);
+
+        if (chip is FoldChip.Joined joined)
+            DrawSpannedText(c, joined.Text, joined.Spans, x + width, p.Bottom, p.Left + p.Width, p.Z + 2);
     }
 
     /// <summary>Where a collapsed fold's pill sits on its row, for drawing it and for clicking it.</summary>
     public (float X, float Width) FoldChipBounds(DiffRow.Line l, float textLeft) => (
         textLeft + DiffText.VisualCells(l.Text.Expanded) * MonoAdvance,
-        DiffText.VisualCells(FullFileRow.FoldChipText) * MonoAdvance);
+        (l.Fold?.Chip is { } chip ? FullFileRow.PillCells(chip) : 0) * MonoAdvance);
 
     private const float FoldChipInsetY = 1f;
 
@@ -868,10 +871,12 @@ internal sealed class DiffRowPainter
     // Draws the line's text either as one run (no spans → plain, identical to before) or as a
     // sequence of colored runs interleaved with base-colored gaps. The font is monospace, so
     // each run sits at textStart + column*advance and every DrawText batches into one GPU draw.
-    private void DrawLineText(ICanvas c, DiffRow.Line l, float textStart, float bottom, float maxRight, int z)
+    private void DrawLineText(ICanvas c, DiffRow.Line l, float textStart, float bottom, float maxRight, int z) =>
+        DrawSpannedText(c, l.Text.Expanded, l.Spans, textStart, bottom, maxRight, z);
+
+    private void DrawSpannedText(
+        ICanvas c, string text, IReadOnlyList<TokenSpan>? spans, float textStart, float bottom, float maxRight, int z)
     {
-        var text = l.Text.Expanded;
-        var spans = l.Spans;
         if (spans == null || spans.Count == 0)
         {
             DrawMonoText(c, text, textStart, bottom, Math.Max(0f, maxRight - textStart),

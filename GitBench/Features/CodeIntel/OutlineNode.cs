@@ -26,8 +26,21 @@ internal sealed record OutlineNode(
     RawColumn NameColumn,
     IReadOnlyList<OutlineNode> Children);
 
-internal sealed record FileOutline(IReadOnlyList<OutlineNode> Roots)
+/// <summary>
+/// A construct that folds without being a declaration — a block, an object literal, a JSX element.
+/// Its first and last lines stay on screen when it is folded, so what it hides is the lines between.
+/// </summary>
+/// <param name="Id">The enclosing declaration's path, the region's first line and which occurrence
+/// of that line it is within the declaration — what a fold is remembered by, so an edit elsewhere in
+/// the file leaves it shut.</param>
+internal sealed record FoldRegion(string Id, int StartLine, int EndLine);
+
+/// <param name="Regions">The folds besides declarations, in source order, at most one per line and
+/// never on a line a declaration already folds from.</param>
+internal sealed record FileOutline(IReadOnlyList<OutlineNode> Roots, IReadOnlyList<FoldRegion> Regions)
 {
+    public FileOutline(IReadOnlyList<OutlineNode> roots) : this(roots, []) { }
+
     public OutlineNode? EnclosingAt(int line) => Innermost(Roots, line, null);
 
     /// <summary>

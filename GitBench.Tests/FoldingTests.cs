@@ -53,7 +53,7 @@ public class FoldingTests(CodeIntelFixture fixture)
         Assert.DoesNotContain(rows, r => Text(r) == "        Issue(user);");
         Assert.DoesNotContain(rows, r => Text(r) == "    }");
 
-        var chip = Assert.Single(rows.OfType<DiffRow.Line>().Where(r => r.Fold is { Chip: true }));
+        var chip = Assert.Single(rows.OfType<DiffRow.Line>().Where(r => r.Fold is { Chip: not null }));
         Assert.Equal("    void Login(string user)", chip.Text.Raw);
         Assert.True(chip.Fold!.Value.Chevron, "the one visible row carries both the toggle and the chip");
     }
@@ -111,7 +111,7 @@ public class FoldingTests(CodeIntelFixture fixture)
         var set = Set(Collapsed("App.AuthService.Login(string)"));
         var chipRow = set.Rows
             .Select((row, index) => (row, index))
-            .First(r => r.row is DiffRow.Line { Fold.Chip: true }).index;
+            .First(r => r.row is DiffRow.Line { Fold.Chip: not null }).index;
 
         var text = DiffSelectionModel.BuildCopyText(
             set.Rows, new DiffTextPos(default, default),
