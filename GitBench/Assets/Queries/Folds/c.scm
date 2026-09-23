@@ -11,6 +11,14 @@
 (argument_list) @fold
 (parameter_list) @fold
 
+; An #if's #elif and #else fold on their own, so its own fold stops before its alternative.
 (preproc_if) @fold
+(preproc_if alternative: (_) @stop) @fold
 (preproc_ifdef) @fold
+(preproc_ifdef alternative: (_) @stop) @fold
+(preproc_elif) @fold
+(preproc_elif alternative: (_) @stop) @fold
+(preproc_elifdef) @fold
+(preproc_elifdef alternative: (_) @stop) @fold
+(preproc_else) @fold
 (comment) @fold

@@ -172,22 +172,43 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
     private static IReadOnlyList<FoldRegion> Regions(
         ParseSession session, FoldQuery folds, string text, Node root, IReadOnlyList<OutlineNode> declarations)
     {
-        var widest = new SortedDictionary<int, int>();
+        // Keyed by node: a branch-stopped pattern matches once per branch and the earliest wins,
+        // and it wins over the same node's unstopped match too, which is there for the node with
+        // no branch at all.
+        var spans = new Dictionary<(uint Start, uint End), FoldSpan>();
         session.Cursor.ForEachMatch(folds.Query, root, match =>
         {
             if (!match.TryGetNode(folds.FoldCaptureId, out var node)) return;
-            var stop = folds.EndCaptureId is { } endId && match.TryGetNode(endId, out var endNode) ? endNode : node;
 
             var start = (int)node.StartPoint.Row + 1;
+            var key = (node.StartByte, node.EndByte);
+            var known = spans.TryGetValue(key, out var k) ? k : (FoldSpan?)null;
+
+            if (folds.StopCaptureId is { } stopId && match.TryGetNode(stopId, out var branch))
+            {
+                // The line before the branch's own: that line opens the branch's fold.
+                var beforeBranch = (int)branch.StartPoint.Row;
+                if (known is not { Stopped: true } stopped || beforeBranch < stopped.End)
+                    spans[key] = new FoldSpan(start, beforeBranch, Stopped: true);
+                return;
+            }
+
+            if (known is not null) return;
+            var last = folds.EndCaptureId is { } endId && match.TryGetNode(endId, out var endNode) ? endNode : node;
             // A node that swallows its line's newline — a line comment, in some grammars — ends
             // at the start of the next line, which is not a line it covers.
-            var endRow = stop.EndPoint.Column == 0 && stop.EndPoint.Row > node.StartPoint.Row
-                ? stop.EndPoint.Row - 1
-                : stop.EndPoint.Row;
-            var end = (int)endRow + 1;
-            if (end - start < 2) return;
-            if (!widest.TryGetValue(start, out var known) || end > known) widest[start] = end;
+            var endRow = last.EndPoint.Column == 0 && last.EndPoint.Row > node.StartPoint.Row
+                ? last.EndPoint.Row - 1
+                : last.EndPoint.Row;
+            spans[key] = new FoldSpan(start, (int)endRow + 1, Stopped: false);
         });
+
+        var widest = new SortedDictionary<int, int>();
+        foreach (var (start, end, _) in spans.Values)
+        {
+            if (end - start < 2) continue;
+            if (!widest.TryGetValue(start, out var known) || end > known) widest[start] = end;
+        }
         if (widest.Count == 0) return [];
 
         var lineStarts = LineStarts(text);
@@ -380,6 +401,10 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
             builder.Append(c);
         }
     }
+
+    /// <param name="Stopped">Whether the fold ends short of its node, before a branch that folds
+    /// on its own.</param>
+    private readonly record struct FoldSpan(int Start, int End, bool Stopped);
 
     private readonly record struct Pending(
         uint StartByte,

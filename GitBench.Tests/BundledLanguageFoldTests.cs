@@ -82,6 +82,120 @@ public class BundledLanguageFoldTests(CodeIntelFixture fixture)
         Assert.Contains(rows, r => Text(r) == "    queue()");
     }
 
+    // Where a language keeps an if's else inside the if's own node, folding the if still stops at
+    // the else, and the else folds on its own.
+    [Fact]
+    public void FoldingAnIfLeavesItsElseOnScreenInEveryLanguageThatNestsIt()
+    {
+        var wrong = new List<string>();
+        foreach (var (language, source, ifLine, elseLine, hidden, kept) in Branches)
+        {
+            var rows = Collapse(source, language, ifLine);
+            if (rows.Any(r => Text(r) == hidden)) wrong.Add($"{language}: '{hidden}' is still on screen");
+            if (!rows.Any(r => Text(r) == elseLine)) wrong.Add($"{language}: '{elseLine}' was hidden");
+            if (!rows.Any(r => Text(r) == kept)) wrong.Add($"{language}: '{kept}' was hidden");
+            if (!rows.Any(r => r is DiffRow.Line { Fold.Chevron: true } l && l.Text.Raw == elseLine))
+                wrong.Add($"{language}: '{elseLine}' has no chevron of its own");
+        }
+
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+    }
+
+    // A keyword closes a block the way a brace does, so an if with no else reads as one line.
+    [Fact]
+    public void AnIfWithNoElseJoinsTheKeywordThatClosesIt()
+    {
+        var wrong = new List<string>();
+        foreach (var (language, source, ifLine, closer) in Closed)
+        {
+            var rows = Collapse(source, language, ifLine);
+            var chip = rows.OfType<DiffRow.Line>().SingleOrDefault(r => r.Fold is { Chip: not null })?.Fold?.Chip;
+            if (chip is not FoldChip.Joined joined || joined.Text != closer)
+                wrong.Add($"{language}: expected '{closer}' joined behind the chip but got {chip}");
+        }
+
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+    }
+
+    // A word that only begins like a closing keyword closes nothing.
+    [Fact]
+    public void ACommandThatBeginsLikeAClosingKeywordIsNotOne()
+    {
+        const string source = """
+            for f in *.txt; do
+              echo "$f"
+              cat "$f"
+            done
+            deploy() {
+              echo start
+              echo more
+              find . -name x
+            }
+            """;
+
+        var rows = Collapse(source, CodeLanguage.Bash, "deploy() {");
+
+        var chip = Assert.Single(rows.OfType<DiffRow.Line>(), r => r.Fold is { Chip: not null });
+        Assert.Equal("}", Assert.IsType<FoldChip.Joined>(chip.Fold!.Value.Chip).Text);
+    }
+
+    private static readonly (CodeLanguage Language, string Source, string IfLine, string ElseLine, string Hidden, string Kept)[] Branches =
+    [
+        (CodeLanguage.Bash, """
+            if [ -f x ]; then
+              echo yes
+              echo again
+            else
+              echo no
+              echo never
+            fi
+            """, "if [ -f x ]; then", "else", "  echo again", "  echo no"),
+
+        (CodeLanguage.C, """
+            #if DEBUG
+            int level = 3;
+            int trace = 1;
+            #else
+            int level = 0;
+            int trace = 0;
+            #endif
+            """, "#if DEBUG", "#else", "int trace = 1;", "int level = 0;"),
+
+        (CodeLanguage.Svelte, """
+            {#if ready}
+              <p>one</p>
+              <p>two</p>
+            {:else}
+              <p>three</p>
+              <p>four</p>
+            {/if}
+            """, "{#if ready}", "{:else}", "  <p>two</p>", "  <p>three</p>"),
+    ];
+
+    private static readonly (CodeLanguage Language, string Source, string IfLine, string Closer)[] Closed =
+    [
+        (CodeLanguage.Bash, """
+            if [ -f x ]; then
+              echo yes
+              echo again
+            fi
+            """, "if [ -f x ]; then", "fi"),
+
+        (CodeLanguage.C, """
+            #ifdef DEBUG
+            int level = 3;
+            int trace = 1;
+            #endif
+            """, "#ifdef DEBUG", "#endif"),
+
+        (CodeLanguage.Svelte, """
+            {#if ready}
+              <p>one</p>
+              <p>two</p>
+            {/if}
+            """, "{#if ready}", "{/if}"),
+    ];
+
     // A Markdown section ends on its last paragraph, not a closing bracket.
     [Fact]
     public void AMarkdownSectionHidesItsLastLine()

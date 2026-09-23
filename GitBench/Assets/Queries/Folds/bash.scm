@@ -4,7 +4,11 @@
 
 (compound_statement) @fold
 (do_group) @fold
+; An if's elif and else fold on their own, so its own fold stops before the first of them.
 (if_statement) @fold
+(if_statement [(elif_clause) (else_clause)] @stop) @fold
+(elif_clause) @fold
+(else_clause) @fold
 (case_statement) @fold
 (case_item) @fold
 (subshell) @fold

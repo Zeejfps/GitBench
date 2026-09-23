@@ -253,13 +253,21 @@ internal sealed class FoldPlan
         return opensOnChipLine ? (last, ClosingOf(lines, endLine)) : (last, FoldChip.Body.Instance);
     }
 
-    private static readonly string[] Closers = ["}", ")", "]", "</", "/>", "*/", "-->"];
+    private static readonly string[] Closers = ["}", ")", "]", "</", "/>", "*/", "-->", "{/"];
+
+    // Keywords that close a block the way a bracket does. A whole word only: `fi` must not close
+    // on `find`.
+    private static readonly string[] ClosingWords = ["fi", "done", "esac", "#endif"];
 
     private static bool ClosesBracket(string line)
     {
         var text = line.AsSpan().TrimStart();
         foreach (var closer in Closers)
             if (text.StartsWith(closer, StringComparison.Ordinal)) return true;
+        foreach (var word in ClosingWords)
+            if (text.StartsWith(word, StringComparison.Ordinal)
+                && (text.Length == word.Length || !char.IsLetterOrDigit(text[word.Length]) && text[word.Length] != '_'))
+                return true;
         return false;
     }
 
