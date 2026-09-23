@@ -208,10 +208,10 @@ internal sealed record PairingStopActions : Widget
                                     FontSize = FontSize.Caption,
                                     Color = Theme.Color(s => s.Palette.TextSecondary),
                                 },
-                                new Row
+                                new Wrap
                                 {
                                     Gap = Spacing.Sm,
-                                    CrossAxis = CrossAxisAlignment.Center,
+                                    RunGap = Spacing.Sm,
                                     Children =
                                     [
                                         new Switch<bool>
