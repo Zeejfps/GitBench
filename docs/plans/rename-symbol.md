@@ -2,7 +2,7 @@
 
 ## What this is
 
-Rider's Shift+F6: rename the symbol under the caret — a local, a parameter, a method, a type — and
+Visual Studio's Ctrl+R, R: rename the symbol under the caret — a local, a parameter, a method, a type — and
 every reference to it, in every file of the project, changes with it. The language server decides
 what is a reference; the client applies the edits.
 
@@ -30,12 +30,19 @@ largest of the three editing plans and the one that builds the shared piece: app
 | Toasts with an action button, for Undo | `Features/Notifications/Toast.cs` (`ToastAction`) |
 | The server is only ever shown the one previewed file; every other file it reads from disk | `GitBench.Lsp/Documents/Documents.cs` (`PreviewSession`) |
 
-Shift+F6 is unbound today.
+Ctrl+R is unbound today (Refresh is F5). But the keymap has no two-stroke chords: a binding is one
+`KeyGesture` — one key and its modifiers (`Input/KeyGesture.cs`) — and `IKeyMap.Matches` judges a
+single key press with no memory of the one before. Parsing and display (`KeyGesture.TryParse`,
+`Display`) and the shortcut recorder in settings (`Features/Settings/ShortcutRecorderController.cs`)
+all assume one stroke.
 
 ## Decisions
 
 | Area | Decision |
 | --- | --- |
+| Shortcut | **Ctrl+R, R**, as in Visual Studio: Ctrl+R, then R. The second stroke is accepted with or without Ctrl still held, since holding it through both is how the chord is usually typed (Visual Studio's own binding is Ctrl+R, Ctrl+R). Cmd+R, R on macOS, through the primary modifier like every other shortcut. Rebindable in settings like any other command. |
+| Chords in the keymap | A binding becomes one stroke or two: a sum type (`Single(KeyGesture)` / `Chord(KeyGesture First, KeyGesture Second)`), never a list of gestures a handler has to interpret. Parsed and displayed as `Ctrl+R, R`, and persisted in the same string form, so an existing preferences file still reads. |
+| A pending first stroke | Waits for the next key with no timeout, as Visual Studio does, and says so in the status bar ("Ctrl+R was pressed — waiting for the second key"). A second key that completes no chord cancels it and is **swallowed**, not typed: a stray R landing in the file is worse than a key that did nothing. Esc cancels. |
 | Asking | `prepareRename` when the server supports it (its range and placeholder are the truth); otherwise the identifier under the caret. A refusal is shown as the server's own message. |
 | Entering the name | A small popup at the symbol, prefilled and selected, Enter to rename, Esc to cancel. Not Rider's in-place live rename: that needs every reference in the file edited as you type, which is v2. |
 | The workspace edit | Both shapes: `changes` and `documentChanges` of text edits. **No resource operations** — the client advertises none, so no server renames or creates files in response. |
@@ -46,6 +53,14 @@ Shift+F6 is unbound today.
 | Telling the server | Files written to disk are announced with `workspace/didChangeWatchedFiles`, or the server's index keeps the old name and the next rename is computed against stale text. |
 
 ## The hard parts
+
+**Chords are state, and the keymap is not.** `Matches(command, key, modifiers)` answers from one key
+press. A chord needs a pending first stroke held somewhere between two key events — and in one place,
+so a Ctrl+R pressed in the editor is not also taken by an app-wide handler as the start of something
+else, or ignored by the editor because the second stroke arrives after focus moved. The keymap owns
+the pending state and every dispatcher asks it, so that stays true for every chord added later.
+Conflict detection in the shortcuts dialog grows a new case: a single stroke that is the first
+stroke of some chord shadows it, and has to be reported as a conflict.
 
 **Three kinds of target, three different truths.** The file on screen is in sync with the server.
 Other open files with unsaved edits are not — the server saw their disk text. Closed files are only
@@ -68,14 +83,17 @@ diff, and Discard undoes them one file at a time.
 
 ## Build order
 
-1. Protocol: `prepareRename`, `rename`, the `WorkspaceEdit` reader (both shapes). Shape tests.
-2. The workspace edit applier, on its own: validate across open buffers and disk, then apply, with
+1. Two-stroke chords in the keymap: the binding sum type, parse and display, the pending stroke
+   and its status-bar hint, the recorder capturing a second stroke, conflict detection. Tests for
+   matching, cancelling, swallowing the stray second key, and round-tripping preferences.
+2. Protocol: `prepareRename`, `rename`, the `WorkspaceEdit` reader (both shapes). Shape tests.
+3. The workspace edit applier, on its own: validate across open buffers and disk, then apply, with
    the undo record. Tests on temp directories covering all three kinds of target and each refusal.
-3. The rename popup and Shift+F6. Driven check against csharp-ls: rename a method used in two
+4. The rename popup on Ctrl+R, R. Driven check against csharp-ls: rename a method used in two
    files, one of them open with unsaved edits elsewhere in it.
-4. Undo from the toast.
-5. `didChangeWatchedFiles` for files written, after checking what csharp-ls and rust-analyzer need.
-6. Hand the applier to code actions, which enables their multi-file actions (`code-actions.md`).
+5. Undo from the toast.
+6. `didChangeWatchedFiles` for files written, after checking what csharp-ls and rust-analyzer need.
+7. Hand the applier to code actions, which enables their multi-file actions (`code-actions.md`).
 
 ## Testing
 
