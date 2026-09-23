@@ -67,6 +67,7 @@
   "common.continue": "Continue",
   "common.skip": "Skip",
   "common.ok": "OK",
+  "common.cut": "Cut",
   "common.copy": "Copy",
   "common.paste": "Paste",
   "common.select_all": "Select All",

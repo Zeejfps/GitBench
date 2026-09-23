@@ -245,6 +245,32 @@ internal sealed class EditorController
     /// <summary>Abandons any composition in flight, discarding it rather than committing it.</summary>
     public void CancelComposition() => _ime.Abandon();
 
+    /// <summary>Takes the selection to the clipboard and out of the text, as Ctrl+X does.</summary>
+    public void CutSelection()
+    {
+        if (_surface.Editor is not { } editor || !_surface.Selection.IsActive) return;
+        if (Cut(editor, _surface.Selection)) CaretOrTextMoved(editor, _surface.Selection);
+    }
+
+    private bool Cut(EditorBuffer editor, DiffSelectionModel selection)
+    {
+        if (!_surface.CopySelection()) return false;
+        Edit(editor, selection, editor.Session.Delete(editor.SelectionOf(selection), TextUnit.Cluster, MoveDirection.Backward));
+        return true;
+    }
+
+    /// <summary>Puts the clipboard's text in place of the selection, as Ctrl+V does. Answers
+    /// whether anything went in.</summary>
+    public bool PasteClipboard()
+    {
+        if (_surface.Editor is not { } editor) return false;
+        var selection = _surface.Selection;
+        if (!selection.IsActive || _surface.ClipboardText() is not { Length: > 0 } text) return false;
+        Edit(editor, selection, editor.Session.Paste(editor.SelectionOf(selection), text));
+        CaretOrTextMoved(editor, selection);
+        return true;
+    }
+
     private Claimed Handle(
         EditorBuffer editor, DiffSelectionModel selection, KeyboardKey key, InputModifiers modifiers)
     {
@@ -305,9 +331,7 @@ internal sealed class EditorController
                 return Claimed.Command;
 
             case KeyboardKey.X:
-                if (_surface.CopySelection())
-                    Edit(editor, selection, session.Delete(
-                        editor.SelectionOf(selection), TextUnit.Cluster, MoveDirection.Backward));
+                Cut(editor, selection);
                 return Claimed.Command;
 
             case KeyboardKey.V:

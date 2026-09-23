@@ -1543,21 +1543,51 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (Document != null) SetDirty();
     }
 
-    bool IDiffSelectionSurface.ShowSelectionMenu(PointF point)
+    bool IDiffSelectionSurface.ShowSelectionMenu(PointF point) =>
+        SelectionMenuItems() is { Count: > 0 } items && RepoBarContextMenu.Show(_ctx, point, items) != null;
+
+    /// <summary>What a right-click on the body offers: the clipboard, then what the selection can
+    /// be asked or sent as.</summary>
+    internal IReadOnlyList<RepoBarContextMenu.Item> SelectionMenuItems()
+    {
+        var strings = _loc.Strings.Value;
+        var items = new List<RepoBarContextMenu.Item>();
+        if (_selection.HasRange && _editorController.IsEditing)
+            items.Add(new RepoBarContextMenu.Item(strings.CommonCut, _editorController.CutSelection));
+        if (_selection.HasRange)
+            items.Add(new RepoBarContextMenu.Item(strings.CommonCopy, () => _selectionController.Copy(), LucideIcons.Copy));
+        if (_editorController.IsEditing)
+            items.Add(new RepoBarContextMenu.Item(
+                strings.CommonPaste,
+                () => _editorController.PasteClipboard(),
+                LucideIcons.ClipboardPaste,
+                Enabled: _selection.IsActive && _clipboard.GetText() is { Length: > 0 }));
+
+        if (_selection.HasRange && SelectionActions() is { Count: > 0 } actions)
+        {
+            if (items.Count > 0) items.Add(RepoBarContextMenu.Separator);
+            items.AddRange(actions);
+        }
+
+        return items;
+    }
+
+    // What a selection offers beyond the clipboard: the assistant's questions where this is the
+    // main window's diff, and sending it to the agent where that is wired.
+    private IReadOnlyList<RepoBarContextMenu.Item> SelectionActions()
     {
         if (!AssistantActions)
-            return SendToAgent is { } sendFile && SelectedQuote() is { } selected
-                && RepoBarContextMenu.Show(_ctx, point, [SendItem(() => sendFile(selected))]) != null;
-        if (DescribeState(_renderState).Path is not { } path) return false;
+            return SendToAgent is { } sendFile && SelectedQuote() is { } selected ? [SendItem(() => sendFile(selected))] : [];
+        if (DescribeState(_renderState).Path is not { } path) return [];
         if (DiffSelectionQuote.Build(
                 RowSource.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
-            return false;
+            return [];
 
         var assistant = _ctx.Require<AssistantViewModel>();
         var items = DiffAssistantMenu.Items(_loc.Strings.Value, quote, assistant.AskAboutSelection);
-        if (SendToAgent is { } sendDiff)
-            items = [.. items, RepoBarContextMenu.Separator, SendItem(() => sendDiff(new Features.Editor.CodeQuote.InDiff(quote)))];
-        return RepoBarContextMenu.Show(_ctx, point, items) != null;
+        return SendToAgent is { } sendDiff
+            ? [.. items, RepoBarContextMenu.Separator, SendItem(() => sendDiff(new Features.Editor.CodeQuote.InDiff(quote)))]
+            : items;
     }
 
     private static DiffAnnotations? AnnotationsOf(DiffRenderState state) => state switch

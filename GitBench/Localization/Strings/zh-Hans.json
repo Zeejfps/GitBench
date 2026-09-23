@@ -67,6 +67,7 @@
   "common.continue": "继续",
   "common.skip": "跳过",
   "common.ok": "确定",
+  "common.cut": "剪切",
   "common.copy": "复制",
   "common.paste": "粘贴",
   "common.select_all": "全选",

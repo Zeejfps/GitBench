@@ -1,3 +1,4 @@
+using GitBench.Features.Repos;
 using System.Runtime.InteropServices;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
@@ -455,6 +456,71 @@ public class EditorTypingViewTests
             Assert.Equal("<p>hi</p>", Text(buffer));
         }
     }
+
+    [Fact]
+    public void TheRightClickMenu_CopiesTheSelection_AndPastesOverIt()
+    {
+        var s = Create();
+        using (s.Harness)
+        {
+            var buffer = Show(s, ["alpha beta"]);
+            DragCells(s, row: 0, from: 6, to: 10);
+
+            Item(s, "Copy").OnSelected();
+            Assert.Equal("beta", s.Clipboard.Text);
+
+            s.Clipboard.SetText("gamma");
+            Item(s, "Paste").OnSelected();
+            Assert.Equal("alpha gamma", Text(buffer));
+        }
+    }
+
+    [Fact]
+    public void TheRightClickMenu_CutsTheSelection()
+    {
+        var s = Create();
+        using (s.Harness)
+        {
+            var buffer = Show(s, ["alpha beta"]);
+            DragCells(s, row: 0, from: 6, to: 10);
+
+            Assert.Equal(["Cut", "Copy", "Paste"], s.View.SelectionMenuItems().Select(i => i.Label).Take(3));
+            Item(s, "Cut").OnSelected();
+
+            Assert.Equal("beta", s.Clipboard.Text);
+            Assert.Equal("alpha ", Text(buffer));
+        }
+    }
+
+    [Fact]
+    public void TheRightClickMenu_OnAViewer_OffersCopyButNotPaste()
+    {
+        var s = Create();
+        using (s.Harness)
+        {
+            Show(s, ["alpha beta"], editable: false);
+            DragCells(s, row: 0, from: 6, to: 10);
+
+            Assert.Equal(["Copy"], s.View.SelectionMenuItems().Select(i => i.Label));
+        }
+    }
+
+    [Fact]
+    public void TheRightClickMenu_WithAnEmptyClipboard_HasPasteTurnedOff()
+    {
+        var s = Create();
+        using (s.Harness)
+        {
+            Show(s, ["alpha"]);
+            ClickCell(s, row: 0, cell: 2);
+
+            Assert.False(Item(s, "Paste").Enabled);
+            Assert.DoesNotContain(s.View.SelectionMenuItems(), i => i.Label == "Copy");
+        }
+    }
+
+    private static RepoBarContextMenu.Item Item(Surface s, string label) =>
+        Assert.Single(s.View.SelectionMenuItems(), i => i.Label == label);
 
     [Fact]
     public void CutTakesTheSelectionToTheClipboardAndPasteBringsItBack()

@@ -172,12 +172,13 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
-        // A right-click over a selection asks about it. Anywhere else — a right-click with nothing
-        // selected, or one outside the body — is somebody else's, so it falls through unconsumed.
+        // A right-click over a selection, or anywhere in a body being edited, opens the menu for it.
+        // Anywhere else — a right-click on a viewer with nothing selected, or one outside the body —
+        // is somebody else's, so it falls through unconsumed.
         if (e.Button == MouseButton.Right)
         {
             if (e.Phase != EventPhase.Capturing || e.State != InputState.Pressed) return;
-            if (!_surface.Selection.HasRange) return;
+            if (!_surface.Selection.HasRange && EditorKeys == null) return;
             if (!_surface.SelectionViewport.ContainsPoint(e.Mouse.Point)) return;
             if (_surface.ShowSelectionMenu(e.Mouse.Point)) e.Consume();
             return;
