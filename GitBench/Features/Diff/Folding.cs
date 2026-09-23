@@ -27,8 +27,10 @@ internal abstract record FoldChip
         public static readonly Body Instance = new();
     }
 
-    /// <summary>A region's lines between its first and its last, where the last stays on a row of
-    /// its own because another fold starts on it — the <c>} else {</c> of a folded <c>if</c>.</summary>
+    /// <summary>The pill alone. Either the fold's closing line stays on a row of its own because
+    /// another fold starts on it — the <c>} else {</c> of a folded <c>if</c> — or it has no closing
+    /// line at all, ending on a line of its own content as a Python block or a Markdown section
+    /// does, and that line is hidden with the rest.</summary>
     public sealed record Interior : FoldChip
     {
         public static readonly Interior Instance = new();
@@ -90,6 +92,7 @@ internal sealed class FoldPlan
     private readonly Dictionary<int, string> _swallowed = new();
     private readonly Dictionary<int, DiffRow.Lens> _lenses = new();
     private readonly List<(int From, int To)> _hidden = new();
+    private readonly HashSet<int> _foldStarts = new();
     private readonly bool _usageLens;
 
     private FoldPlan(bool usageLens = false) => _usageLens = usageLens;
@@ -101,6 +104,7 @@ internal sealed class FoldPlan
         if (folds is null && !usageLens) return Nothing;
 
         var plan = new FoldPlan(usageLens);
+        if (folds is not null) plan.CollectFoldStarts(outline);
         plan.Walk(outline.Roots, parentPath: null, folds, lines, insideBody: false);
         if (folds is not null) plan.PlanRegions(outline.Regions, folds, lines);
         plan.Normalize();
@@ -194,14 +198,11 @@ internal sealed class FoldPlan
             // its brace sometimes share a line.
             var hideFrom = Math.Max(node.StartLine + 1, node.SignatureEndLine);
             var chipLine = hideFrom - 1;
-            var last = Math.Min(node.EndLine, lines.Count);
+            // Where they share it the brace is already on screen, so a chip standing for the braces
+            // too would draw a second one.
+            var (last, chip) = Collapse(hideFrom, node.EndLine, opensOnChipLine: node.SignatureEndLine == node.StartLine, lines);
             if (last < hideFrom) continue;
 
-            // Where they share it the brace is already on screen, so a chip standing for the braces
-            // too would draw a second one; the closing line comes up behind the chip instead.
-            var chip = node.SignatureEndLine == node.StartLine && node.EndLine <= lines.Count
-                ? ClosingOf(lines, node.EndLine)
-                : (FoldChip)FoldChip.Body.Instance;
             Mark(chipLine, path, collapsed: true, chevron: false, chip);
             _hidden.Add((hideFrom, last));
             _swallowed[chipLine] = JoinLines(lines, hideFrom, last);
@@ -213,29 +214,18 @@ internal sealed class FoldPlan
     // before any region it contains is reached.
     private void PlanRegions(IReadOnlyList<FoldRegion> regions, FoldState folds, IReadOnlyList<string> lines)
     {
-        HashSet<int>? starts = null;
         foreach (var region in regions)
         {
             if (_marks.ContainsKey(region.StartLine) || Covered(region.StartLine)) continue;
 
-            if (!folds.IsCollapsed(region.Id))
-            {
-                Mark(region.StartLine, region.Id, collapsed: false, chevron: true, chip: null);
-                continue;
-            }
-
+            var collapsed = folds.IsCollapsed(region.Id);
             var hideFrom = region.StartLine + 1;
-            if (region.EndLine > lines.Count || region.EndLine - 1 < hideFrom)
+            var (last, chip) = Collapse(hideFrom, region.EndLine, opensOnChipLine: true, lines);
+            if (!collapsed || last < hideFrom)
             {
-                Mark(region.StartLine, region.Id, collapsed: true, chevron: true, chip: null);
+                Mark(region.StartLine, region.Id, collapsed, chevron: true, chip: null);
                 continue;
             }
-
-            starts ??= regions.Select(r => r.StartLine).ToHashSet();
-            var chip = FoldsFrom(region.EndLine, starts)
-                ? (FoldChip)FoldChip.Interior.Instance
-                : ClosingOf(lines, region.EndLine);
-            var last = chip is FoldChip.Joined ? region.EndLine : region.EndLine - 1;
 
             Mark(region.StartLine, region.Id, collapsed: true, chevron: true, chip);
             _hidden.Add((hideFrom, last));
@@ -243,10 +233,35 @@ internal sealed class FoldPlan
         }
     }
 
-    // A line another fold starts on keeps its row, or pulling it up would take that fold's
-    // chevron with it.
-    private bool FoldsFrom(int line, HashSet<int> regionStarts) =>
-        regionStarts.Contains(line) || _marks.TryGetValue(line, out var mark) && mark.Chevron;
+    private void CollectFoldStarts(FileOutline outline)
+    {
+        foreach (var node in outline.Flatten())
+            if (node.SignatureEndLine < node.EndLine) _foldStarts.Add(node.StartLine);
+        foreach (var region in outline.Regions) _foldStarts.Add(region.StartLine);
+    }
+
+    /// <summary>How far a collapsed fold hides and what its chip shows, from what its last line is.
+    /// A closing bracket comes up behind the chip, unless another fold starts on its line and would
+    /// lose its chevron; a closing line that is content, as a Python block's is, goes with the rest.</summary>
+    /// <param name="opensOnChipLine">Whether the opening bracket stays on screen. Where it is hidden
+    /// with the body — a brace on a line of its own — the chip stands for both braces instead.</param>
+    private (int Last, FoldChip Chip) Collapse(int hideFrom, int endLine, bool opensOnChipLine, IReadOnlyList<string> lines)
+    {
+        var last = Math.Min(endLine, lines.Count);
+        if (endLine > lines.Count || !ClosesBracket(lines[endLine - 1])) return (last, FoldChip.Interior.Instance);
+        if (_foldStarts.Contains(endLine)) return (endLine - 1, FoldChip.Interior.Instance);
+        return opensOnChipLine ? (last, ClosingOf(lines, endLine)) : (last, FoldChip.Body.Instance);
+    }
+
+    private static readonly string[] Closers = ["}", ")", "]", "</", "/>", "*/", "-->"];
+
+    private static bool ClosesBracket(string line)
+    {
+        var text = line.AsSpan().TrimStart();
+        foreach (var closer in Closers)
+            if (text.StartsWith(closer, StringComparison.Ordinal)) return true;
+        return false;
+    }
 
     private static FoldChip.Joined ClosingOf(IReadOnlyList<string> lines, int line)
     {

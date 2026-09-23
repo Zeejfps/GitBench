@@ -22,8 +22,5 @@
 (named_imports) @fold
 (export_clause) @fold
 
-(jsx_element) @fold
-(jsx_self_closing_element) @fold
-
 (template_string) @fold
 (comment) @fold

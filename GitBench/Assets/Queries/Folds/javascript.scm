@@ -10,10 +10,6 @@
 (array) @fold
 (object_pattern) @fold
 (array_pattern) @fold
-(object_type) @fold
-(enum_body) @fold
-(interface_body) @fold
-(type_arguments) @fold
 
 (arguments) @fold
 (formal_parameters) @fold

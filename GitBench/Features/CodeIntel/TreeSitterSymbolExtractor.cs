@@ -175,21 +175,23 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
         var widest = new SortedDictionary<int, int>();
         session.Cursor.ForEachMatch(folds.Query, root, match =>
         {
-            for (var i = 0; i < match.CaptureCount; i++)
-            {
-                var node = match.NodeAt(i);
-                var start = (int)node.StartPoint.Row + 1;
-                // A node that swallows its line's newline — a line comment, in some grammars — ends
-                // at the start of the next line, which is not a line it covers.
-                var endRow = node.EndPoint.Column == 0 && node.EndPoint.Row > node.StartPoint.Row
-                    ? node.EndPoint.Row - 1
-                    : node.EndPoint.Row;
-                var end = (int)endRow + 1;
-                if (end - start < 2) continue;
-                if (!widest.TryGetValue(start, out var known) || end > known) widest[start] = end;
-            }
+            if (!match.TryGetNode(folds.FoldCaptureId, out var node)) return;
+            var stop = folds.EndCaptureId is { } endId && match.TryGetNode(endId, out var endNode) ? endNode : node;
+
+            var start = (int)node.StartPoint.Row + 1;
+            // A node that swallows its line's newline — a line comment, in some grammars — ends
+            // at the start of the next line, which is not a line it covers.
+            var endRow = stop.EndPoint.Column == 0 && stop.EndPoint.Row > node.StartPoint.Row
+                ? stop.EndPoint.Row - 1
+                : stop.EndPoint.Row;
+            var end = (int)endRow + 1;
+            if (end - start < 2) return;
+            if (!widest.TryGetValue(start, out var known) || end > known) widest[start] = end;
         });
         if (widest.Count == 0) return [];
+
+        var lineStarts = LineStarts(text);
+        widest = UnderTheirHeaders(widest, text, lineStarts);
 
         var outline = new FileOutline(declarations);
         var claimedStarts = new HashSet<int>();
@@ -201,7 +203,6 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
             for (var line = node.StartLine; line <= node.SignatureEndLine; line++) claimedBodies.Add((line, node.EndLine));
         }
 
-        var lineStarts = LineStarts(text);
         var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
         var regions = new List<FoldRegion>();
         foreach (var (start, end) in widest)
@@ -218,6 +219,32 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor
         }
 
         return regions;
+    }
+
+    /// <summary>
+    /// Moves a fold whose first line is its opening bracket alone up onto the line above — the
+    /// <c>if (ready)</c> of a brace on a line of its own — so the chevron sits beside what the block
+    /// belongs to and folding it leaves that line on screen rather than a lone brace.
+    /// </summary>
+    private static SortedDictionary<int, int> UnderTheirHeaders(
+        SortedDictionary<int, int> widest, string text, List<int> lineStarts)
+    {
+        var moved = new SortedDictionary<int, int>();
+        foreach (var (start, end) in widest)
+        {
+            var from = start;
+            if (start > 1
+                && LineAt(text, lineStarts, start).Trim() is "{" or "[" or "("
+                && !widest.ContainsKey(start - 1)
+                && !moved.ContainsKey(start - 1)
+                && LineAt(text, lineStarts, start - 1).Trim().Length > 0)
+            {
+                from = start - 1;
+            }
+
+            if (!moved.TryGetValue(from, out var known) || end > known) moved[from] = end;
+        }
+        return moved;
     }
 
     private static List<int> LineStarts(string text)
