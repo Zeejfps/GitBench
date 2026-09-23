@@ -13,6 +13,7 @@ public enum KeyCommand
     ToggleAssistant,
     FindInFile,
     FindFile,
+    SearchEverywhere,
     RepoHotkey1,
     RepoHotkey2,
     RepoHotkey3,

@@ -229,7 +229,7 @@ public static class PreferencesStore
                 .Select(b => new KeyBindingShape
                 {
                     Command = b.Command.ToString(),
-                    Keys = b.Gestures.Select(g => g.Serialize()).ToList(),
+                    Keys = b.Triggers.Select(t => t.Serialize()).ToList(),
                 })
                 .ToList(),
             AgentConnectionsEnabled = preferences.AgentConnectionsEnabled,
@@ -249,12 +249,12 @@ public static class PreferencesStore
         {
             if (!Enum.TryParse<KeyCommand>(entry.Command, ignoreCase: true, out var command) || !Enum.IsDefined(command))
                 continue;
-            var gestures = new List<KeyGesture>();
+            var triggers = new List<KeyTrigger>();
             foreach (var text in entry.Keys ?? [])
-                if (KeyGesture.TryParse(text, out var gesture))
-                    gestures.Add(gesture);
-            if (gestures.Count > 0)
-                bindings.Add(new KeyBinding(command, gestures));
+                if (KeyTrigger.TryParse(text, out var trigger))
+                    triggers.Add(trigger);
+            if (triggers.Count > 0)
+                bindings.Add(new KeyBinding(command, triggers));
         }
 
         return bindings;

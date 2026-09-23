@@ -54,6 +54,7 @@ public readonly record struct LspMethod(string Name)
     public static readonly LspMethod ResolveCompletion = new("completionItem/resolve");
     public static readonly LspMethod SignatureHelp = new("textDocument/signatureHelp");
     public static readonly LspMethod SemanticTokensFull = new("textDocument/semanticTokens/full");
+    public static readonly LspMethod WorkspaceSymbol = new("workspace/symbol");
     public static readonly LspMethod DidOpen = new("textDocument/didOpen");
     public static readonly LspMethod DidChange = new("textDocument/didChange");
     public static readonly LspMethod DidClose = new("textDocument/didClose");

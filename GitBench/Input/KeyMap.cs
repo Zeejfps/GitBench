@@ -13,51 +13,59 @@ public sealed class KeyMap : IKeyMap
     /// <summary>The built-in table, shared and never edited: it carries no editing surface at all.</summary>
     public static IKeyMap Defaults { get; } = new ReadOnly(new KeyMap());
 
-    private readonly Dictionary<KeyCommand, KeyGesture[]> _bindings = new();
+    private readonly Dictionary<KeyCommand, KeyTrigger[]> _bindings = new();
     private readonly State<int> _version = new(0);
 
     public KeyMap() : this([]) { }
 
     /// <summary>Starts from the built-in table with these overrides applied; an override with no
-    /// gestures leaves its command on the defaults.</summary>
+    /// triggers leaves its command on the defaults.</summary>
     public KeyMap(IEnumerable<KeyBinding> overrides)
     {
         foreach (var command in Enum.GetValues<KeyCommand>())
-            _bindings[command] = DefaultGestures(command);
+            _bindings[command] = DefaultTriggers(command);
         foreach (var binding in overrides)
-            if (binding.Gestures.Count > 0)
-                _bindings[binding.Command] = binding.Gestures.ToArray();
+            if (binding.Triggers.Count > 0)
+                _bindings[binding.Command] = binding.Triggers.ToArray();
     }
 
     public IReadable<int> Version => _version;
 
-    public IReadOnlyList<KeyGesture> GesturesFor(KeyCommand command) => _bindings[command];
+    public IReadOnlyList<KeyTrigger> TriggersFor(KeyCommand command) => _bindings[command];
 
     public bool Matches(KeyCommand command, KeyboardKey key, InputModifiers modifiers)
     {
-        foreach (var gesture in _bindings[command])
-            if (gesture.Matches(key, modifiers))
+        foreach (var trigger in _bindings[command])
+            if (trigger is KeyTrigger.Stroke stroke && stroke.Gesture.Matches(key, modifiers))
+                return true;
+        return false;
+    }
+
+    public bool MatchesDoubleTap(KeyCommand command, TapModifier modifier)
+    {
+        foreach (var trigger in _bindings[command])
+            if (trigger is KeyTrigger.DoubleTap tap && tap.Modifier == modifier)
                 return true;
         return false;
     }
 
     public string Display(KeyCommand command) => _bindings[command][0].Display;
 
-    public IReadOnlyList<KeyGesture> DefaultsFor(KeyCommand command) => DefaultGestures(command);
+    public IReadOnlyList<KeyTrigger> DefaultsFor(KeyCommand command) => DefaultTriggers(command);
 
-    public bool IsDefault(KeyCommand command) => _bindings[command].AsSpan().SequenceEqual(DefaultGestures(command));
+    public bool IsDefault(KeyCommand command) => _bindings[command].AsSpan().SequenceEqual(DefaultTriggers(command));
 
-    public void Rebind(KeyCommand command, KeyGesture gesture)
+    public void Rebind(KeyCommand command, KeyTrigger trigger)
     {
-        if (_bindings[command] is [var only] && only == gesture) return;
-        _bindings[command] = [gesture];
+        if (_bindings[command] is [var only] && only == trigger) return;
+        _bindings[command] = [trigger];
         _version.Value++;
     }
 
     public void Reset(KeyCommand command)
     {
         if (IsDefault(command)) return;
-        _bindings[command] = DefaultGestures(command);
+        _bindings[command] = DefaultTriggers(command);
         _version.Value++;
     }
 
@@ -67,7 +75,7 @@ public sealed class KeyMap : IKeyMap
         foreach (var command in Enum.GetValues<KeyCommand>())
         {
             if (IsDefault(command)) continue;
-            _bindings[command] = DefaultGestures(command);
+            _bindings[command] = DefaultTriggers(command);
             changed = true;
         }
 
@@ -86,7 +94,7 @@ public sealed class KeyMap : IKeyMap
         }
     }
 
-    public IReadOnlyList<KeyCommand> ConflictsWith(KeyCommand command, KeyGesture gesture)
+    public IReadOnlyList<KeyCommand> ConflictsWith(KeyCommand command, KeyTrigger trigger)
     {
         var section = KeyCommandSections.Of(command);
         var conflicts = new List<KeyCommand>();
@@ -100,7 +108,7 @@ public sealed class KeyMap : IKeyMap
             if (!sharesPath) continue;
             foreach (var bound in _bindings[other])
             {
-                if (bound != gesture) continue;
+                if (bound != trigger) continue;
                 conflicts.Add(other);
                 break;
             }
@@ -109,13 +117,16 @@ public sealed class KeyMap : IKeyMap
         return conflicts;
     }
 
-    private static KeyGesture[] DefaultGestures(KeyCommand command) => command switch
+    private static KeyTrigger[] DefaultTriggers(KeyCommand command) => command switch
     {
-        KeyCommand.Refresh => [new(KeyboardKey.F5)],
+        KeyCommand.Refresh => [new KeyGesture(KeyboardKey.F5)],
         KeyCommand.ToggleRepoBar => [KeyGesture.WithPrimary(KeyboardKey.B)],
         KeyCommand.ToggleAssistant => [KeyGesture.WithPrimary(KeyboardKey.K)],
         KeyCommand.FindInFile => [KeyGesture.WithPrimary(KeyboardKey.F)],
         KeyCommand.FindFile => [KeyGesture.WithPrimary(KeyboardKey.P)],
+        // Not Rider's Ctrl+Shift+A: that is the terminal's Select All, and every text field's.
+        KeyCommand.SearchEverywhere =>
+            [new KeyTrigger.DoubleTap(TapModifier.Shift), KeyGesture.WithPrimary(KeyboardKey.T)],
         KeyCommand.RepoHotkey1 => RepoHotkey(KeyboardKey.Alpha1, KeyboardKey.Numpad1),
         KeyCommand.RepoHotkey2 => RepoHotkey(KeyboardKey.Alpha2, KeyboardKey.Numpad2),
         KeyCommand.RepoHotkey3 => RepoHotkey(KeyboardKey.Alpha3, KeyboardKey.Numpad3),
@@ -127,46 +138,46 @@ public sealed class KeyMap : IKeyMap
         KeyCommand.RepoHotkey9 => RepoHotkey(KeyboardKey.Alpha9, KeyboardKey.Numpad9),
         KeyCommand.NewPairingSession => [KeyGesture.WithPrimary(KeyboardKey.P, InputModifiers.Shift)],
 
-        KeyCommand.ListUp => [new(KeyboardKey.UpArrow)],
-        KeyCommand.ListDown => [new(KeyboardKey.DownArrow)],
-        KeyCommand.ListCollapse => [new(KeyboardKey.LeftArrow)],
-        KeyCommand.ListExpand => [new(KeyboardKey.RightArrow)],
-        KeyCommand.ListActivate => [new(KeyboardKey.Enter), new(KeyboardKey.NumpadEnter)],
-        KeyCommand.ListDelete => [new(KeyboardKey.Delete)],
-        KeyCommand.ListViewInDiff => [new(KeyboardKey.Space)],
+        KeyCommand.ListUp => [new KeyGesture(KeyboardKey.UpArrow)],
+        KeyCommand.ListDown => [new KeyGesture(KeyboardKey.DownArrow)],
+        KeyCommand.ListCollapse => [new KeyGesture(KeyboardKey.LeftArrow)],
+        KeyCommand.ListExpand => [new KeyGesture(KeyboardKey.RightArrow)],
+        KeyCommand.ListActivate => [new KeyGesture(KeyboardKey.Enter), new KeyGesture(KeyboardKey.NumpadEnter)],
+        KeyCommand.ListDelete => [new KeyGesture(KeyboardKey.Delete)],
+        KeyCommand.ListViewInDiff => [new KeyGesture(KeyboardKey.Space)],
 
-        KeyCommand.ToggleFullFile => [new(KeyboardKey.F)],
+        KeyCommand.ToggleFullFile => [new KeyGesture(KeyboardKey.F)],
 
-        KeyCommand.CommitCreateBranch => [new(KeyboardKey.B)],
-        KeyCommand.CommitCreateTag => [new(KeyboardKey.T)],
-        KeyCommand.CommitCherryPick => [new(KeyboardKey.C)],
-        KeyCommand.CommitRevert => [new(KeyboardKey.V)],
+        KeyCommand.CommitCreateBranch => [new KeyGesture(KeyboardKey.B)],
+        KeyCommand.CommitCreateTag => [new KeyGesture(KeyboardKey.T)],
+        KeyCommand.CommitCherryPick => [new KeyGesture(KeyboardKey.C)],
+        KeyCommand.CommitRevert => [new KeyGesture(KeyboardKey.V)],
 
-        KeyCommand.ReviewNextFile => [new(KeyboardKey.J)],
-        KeyCommand.ReviewPrevFile => [new(KeyboardKey.K)],
+        KeyCommand.ReviewNextFile => [new KeyGesture(KeyboardKey.J)],
+        KeyCommand.ReviewPrevFile => [new KeyGesture(KeyboardKey.K)],
         KeyCommand.ReviewToggleMark =>
-            [new(KeyboardKey.V), new(KeyboardKey.Space), new(KeyboardKey.Enter), new(KeyboardKey.NumpadEnter)],
-        KeyCommand.ReviewToggleHelp => [new(KeyboardKey.Slash, InputModifiers.Shift)],
+            [new KeyGesture(KeyboardKey.V), new KeyGesture(KeyboardKey.Space), new KeyGesture(KeyboardKey.Enter), new KeyGesture(KeyboardKey.NumpadEnter)],
+        KeyCommand.ReviewToggleHelp => [new KeyGesture(KeyboardKey.Slash, InputModifiers.Shift)],
 
-        KeyCommand.WalkthroughNext => [new(KeyboardKey.Space), new(KeyboardKey.N)],
-        KeyCommand.WalkthroughBack => [new(KeyboardKey.P)],
-        KeyCommand.WalkthroughAsk => [new(KeyboardKey.Slash)],
+        KeyCommand.WalkthroughNext => [new KeyGesture(KeyboardKey.Space), new KeyGesture(KeyboardKey.N)],
+        KeyCommand.WalkthroughBack => [new KeyGesture(KeyboardKey.P)],
+        KeyCommand.WalkthroughAsk => [new KeyGesture(KeyboardKey.Slash)],
 
         KeyCommand.PairingAccept => PrimaryEnter(InputModifiers.Shift),
         KeyCommand.PairingAcceptAndNext => PrimaryEnter(InputModifiers.None),
         KeyCommand.PairingNext => PrimaryEnter(InputModifiers.Alt),
 
-        KeyCommand.GoToDefinition => [new(KeyboardKey.F12)],
-        KeyCommand.FindUsages => [new(KeyboardKey.F12, InputModifiers.Shift)],
+        KeyCommand.GoToDefinition => [new KeyGesture(KeyboardKey.F12)],
+        KeyCommand.FindUsages => [new KeyGesture(KeyboardKey.F12, InputModifiers.Shift)],
         KeyCommand.NavigateBack => [KeyGesture.WithPrimary(KeyboardKey.LeftBracket)],
         KeyCommand.NavigateForward => [KeyGesture.WithPrimary(KeyboardKey.RightBracket)],
 
         KeyCommand.SaveFile => [KeyGesture.WithPrimary(KeyboardKey.S)],
         KeyCommand.ToggleLineComment => [KeyGesture.WithPrimary(KeyboardKey.Slash)],
         // Ctrl on macOS too: Cmd+Space is Spotlight.
-        KeyCommand.ShowCompletions => [new(KeyboardKey.Space, InputModifiers.Control)],
+        KeyCommand.ShowCompletions => [new KeyGesture(KeyboardKey.Space, InputModifiers.Control)],
         // Not Rider's Ctrl+P, which is already the app's Find File.
-        KeyCommand.ParameterInfo => [new(KeyboardKey.Space, InputModifiers.Control | InputModifiers.Shift)],
+        KeyCommand.ParameterInfo => [new KeyGesture(KeyboardKey.Space, InputModifiers.Control | InputModifiers.Shift)],
         KeyCommand.EditorZoomIn =>
         [
             KeyGesture.WithPrimary(KeyboardKey.Equals),
@@ -181,27 +192,30 @@ public sealed class KeyMap : IKeyMap
         KeyCommand.TerminalCopy => [TerminalChord(KeyboardKey.C)],
         KeyCommand.TerminalPaste => [TerminalChord(KeyboardKey.V)],
         KeyCommand.TerminalSelectAll => [TerminalChord(KeyboardKey.A)],
-        KeyCommand.TerminalPageUp => [new(KeyboardKey.PageUp, InputModifiers.Shift)],
-        KeyCommand.TerminalPageDown => [new(KeyboardKey.PageDown, InputModifiers.Shift)],
+        KeyCommand.TerminalPageUp => [new KeyGesture(KeyboardKey.PageUp, InputModifiers.Shift)],
+        KeyCommand.TerminalPageDown => [new KeyGesture(KeyboardKey.PageDown, InputModifiers.Shift)],
 
         _ => throw new ArgumentOutOfRangeException(nameof(command), command, "No default binding."),
     };
 
     private sealed class ReadOnly(KeyMap inner) : IKeyMap
     {
-        public IReadOnlyList<KeyGesture> GesturesFor(KeyCommand command) => inner.GesturesFor(command);
+        public IReadOnlyList<KeyTrigger> TriggersFor(KeyCommand command) => inner.TriggersFor(command);
 
         public bool Matches(KeyCommand command, KeyboardKey key, InputModifiers modifiers) =>
             inner.Matches(command, key, modifiers);
 
+        public bool MatchesDoubleTap(KeyCommand command, TapModifier modifier) =>
+            inner.MatchesDoubleTap(command, modifier);
+
         public string Display(KeyCommand command) => inner.Display(command);
     }
 
-    private static KeyGesture[] RepoHotkey(KeyboardKey digit, KeyboardKey numpad) =>
+    private static KeyTrigger[] RepoHotkey(KeyboardKey digit, KeyboardKey numpad) =>
         [KeyGesture.WithPrimary(digit), KeyGesture.WithPrimary(numpad)];
 
     // Cmd/Ctrl+Enter chords: the editor keeps a plain, Shift- or Alt-Enter for a new line.
-    private static KeyGesture[] PrimaryEnter(InputModifiers also) =>
+    private static KeyTrigger[] PrimaryEnter(InputModifiers also) =>
         [KeyGesture.WithPrimary(KeyboardKey.Enter, also), KeyGesture.WithPrimary(KeyboardKey.NumpadEnter, also)];
 
     private static KeyGesture TerminalChord(KeyboardKey key) => OperatingSystem.IsMacOS()

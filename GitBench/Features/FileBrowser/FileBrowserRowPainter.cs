@@ -267,7 +267,7 @@ internal static class FileBrowserRowPainter
 
     // Four categories, not fourteen: a reader scanning an outline is separating what runs from what
     // holds a value from what contains either, and a glyph per SymbolKind would be a legend.
-    private static string SymbolGlyph(SymbolKind kind) => kind switch
+    internal static string SymbolGlyph(SymbolKind kind) => kind switch
     {
         SymbolKind.Namespace => LucideIcons.Braces,
         SymbolKind.Method or SymbolKind.Constructor or SymbolKind.Function => LucideIcons.FunctionSquare,

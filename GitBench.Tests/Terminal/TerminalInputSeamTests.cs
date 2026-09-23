@@ -5,6 +5,7 @@ using GitBench.App;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Repos;
+using GitBench.Features.Search;
 using GitBench.Features.Terminal;
 using GitBench.Input;
 using GitBench.Localization;
@@ -381,6 +382,21 @@ public class TerminalKeybindCollisionTests : IDisposable
 
     public void Dispose() => _app.Dispose();
 
+    [Fact]
+    public void AFocusedTerminal_StillLetsDoubleShiftOpenSearch_AndSendsTheShellNothing()
+    {
+        _app.FocusTerminal();
+
+        for (var tap = 0; tap < 2; tap++)
+        {
+            _app.Press(KeyboardKey.LeftShift, InputModifiers.Shift);
+            _app.Release(KeyboardKey.LeftShift);
+        }
+
+        Assert.True(_app.Search.IsOpen.Value);
+        Assert.Equal(string.Empty, _app.Terminal.SentText);
+    }
+
     // ---- chords the terminal keeps ----
 
     [Fact]
@@ -576,15 +592,18 @@ public class TerminalKeybindCollisionTests : IDisposable
             var localization = new LocalizationService(new State<Locale>(Locale.En));
             _assistant = new AssistantViewModel(new StubAssistantStore(), localization, _bus);
 
-            var keybind = new AppKeybindController(
-                new KeyMap(), _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
-                new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers(),
-                new State<SidebarPane>(SidebarPane.Branches));
+            AppKeybindController keybind = null!;
+            Search = SearchFixtures.Idle(_registry, new NoFileBrowsers());
 
             Harness = GuiTestHarness.Create(
                 ctx =>
                 {
                     var input = ctx.Require<InputSystem>();
+                    keybind = new AppKeybindController(
+                        new KeyMap(), _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
+                        new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers(),
+                        new State<SidebarPane>(SidebarPane.Branches),
+                        Search, input, TimeProvider.System);
                     Grid = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>())
                     {
                         Width = PaneWidth,
@@ -613,6 +632,7 @@ public class TerminalKeybindCollisionTests : IDisposable
         }
 
         public GuiTestHarness Harness { get; }
+        public SearchEverywhereViewModel Search { get; }
         public TerminalGridView Grid { get; private set; } = null!;
         public TerminalInputController Controller { get; private set; } = null!;
         public SeamTerminal Terminal { get; } = new();
@@ -678,6 +698,7 @@ public class TerminalKeybindCollisionTests : IDisposable
         {
             Harness.Dispose();
             _assistant.Dispose();
+            Search.Dispose();
             _preferences.Dispose();
             _dir.Dispose();
         }

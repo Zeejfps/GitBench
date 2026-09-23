@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
@@ -536,6 +537,56 @@ public sealed class LanguageServerConnectionTests : IDisposable
         Source: "rustc",
         Code: "E0425");
 
+    [Fact]
+    public async Task WorkspaceSymbols_AreMappedIntoTheRepository_AndOutsideOnesLeftOut()
+    {
+        _server.Capabilities = _server.Capabilities! with { SupportsWorkspaceSymbols = true };
+        var inside = DocumentUri.OfFile(Path.Combine(_dir.Path, "src", "lib.rs"));
+        var outside = DocumentUri.OfFile(Path.Combine(Path.GetTempPath(), "sdk", "core.rs"));
+        _server.WorkspaceSymbolAnswer = new LspResponse<WorkspaceSymbols>.Ok(new WorkspaceSymbols(
+        [
+            new WorkspaceSymbol("Parser", LspSymbolKind.Struct, "parse", new Location(inside, Range(4, 11))),
+            new WorkspaceSymbol("Vec", LspSymbolKind.Struct, null, new Location(outside, Range(0, 0))),
+            new WorkspaceSymbol("LIMIT", LspSymbolKind.Constant, null, new Location(inside, Range(1, 6))),
+        ]));
+        using var connection = Connect();
+
+        var rows = await connection.WorkspaceSymbolsAsync("Par", TimeSpan.FromSeconds(2), CancellationToken.None);
+
+        Assert.NotNull(rows);
+        Assert.Equal(
+            [
+                ("Parser", SymbolKind.Struct, "parse", "src/lib.rs", 5, 11),
+                ("LIMIT", SymbolKind.Other, (string?)null, "src/lib.rs", 2, 6),
+            ],
+            rows.Select(r => (r.Name, r.Kind, r.Container, r.Path, r.Line.Value, r.Column.Value)));
+    }
+
+    [Fact]
+    public async Task WorkspaceSymbols_FromAServerWithoutTheCapability_AreNotAsked()
+    {
+        using var connection = Connect();
+
+        var rows = await connection.WorkspaceSymbolsAsync("Par", TimeSpan.FromSeconds(2), CancellationToken.None);
+
+        Assert.Null(rows);
+        Assert.Equal(0, _server.Asks);
+    }
+
+    [Fact]
+    public async Task WorkspaceSymbols_ThatTimeOut_AreNoAnswer()
+    {
+        _server.Capabilities = _server.Capabilities! with { SupportsWorkspaceSymbols = true };
+        _server.WorkspaceSymbolAnswer = new LspResponse<WorkspaceSymbols>.TimedOut(TimeSpan.FromSeconds(2));
+        using var connection = Connect();
+
+        Assert.Null(await connection.WorkspaceSymbolsAsync("Par", TimeSpan.FromSeconds(2), CancellationToken.None));
+    }
+
+    private static LspRange Range(int line, int character) =>
+        new(new LspPosition(new LspLine(line), new LspCharacter(character)),
+            new LspPosition(new LspLine(line), new LspCharacter(character + 1)));
+
     private sealed class FakeSession : ILanguageServerSession
     {
         public readonly Queue<LspResponse<Hover>> Answers = new();
@@ -570,9 +621,15 @@ public sealed class LanguageServerConnectionTests : IDisposable
 
         public readonly Queue<LspResponse<Definition>> Definitions = new();
 
+        public LspResponse<WorkspaceSymbols> WorkspaceSymbolAnswer { get; set; } =
+            new LspResponse<WorkspaceSymbols>.Ok(new WorkspaceSymbols([]));
+
         public Task<LspResponse<T>> AskAsync<T>(LspRequest<T> request, TimeSpan timeout, CancellationToken cancel)
         {
             Asks++;
+            if (typeof(T) == typeof(WorkspaceSymbols))
+                return Task.FromResult((LspResponse<T>)(object)WorkspaceSymbolAnswer);
+
             if (typeof(T) == typeof(Definition))
             {
                 DefinitionAsks++;

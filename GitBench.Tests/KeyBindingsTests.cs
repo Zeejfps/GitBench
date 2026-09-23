@@ -54,7 +54,7 @@ public class KeyBindingsTests
 
         keys.Rebind(KeyCommand.ListActivate, CtrlShiftR);
 
-        Assert.Equal([CtrlShiftR], keys.GesturesFor(KeyCommand.ListActivate));
+        Assert.Equal([CtrlShiftR], keys.TriggersFor(KeyCommand.ListActivate));
         Assert.True(keys.Matches(KeyCommand.ListActivate, KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift));
         Assert.False(keys.Matches(KeyCommand.ListActivate, KeyboardKey.Enter, InputModifiers.None));
         Assert.False(keys.Matches(KeyCommand.ListActivate, KeyboardKey.NumpadEnter, InputModifiers.None));
@@ -65,12 +65,12 @@ public class KeyBindingsTests
     public void ARebindLeavesEveryOtherCommandAlone()
     {
         var keys = new KeyMap();
-        var before = Enum.GetValues<KeyCommand>().ToDictionary(c => c, c => keys.GesturesFor(c).ToArray());
+        var before = Enum.GetValues<KeyCommand>().ToDictionary(c => c, c => keys.TriggersFor(c).ToArray());
 
         keys.Rebind(KeyCommand.Refresh, CtrlShiftR);
 
         foreach (var command in Enum.GetValues<KeyCommand>().Where(c => c != KeyCommand.Refresh))
-            Assert.Equal(before[command], keys.GesturesFor(command));
+            Assert.Equal(before[command], keys.TriggersFor(command));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class KeyBindingsTests
 
         keys.Reset(KeyCommand.Refresh);
         Assert.True(keys.IsDefault(KeyCommand.Refresh));
-        Assert.Equal(keys.DefaultsFor(KeyCommand.Refresh), keys.GesturesFor(KeyCommand.Refresh));
+        Assert.Equal(keys.DefaultsFor(KeyCommand.Refresh), keys.TriggersFor(KeyCommand.Refresh));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class KeyBindingsTests
         var overrides = keys.Overrides;
 
         Assert.Equal([KeyCommand.Refresh, KeyCommand.SaveFile], overrides.Select(o => o.Command));
-        Assert.Equal([CtrlShiftR], overrides[0].Gestures);
+        Assert.Equal([CtrlShiftR], overrides[0].Triggers);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class KeyBindingsTests
 
         var second = new KeyMap(first.Overrides);
 
-        Assert.Equal([CtrlShiftR], second.GesturesFor(KeyCommand.Refresh));
+        Assert.Equal([CtrlShiftR], second.TriggersFor(KeyCommand.Refresh));
         Assert.False(second.IsDefault(KeyCommand.Refresh));
         Assert.True(second.IsDefault(KeyCommand.SaveFile));
     }

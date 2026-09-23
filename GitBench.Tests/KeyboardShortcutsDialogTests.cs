@@ -68,7 +68,7 @@ public class KeyboardShortcutsDialogTests
         harness.PressKey(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift);
         harness.Layout();
 
-        Assert.Equal([new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift)], keys.GesturesFor(KeyCommand.Refresh));
+        Assert.Equal([new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift)], keys.TriggersFor(KeyCommand.Refresh));
         var canvas = harness.Render();
         Assert.True(HasText(canvas, "Ctrl+Shift+R"));
         Assert.False(HasText(canvas, "Press the new shortcut"));
@@ -87,6 +87,39 @@ public class KeyboardShortcutsDialogTests
 
         Assert.True(keys.IsDefault(KeyCommand.Refresh));
         Assert.True(HasText(harness.Render(), "Press the new shortcut"));
+    }
+
+    [Fact]
+    public void AModifierTappedTwice_RecordsADoubleTap()
+    {
+        var keys = new KeyMap();
+        using var harness = Mount(() => { }, keys);
+
+        harness.ClickOn(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh));
+        harness.KeyDown(KeyboardKey.LeftControl, InputModifiers.Control);
+        harness.KeyUp(KeyboardKey.LeftControl);
+        harness.KeyDown(KeyboardKey.RightControl, InputModifiers.Control);
+        harness.KeyUp(KeyboardKey.RightControl);
+        harness.Layout();
+
+        Assert.Equal([new KeyTrigger.DoubleTap(TapModifier.Control)], keys.TriggersFor(KeyCommand.Refresh));
+        Assert.True(HasText(harness.Render(), "Double Ctrl"));
+    }
+
+    [Fact]
+    public void AModifierTappedOnce_ThenUsedInAChord_RecordsTheChord()
+    {
+        var keys = new KeyMap();
+        using var harness = Mount(() => { }, keys);
+
+        harness.ClickOn(KeyboardShortcutsDialog.CapsId(KeyCommand.Refresh));
+        harness.KeyDown(KeyboardKey.LeftShift, InputModifiers.Shift);
+        harness.KeyUp(KeyboardKey.LeftShift);
+        harness.KeyDown(KeyboardKey.LeftShift, InputModifiers.Shift);
+        harness.PressKey(KeyboardKey.F6, InputModifiers.Shift);
+        harness.Layout();
+
+        Assert.Equal([new KeyGesture(KeyboardKey.F6, InputModifiers.Shift)], keys.TriggersFor(KeyCommand.Refresh));
     }
 
     [Fact]
@@ -117,7 +150,7 @@ public class KeyboardShortcutsDialogTests
         harness.PressKey(KeyboardKey.F6);
         harness.Layout();
 
-        Assert.Equal([new KeyGesture(KeyboardKey.F6)], keys.GesturesFor(KeyCommand.Refresh));
+        Assert.Equal([new KeyGesture(KeyboardKey.F6)], keys.TriggersFor(KeyCommand.Refresh));
         Assert.Equal(string.Empty, ((TextInputView)harness.Get(KeyboardShortcutsDialog.SearchInputId)).Text);
     }
 
@@ -162,7 +195,9 @@ public class KeyboardShortcutsDialogTests
         Assert.True(HasText(canvas, "Refresh"));
         Assert.True(HasText(canvas, keys.Display(KeyCommand.Refresh)));
         Assert.True(HasText(canvas, keys.Display(KeyCommand.ToggleRepoBar)));
-        Assert.True(HasText(canvas, "Switch to repository 9"));
+        Assert.True(HasText(canvas, "Search everywhere"));
+        Assert.True(HasText(canvas, "Double Shift"));
+        Assert.True(HasText(canvas, "Switch to repository 1"));
     }
 
     [Fact]

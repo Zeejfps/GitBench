@@ -10,18 +10,21 @@ namespace GitBench.Input;
 /// </summary>
 public interface IKeyMap
 {
-    /// <summary>Every gesture bound to the command, the primary one first. Never empty.</summary>
-    IReadOnlyList<KeyGesture> GesturesFor(KeyCommand command);
+    /// <summary>Every trigger bound to the command, the primary one first. Never empty.</summary>
+    IReadOnlyList<KeyTrigger> TriggersFor(KeyCommand command);
 
-    /// <summary>Whether a key press, with these modifiers, is one of the command's gestures.</summary>
+    /// <summary>Whether a key press, with these modifiers, is one of the command's strokes.</summary>
     bool Matches(KeyCommand command, KeyboardKey key, InputModifiers modifiers);
 
-    /// <summary>Hint text for the command's primary gesture, e.g. "Ctrl+B".</summary>
+    /// <summary>Whether a double tap of the modifier is one of the command's triggers.</summary>
+    bool MatchesDoubleTap(KeyCommand command, TapModifier modifier);
+
+    /// <summary>Hint text for the command's primary trigger, e.g. "Ctrl+B" or "Double Shift".</summary>
     string Display(KeyCommand command);
 }
 
-/// <summary>A command's gestures as the user set them, for carrying between the key map and storage.</summary>
-public sealed record KeyBinding(KeyCommand Command, IReadOnlyList<KeyGesture> Gestures);
+/// <summary>A command's triggers as the user set them, for carrying between the key map and storage.</summary>
+public sealed record KeyBinding(KeyCommand Command, IReadOnlyList<KeyTrigger> Triggers);
 
 public static class KeyMapContext
 {

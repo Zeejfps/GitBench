@@ -17,6 +17,7 @@ using GitBench.Features.Operations;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Features.Search;
 using GitBench.Features.Submodules;
 using GitBench.Features.Terminal;
 using GitBench.Terminal.Vt;
@@ -44,6 +45,7 @@ internal static class AppServices
     public static void AddAppServices(this Context context, PreferencesService preferences)
     {
         context.AddService(preferences);
+        context.AddService(TimeProvider.System);
         // Which keys run which commands. Every handler matches through it and every shortcut hint
         // reads from it, so a binding is decided in one table.
         var keyMap = new KeyMap(preferences.Current.KeyBindings);
@@ -250,6 +252,12 @@ internal static class AppServices
         // configuration, so no server is ever launched, nothing is asked of one, and no timer runs.
         // Hosted because it follows the registry, which it can only do once the UI loop exists.
         context.AddHostedService<ILanguageServerStore, LanguageServerStore>();
+        context.AddAlias<IWorkspaceSymbolSource, ILanguageServerStore>();
+
+        // Search everywhere: the symbol index is built in the background the first time a
+        // repository is active, and the popup reads it along with the running language servers.
+        context.AddHostedService<ISymbolIndexStore, SymbolIndexStore>();
+        context.AddSingleton<SearchEverywhereViewModel>();
 
         context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>();
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();

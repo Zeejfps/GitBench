@@ -5,6 +5,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Features.Search;
 using GitBench.Features.Settings;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -25,6 +26,7 @@ internal sealed record AppWidget : Widget
                 new AssistantOverlay(),
                 new DragOverlay(),
                 new TabDropIndicator(),
+                new SearchEverywhereOverlay(),
                 new DialogSurface(),
                 new DiffWindowsView(),
                 new ReviewWindowsView(),

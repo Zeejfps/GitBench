@@ -64,12 +64,12 @@ internal sealed class KeyboardShortcutsViewModel
 
     public void CancelRecording() => Recording.Value = null;
 
-    /// <summary>Binds the recording command to the gesture and ends the recording; a no-op with none recording.</summary>
-    public void CommitRecording(KeyGesture gesture)
+    /// <summary>Binds the recording command to the trigger and ends the recording; a no-op with none recording.</summary>
+    public void CommitRecording(KeyTrigger trigger)
     {
         if (Recording.Value is not { } command) return;
         Recording.Value = null;
-        _keys.Rebind(command, gesture);
+        _keys.Rebind(command, trigger);
     }
 
     public void Reset(KeyCommand command) => _keys.Reset(command);
@@ -139,18 +139,18 @@ internal sealed class KeyboardShortcutsViewModel
     private static IReadOnlyList<string> Caps(IKeyMap keys, KeyCommand command)
     {
         var caps = new List<string>();
-        foreach (var gesture in keys.GesturesFor(command))
-            if (!caps.Contains(gesture.Display))
-                caps.Add(gesture.Display);
+        foreach (var trigger in keys.TriggersFor(command))
+            if (!caps.Contains(trigger.Display))
+                caps.Add(trigger.Display);
         return caps;
     }
 
     private static IReadOnlyList<string> Conflicts(KeyMap keys, Strings s, KeyCommand command)
     {
         var labels = new List<string>();
-        foreach (var gesture in keys.GesturesFor(command))
+        foreach (var trigger in keys.TriggersFor(command))
         {
-            foreach (var other in keys.ConflictsWith(command, gesture))
+            foreach (var other in keys.ConflictsWith(command, trigger))
             {
                 var label = Label(s, other);
                 if (!labels.Contains(label))
@@ -190,6 +190,7 @@ internal sealed class KeyboardShortcutsViewModel
         KeyCommand.NewPairingSession => s.ShortcutsCommandNewPairingSession,
         KeyCommand.FindInFile => s.ShortcutsCommandFindInFile,
         KeyCommand.FindFile => s.ShortcutsCommandFindFile,
+        KeyCommand.SearchEverywhere => s.ShortcutsCommandSearchEverywhere,
 
         KeyCommand.ListUp => s.ShortcutsCommandListUp,
         KeyCommand.ListDown => s.ShortcutsCommandListDown,

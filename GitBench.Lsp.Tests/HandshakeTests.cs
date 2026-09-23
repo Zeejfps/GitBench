@@ -155,6 +155,42 @@ public sealed class HandshakeTests
         Assert.False(Read("""{"capabilities":{"textDocumentSync":0}}""").FollowsEdits);
     }
 
+    [Theory]
+    [InlineData("true")]
+    [InlineData("{}")]
+    [InlineData("{\"resolveProvider\":true}")]
+    public void WorkspaceSymbolsAreReadEitherWay(string advertised)
+    {
+        Assert.True(Read("{\"capabilities\":{\"workspaceSymbolProvider\":" + advertised + "}}").SupportsWorkspaceSymbols);
+    }
+
+    [Fact]
+    public void NoWorkspaceSymbolProvider_MeansNoWorkspaceSymbols()
+    {
+        Assert.False(Read(Minimal).SupportsWorkspaceSymbols);
+        Assert.False(Read("""{"capabilities":{"workspaceSymbolProvider":false}}""").SupportsWorkspaceSymbols);
+    }
+
+    // Without resolveSupport a server must answer a workspace symbol search with whole locations;
+    // with it, it may send bare URIs that each need another request.
+    [Fact]
+    public async Task TheClientAsksForWorkspaceSymbols_WithoutResolveSupport()
+    {
+        await using var fx = new LspFixture();
+        var sent = fx.Connection.Send(
+            LspHandshake.Initialize(LspFixture.SomeFile, processId: 1), LspFixture.Budget);
+
+        var asked = await fx.Server.NextRequest();
+
+        var symbol = asked.Params.GetProperty("capabilities").GetProperty("workspace").GetProperty("symbol");
+        Assert.False(symbol.TryGetProperty("resolveSupport", out _));
+        var kinds = symbol.GetProperty("symbolKind").GetProperty("valueSet").EnumerateArray().Select(k => k.GetInt32());
+        Assert.Equal(Enumerable.Range(1, 26), kinds);
+
+        await fx.Server.ReplyOk(asked.Id, Minimal);
+        await sent;
+    }
+
     private static ServerCapabilities Read(string json)
     {
         using var document = JsonDocument.Parse(json);

@@ -3,6 +3,7 @@ using GitBench.Features.FileBrowser;
 using GitBench.Features.Notifications;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
+using GitBench.Features.Search;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -13,7 +14,7 @@ using ZGF.Observable;
 
 namespace GitBench.App;
 
-internal sealed class AppKeybindController : KeyboardMouseController
+internal sealed class AppKeybindController : KeyboardMouseController, IDisposable
 {
     private readonly IKeyMap _keys;
     private readonly IRepoRegistry _registry;
@@ -25,6 +26,9 @@ internal sealed class AppKeybindController : KeyboardMouseController
     private readonly State<MainViewMode> _mode;
     private readonly IFileBrowserStore _browsers;
     private readonly State<SidebarPane> _sidebar;
+    private readonly SearchEverywhereViewModel _search;
+    private readonly InputSystem _input;
+    private readonly KeySequenceRecognizer _sequences;
 
     public AppKeybindController(
         IKeyMap keys,
@@ -36,7 +40,10 @@ internal sealed class AppKeybindController : KeyboardMouseController
         AssistantViewModel assistant,
         State<MainViewMode> mode,
         IFileBrowserStore browsers,
-        State<SidebarPane> sidebar)
+        State<SidebarPane> sidebar,
+        SearchEverywhereViewModel search,
+        InputSystem input,
+        TimeProvider time)
     {
         _keys = keys;
         _sidebar = sidebar;
@@ -48,6 +55,19 @@ internal sealed class AppKeybindController : KeyboardMouseController
         _assistant = assistant;
         _mode = mode;
         _browsers = browsers;
+        _search = search;
+        _input = input;
+        _sequences = new KeySequenceRecognizer(keys, time, RunSequence);
+        input.AddFilter(_sequences);
+    }
+
+    public void Dispose() => _input.RemoveFilter(_sequences);
+
+    // Only commands that make sense from anywhere in the window are run here; a trigger bound to a
+    // pane's command is that pane's to act on, which none is yet.
+    private void RunSequence(KeyCommand command)
+    {
+        if (command == KeyCommand.SearchEverywhere) _search.Open();
     }
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
@@ -105,6 +125,13 @@ internal sealed class AppKeybindController : KeyboardMouseController
                 files.Finder.Open();
                 e.Consume();
             }
+            return;
+        }
+
+        if (_keys.Matches(KeyCommand.SearchEverywhere, e.Key, e.Modifiers))
+        {
+            _search.Open();
+            e.Consume();
             return;
         }
 

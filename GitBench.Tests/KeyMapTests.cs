@@ -13,14 +13,14 @@ public class KeyMapTests
     public void EveryCommandHasAtLeastOneDefaultGesture()
     {
         foreach (var command in Enum.GetValues<KeyCommand>())
-            Assert.NotEmpty(_keys.GesturesFor(command));
+            Assert.NotEmpty(_keys.TriggersFor(command));
     }
 
     [Fact]
     public void DisplayIsThePrimaryGestures()
     {
         foreach (var command in Enum.GetValues<KeyCommand>())
-            Assert.Equal(_keys.GesturesFor(command)[0].Display, _keys.Display(command));
+            Assert.Equal(_keys.TriggersFor(command)[0].Display, _keys.Display(command));
     }
 
     [Fact]

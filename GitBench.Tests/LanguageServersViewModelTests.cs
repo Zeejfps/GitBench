@@ -1,6 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Notifications;
+using GitBench.Features.Search;
 using GitBench.Localization;
 using GitBench.Lsp;
 using GitBench.Lsp.Configuration;
@@ -250,6 +251,11 @@ public sealed class LanguageServersViewModelTests : IDisposable
         public StarterConfigOutcome WriteStarterConfig() => WriteOutcome;
 
         public bool Handles(string absolutePath) => false;
+
+        public LanguageId? LanguageOf(string absolutePath) => null;
+
+        public IReadOnlyList<ServerSymbolQuestion> AskWorkspaceSymbols(
+            string query, TimeSpan limit, CancellationToken cancel) => [];
 
         public Task<GitBench.Lsp.Documents.HoverText?> HoverAsync(
             string repoRoot,

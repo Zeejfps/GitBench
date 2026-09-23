@@ -40,6 +40,7 @@ public static class KeyCommandSections
             or KeyCommand.ToggleAssistant
             or KeyCommand.FindInFile
             or KeyCommand.FindFile
+            or KeyCommand.SearchEverywhere
             or KeyCommand.RepoHotkey1
             or KeyCommand.RepoHotkey2
             or KeyCommand.RepoHotkey3

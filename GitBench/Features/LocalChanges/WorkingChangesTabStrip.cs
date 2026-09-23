@@ -69,7 +69,7 @@ internal sealed record WorkingChangesTabStrip : Widget
         Prop<string?> tooltip)
     {
         var model = new SegmentViewModel<WorkingChangesLayout>(layout, value);
-        return new UnderlineTab { Icon = icon, Label = label, Model = model }
+        return new UnderlineTab<WorkingChangesLayout> { Icon = icon, Label = label, Model = model }
             .WithTooltip(tooltip)
             .WithController<KbmController>();
     }
@@ -80,14 +80,14 @@ internal sealed record WorkingChangesTabStrip : Widget
 /// The rule is always laid out (a transparent bottom border when inactive) so selecting a tab never
 /// shifts the text.
 /// </summary>
-internal sealed record UnderlineTab : Widget<ButtonState>
+internal sealed record UnderlineTab<T> : Widget<ButtonState>
 {
     private const float UnderlineHeight = 2f;
     private const float IconWidth = 16f;
 
     public required string Icon { get; init; }
     public required Prop<string?> Label { get; init; }
-    public required SegmentViewModel<WorkingChangesLayout> Model { get; init; }
+    public required SegmentViewModel<T> Model { get; init; }
 
     protected override ButtonState CreateState(Context ctx) => new(new Command(Model.Activate));
 

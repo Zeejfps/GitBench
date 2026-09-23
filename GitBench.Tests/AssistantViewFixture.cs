@@ -194,7 +194,10 @@ internal sealed class AssistantViewFixture : IDisposable
                     Vm,
                     new State<MainViewMode>(MainViewMode.LocalChanges),
                     new NoFileBrowsers(),
-                    new State<SidebarPane>(SidebarPane.Branches));
+                    new State<SidebarPane>(SidebarPane.Branches),
+                    SearchFixtures.Idle(_registry, new NoFileBrowsers()),
+                    ctx.Require<InputSystem>(),
+                    TimeProvider.System);
             });
 
         store.Start();

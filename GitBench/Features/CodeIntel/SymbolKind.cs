@@ -16,6 +16,10 @@ internal enum SymbolKind
     EnumMember,
     Function,
     Type,
+
+    /// <summary>Something a language server names that no outline query captures: a variable, a
+    /// constant, a type parameter.</summary>
+    Other,
 }
 
 internal static class SymbolKinds

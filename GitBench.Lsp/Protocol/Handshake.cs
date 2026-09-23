@@ -37,6 +37,8 @@ public sealed record ServerCapabilities(
 
     public SignatureHelpSupport SignatureHelp { get; init; } = SignatureHelpSupport.Unsupported;
 
+    public bool SupportsWorkspaceSymbols { get; init; }
+
     /// <summary>Whether an edited document is sent as a change rather than closed and reopened.</summary>
     public bool FollowsEdits => TextSync is TextSync.Full or TextSync.Incremental;
 
@@ -71,6 +73,7 @@ public sealed record ServerCapabilities(
                 TextSync = ReadTextSync(capabilities),
                 Completion = CompletionSupport.Read(capabilities),
                 SignatureHelp = SignatureHelpSupport.Read(capabilities),
+                SupportsWorkspaceSymbols = Advertises(capabilities, "workspaceSymbolProvider"),
             };
         }
 
@@ -146,6 +149,20 @@ public static class LspHandshake
 
             writer.WriteStartObject("window");
             writer.WriteBoolean("workDoneProgress", true);
+            writer.WriteEndObject();
+
+            // No resolveSupport: without it a server has to answer with whole locations, not bare
+            // URIs that need a second request each.
+            writer.WriteStartObject("workspace");
+            writer.WriteStartObject("symbol");
+            writer.WriteStartObject("symbolKind");
+            writer.WriteStartArray("valueSet");
+            foreach (var kind in Enum.GetValues<LspSymbolKind>())
+                if (kind != LspSymbolKind.Unknown)
+                    writer.WriteNumberValue((int)kind);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+            writer.WriteEndObject();
             writer.WriteEndObject();
             writer.WriteEndObject();
 

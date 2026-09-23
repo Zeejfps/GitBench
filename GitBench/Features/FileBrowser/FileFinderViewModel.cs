@@ -1,4 +1,3 @@
-using GitBench.Infrastructure;
 using ZGF.Observable;
 
 namespace GitBench.Features.FileBrowser;
@@ -85,7 +84,7 @@ internal sealed class FileFinderViewModel : IDisposable
         }
 
         _isOpen.Value = true;
-        _pending = _catalogued ??= Task.Run(Catalogue);
+        _pending = _catalogued ??= Task.Run(() => WorkingTreeFileSearch.List(_listFiles));
         Changed?.Invoke();
     }
 
@@ -127,35 +126,17 @@ internal sealed class FileFinderViewModel : IDisposable
         _pending = catalogued.ContinueWith(
             listed =>
             {
-                // One past the cap, so "there are more" is known without ranking the repository twice.
-                var ranked = PathSearch.Rank(listed.Result, query, MaxResults + 1);
-                var truncated = ranked.Count > MaxResults;
-                var paths = new string[truncated ? MaxResults : ranked.Count];
-                for (var i = 0; i < paths.Length; i++) paths[i] = ranked[i].Path;
-
+                var results = WorkingTreeFileSearch.Rank(listed.Result, query, MaxResults);
                 _dispatcher.Post(() =>
                 {
                     if (_disposed || generation != _generation) return;
-                    _results.Value = new FileFinderResults(paths, truncated);
+                    _results.Value = results;
                     Changed?.Invoke();
                 });
             },
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnRanToCompletion,
             TaskScheduler.Default);
-    }
-
-    private IReadOnlyList<string> Catalogue()
-    {
-        try
-        {
-            return _listFiles();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[FileBrowser] Listing the files to search failed: {ex.Message}");
-            return [];
-        }
     }
 
     public void Dispose()

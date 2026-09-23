@@ -69,7 +69,7 @@ public sealed class KeyBindingsPreferenceTests : IDisposable
 
         var binding = Assert.Single(loaded.KeyBindings);
         Assert.Equal(KeyCommand.Refresh, binding.Command);
-        Assert.Equal(new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift), Assert.Single(binding.Gestures));
+        Assert.Equal(new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift), Assert.Single(binding.Triggers));
         Assert.Equal(Theming.ThemeMode.Light, loaded.Theme);
     }
 
@@ -95,7 +95,7 @@ public sealed class KeyBindingsPreferenceTests : IDisposable
             """));
 
         var binding = Assert.Single(loaded.KeyBindings);
-        Assert.Equal([new KeyGesture(KeyboardKey.F6)], binding.Gestures);
+        Assert.Equal([new KeyGesture(KeyboardKey.F6)], binding.Triggers);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class KeyBindingsPreferenceTests : IDisposable
         public static readonly KeyBindingEquality Instance = new();
 
         public bool Equals(KeyBinding? x, KeyBinding? y) =>
-            x is not null && y is not null && x.Command == y.Command && x.Gestures.SequenceEqual(y.Gestures);
+            x is not null && y is not null && x.Command == y.Command && x.Triggers.SequenceEqual(y.Triggers);
 
         public int GetHashCode(KeyBinding obj) => obj.Command.GetHashCode();
     }

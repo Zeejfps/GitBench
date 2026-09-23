@@ -317,6 +317,22 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _caretRequest.Value = new CaretRequest(path, at);
     }
 
+    /// <summary>Opens a file a search found, with the caret at the place given if there is one.
+    /// <see cref="OpenAs.Transient"/> opens it in the tab the next file replaces.</summary>
+    public void OpenSearchResult(string absolutePath, TextPosition? at, OpenAs how)
+    {
+        if (_disposed) return;
+        var path = PathKey.Normalize(absolutePath);
+        var pinned = how switch
+        {
+            OpenAs.Pinned => true,
+            OpenAs.Transient => false,
+            _ => throw new ArgumentOutOfRangeException(nameof(how), how, null),
+        };
+        Travel(path, rowKey: null, at?.Line.Value, pinned);
+        if (at is { } position) _caretRequest.Value = new CaretRequest(path, position);
+    }
+
     /// <summary>What a guide has laid over a file: lit lines and suggested code. The body shows
     /// them while it shows that file.</summary>
     public IReadable<EditorHints?> Hints => _hints;
@@ -1200,3 +1216,10 @@ internal sealed class TakeGhostRequest(string path)
 
 /// <summary>The editor's caret in a file, and whatever text is selected there.</summary>
 internal sealed record EditorCaret(string Path, TextPosition At, string SelectedText);
+
+/// <summary>Whether a file opened by name keeps its own tab, or takes the tab the next one replaces.</summary>
+internal enum OpenAs
+{
+    Pinned,
+    Transient,
+}

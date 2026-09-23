@@ -36,7 +36,7 @@ public class KeyboardShortcutsViewModelTests
 
         foreach (var row in Rows(vm))
         {
-            var expected = keys.GesturesFor(row.Command).Select(g => g.Display).Distinct();
+            var expected = keys.TriggersFor(row.Command).Select(g => g.Display).Distinct();
             Assert.Equal(expected, row.Caps);
             Assert.Equal(keys.Display(row.Command), row.Caps[0]);
         }
@@ -148,7 +148,7 @@ public class KeyboardShortcutsViewModelTests
         vm.CommitRecording(gesture);
 
         Assert.Null(vm.Recording.Value);
-        Assert.Equal([gesture], keys.GesturesFor(KeyCommand.Refresh));
+        Assert.Equal([gesture], keys.TriggersFor(KeyCommand.Refresh));
         var row = Rows(vm).Single(r => r.Command == KeyCommand.Refresh);
         Assert.Equal(["Ctrl+Shift+R"], row.Caps);
         Assert.False(row.IsDefault);

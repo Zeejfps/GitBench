@@ -242,6 +242,95 @@ public abstract record References
     }
 }
 
+/// <summary>What a server says a symbol is, by the protocol's numbering. A number the protocol
+/// does not define reads as <see cref="Unknown"/>.</summary>
+public enum LspSymbolKind
+{
+    Unknown = 0,
+    File = 1,
+    Module = 2,
+    Namespace = 3,
+    Package = 4,
+    Class = 5,
+    Method = 6,
+    Property = 7,
+    Field = 8,
+    Constructor = 9,
+    Enum = 10,
+    Interface = 11,
+    Function = 12,
+    Variable = 13,
+    Constant = 14,
+    String = 15,
+    Number = 16,
+    Boolean = 17,
+    Array = 18,
+    Object = 19,
+    Key = 20,
+    Null = 21,
+    EnumMember = 22,
+    Struct = 23,
+    Event = 24,
+    Operator = 25,
+    TypeParameter = 26,
+}
+
+/// <summary>One symbol a workspace search found: its name, kind, the name of what contains it, and
+/// where it is declared.</summary>
+public sealed record WorkspaceSymbol(string Name, LspSymbolKind Kind, string? ContainerName, Location Location);
+
+/// <summary>
+/// The answer to a workspace symbol search. Two wire shapes — the older <c>SymbolInformation</c> and
+/// the newer <c>WorkspaceSymbol</c> — which differ only in what may be left out; both carry a name,
+/// a kind and a location. A location without a range needs a resolve this client never advertises,
+/// so an entry carrying one is left out rather than guessed at. Order is the server's.
+/// </summary>
+public sealed record WorkspaceSymbols(IReadOnlyList<WorkspaceSymbol> Items)
+{
+    public static readonly ILspResultReader<WorkspaceSymbols> Reader = new WorkspaceSymbolsReader();
+
+    private sealed class WorkspaceSymbolsReader : ILspResultReader<WorkspaceSymbols>
+    {
+        public WorkspaceSymbols Read(JsonElement result)
+        {
+            if (result.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return new WorkspaceSymbols([]);
+
+            if (result.ValueKind != JsonValueKind.Array)
+                throw new LspParseException($"workspace symbols must be an array or null, was {result.ValueKind}");
+
+            var symbols = new List<WorkspaceSymbol>();
+            foreach (var element in result.EnumerateArray())
+                if (ReadOne(element) is { } symbol)
+                    symbols.Add(symbol);
+            return new WorkspaceSymbols(symbols);
+        }
+
+        private static WorkspaceSymbol? ReadOne(JsonElement element)
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+                throw new LspParseException($"a workspace symbol must be an object, was {element.ValueKind}");
+
+            var location = element.Require("location");
+            if (location.Optional("range") is not { } range) return null;
+
+            var container = element.Optional("containerName") is { } c ? c.AsString("a container name") : null;
+            return new WorkspaceSymbol(
+                element.RequireString("name"),
+                KindOf(element.Require("kind")),
+                string.IsNullOrEmpty(container) ? null : container,
+                new Location(Json.ReadUri(location, "uri"), Json.ReadRange(range)));
+        }
+
+        private static LspSymbolKind KindOf(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number))
+                throw new LspParseException($"a symbol kind must be a number, was {value.ValueKind}");
+            var kind = (LspSymbolKind)number;
+            return Enum.IsDefined(kind) ? kind : LspSymbolKind.Unknown;
+        }
+    }
+}
+
 /// <summary>The requests this client knows how to ask, params written by hand.</summary>
 public static class LspRequests
 {
@@ -329,6 +418,15 @@ public static class LspRequests
             writer.WriteEndObject();
             writer.WriteEndObject();
         }, Lsp.SemanticTokens.ReaderFor(legend));
+
+    /// <summary>Every symbol in the workspace matching a query, by the server's own matching.</summary>
+    public static LspRequest<WorkspaceSymbols> WorkspaceSymbol(string query) =>
+        new(LspMethod.WorkspaceSymbol, writer =>
+        {
+            writer.WriteStartObject();
+            writer.WriteString("query", query);
+            writer.WriteEndObject();
+        }, WorkspaceSymbols.Reader);
 
     private static void WriteTextDocumentPosition(
         Utf8JsonWriter writer, DocumentUri uri, LspPosition at, WriteJson? more = null)

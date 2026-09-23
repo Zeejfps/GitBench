@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Search;
 using GitBench.Git;
 using GitBench.Lsp;
 using GitBench.Lsp.Configuration;
@@ -18,6 +19,7 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
     private readonly Action<Action> _post;
     private readonly IFileTextSource _files;
     private readonly PreviewSession _session;
+    private readonly RepoBoundary _boundary;
     private readonly CancellationTokenSource _closing = new();
     private readonly Task<string?> _handshake;
     private readonly object _gate = new();
@@ -47,8 +49,8 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
         server.ReadinessChanged += OnReadinessChanged;
         server.Exited += OnExited;
         _files.Changed += OnFileTextChanged;
-        _session = new PreviewSession(
-            server, _entry, BoundaryOf(request.RepoRoot), retry ?? AskAgainPolicy.Default, _wait);
+        _boundary = BoundaryOf(request.RepoRoot);
+        _session = new PreviewSession(server, _entry, _boundary, retry ?? AskAgainPolicy.Default, _wait);
         _session.StateChanged += state => DocumentChanged?.Invoke(state);
         _handshake = HandshakeAsync(handshakeTimeout);
     }
@@ -112,6 +114,38 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
     }
 
     public bool AnswersReferences => _server.Capabilities is not { SupportsReferences: false };
+
+    /// <summary>
+    /// The symbols in the repository matching a query, by the server's own matching; null when it
+    /// cannot say — no such capability, no answer inside <paramref name="limit"/>, or a refusal.
+    /// Symbols outside the repository are left out: nothing here can open them.
+    /// </summary>
+    public async Task<IReadOnlyList<SymbolRow>?> WorkspaceSymbolsAsync(
+        string query, TimeSpan limit, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return null;
+        if (_server.Capabilities is not { SupportsWorkspaceSymbols: true }) return null;
+
+        var response = await _server.AskAsync(LspRequests.WorkspaceSymbol(query), limit, cancel).ConfigureAwait(false);
+        if (response is not LspResponse<WorkspaceSymbols>.Ok(var symbols)) return null;
+
+        var rows = new List<SymbolRow>(symbols.Items.Count);
+        foreach (var symbol in symbols.Items)
+        {
+            var start = symbol.Location.Range.Start;
+            if (_boundary.Classify(symbol.Location.Uri, start) is not DefinitionTarget.InRepo inRepo) continue;
+            rows.Add(new SymbolRow(
+                symbol.Name,
+                WorkspaceSymbolKinds.ToApp(symbol.Kind),
+                symbol.ContainerName,
+                ParameterTypes: null,
+                inRepo.RelativePath,
+                new FileLine(start.Line.ToOneBased()),
+                new RawColumn(start.Character.Value)));
+        }
+
+        return rows;
+    }
 
     public async Task<SemanticTokensReply> SemanticTokensAsync(string absolutePath, CancellationToken cancel)
     {

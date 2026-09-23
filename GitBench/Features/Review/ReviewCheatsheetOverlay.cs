@@ -102,7 +102,7 @@ internal sealed record ReviewCheatsheetOverlay : Widget
 
     // Every distinct cap a command answers to: Enter and its numpad twin read the same.
     private static string[] Caps(IKeyMap keys, KeyCommand command) =>
-        keys.GesturesFor(command).Select(g => g.Display).Distinct().ToArray();
+        keys.TriggersFor(command).Select(t => t.Display).Distinct().ToArray();
 
     // One shortcut row: the key cap(s) in a fixed leading column, the description filling the rest.
     private static IWidget ShortcutRow(string[] keys, Prop<string?> description) => new Row
@@ -166,8 +166,16 @@ internal sealed class ScrimController : KeyboardMouseController
         e.Consume();
     }
 
-    public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e) => e.Consume();
-    public override void OnMouseMoved(ref MouseMoveEvent e) => e.Consume();
+    // On the way back out only: whatever sits on the scrim — a scrolling list — gets them first.
+    public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
+    {
+        if (e.Phase == EventPhase.Bubbling) e.Consume();
+    }
+
+    public override void OnMouseMoved(ref MouseMoveEvent e)
+    {
+        if (e.Phase == EventPhase.Bubbling) e.Consume();
+    }
 }
 
 // Swallows clicks landing on the card so they don't bubble up to the scrim and dismiss the overlay.

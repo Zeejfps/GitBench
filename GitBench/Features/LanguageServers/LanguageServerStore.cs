@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
+using GitBench.Features.Search;
 using GitBench.Git;
 using GitBench.Lsp;
 using GitBench.Lsp.Configuration;
@@ -22,7 +23,8 @@ internal enum StarterConfigOutcome
 }
 
 internal interface ILanguageServerStore
-    : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource, ISignatureHelpSource
+    : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource, ISignatureHelpSource,
+        IWorkspaceSymbolSource
 {
     IReadable<LanguageServerSnapshot> Active { get; }
 
@@ -118,6 +120,26 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
     }
 
     public bool Handles(string absolutePath) => _config.ServerFor(absolutePath) is not null;
+
+    public LanguageId? LanguageOf(string absolutePath) => _config.ServerFor(absolutePath)?.Language;
+
+    public IReadOnlyList<ServerSymbolQuestion> AskWorkspaceSymbols(
+        string query, TimeSpan limit, CancellationToken cancel)
+    {
+        if (_disposed || _registry.Active.Value is not { } repo) return [];
+
+        var repository = new RepositoryId(repo.Id);
+        var questions = new List<ServerSymbolQuestion>();
+        foreach (var status in _supervisor.Status)
+        {
+            if (status.Repository != repository || status.State is not ServerState.Ready) continue;
+            if (_supervisor.ProcessFor(repository, status.Language) is not { } connection) continue;
+            questions.Add(new ServerSymbolQuestion(
+                status.Language, connection.WorkspaceSymbolsAsync(query, limit, cancel)));
+        }
+
+        return questions;
+    }
 
     public async Task<HoverText?> HoverAsync(
         string repoRoot, string absolutePath, FileLine line, RawColumn column, CancellationToken cancel)

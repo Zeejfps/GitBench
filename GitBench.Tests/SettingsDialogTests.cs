@@ -216,7 +216,7 @@ public sealed class SettingsDialogTests : IDisposable
         h.PressKey(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift);
         h.Layout();
         Assert.Equal([new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift)],
-            _keys.GesturesFor(KeyCommand.Refresh));
+            _keys.TriggersFor(KeyCommand.Refresh));
         Assert.False(_closed);
 
         h.ClickOn(SettingsDialog.GeneralTabId);
