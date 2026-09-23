@@ -227,8 +227,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         this.UseController(input, () => new DiffMouseController(_surface), EventPhaseFilter.Capture);
         _clipboard = ctx.Require<IClipboard>();
         _saves = Features.Editor.DocumentSaves.From(ctx);
-        _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap());
         _dispatcher = ctx.Get<IUiDispatcher>();
+        var completionFeed = ctx.Get<Features.LanguageServers.ILanguageServerStore>() is { } servers && _dispatcher is not null
+            ? new Features.Editor.CompletionFeed(servers, _dispatcher)
+            : null;
+        _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap(), completionFeed);
         if (ctx.Get<IPopupWindowFactory>() is { } popups && ctx.Get<IWindowCoordinates>() is { } coordinates)
             _completionPopup = new Features.Editor.CompletionPopup(popups, coordinates);
         var editorFontSize = ctx.Get<IWritable<EditorFontSize>>();
@@ -891,7 +894,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _completionList = list;
         _completionAnchor = list is null ? null : WordStartRect(list);
         if (_completionPopup is null) return;
-        if (_completionAnchor is { } anchor && list is not null) _completionPopup.Show(list, anchor);
+        // A list still waiting on its server is tracked but not drawn: an empty popup is a thing
+        // to look at that says nothing.
+        if (_completionAnchor is { } anchor && list is { Items.Count: > 0 }) _completionPopup.Show(list, anchor);
         else _completionPopup.Hide();
     }
 

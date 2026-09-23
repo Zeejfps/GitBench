@@ -33,6 +33,8 @@ public sealed record ServerCapabilities(
 
     public TextSync TextSync { get; init; } = TextSync.None;
 
+    public CompletionSupport Completion { get; init; } = CompletionSupport.Unsupported;
+
     /// <summary>Whether an edited document is sent as a change rather than closed and reopened.</summary>
     public bool FollowsEdits => TextSync is TextSync.Full or TextSync.Incremental;
 
@@ -65,6 +67,7 @@ public sealed record ServerCapabilities(
             {
                 SemanticTokens = SemanticTokensSupport.Read(capabilities),
                 TextSync = ReadTextSync(capabilities),
+                Completion = CompletionSupport.Read(capabilities),
             };
         }
 
@@ -131,6 +134,7 @@ public static class LspHandshake
             writer.WriteStartObject("references");
             writer.WriteEndObject();
             WriteSemanticTokensCapability(writer);
+            WriteCompletionCapability(writer);
             writer.WriteStartObject("publishDiagnostics");
             writer.WriteBoolean("versionSupport", true);
             writer.WriteEndObject();
@@ -170,6 +174,26 @@ public static class LspHandshake
     /// are listed because a server may leave out any type its client did not name; the modifiers
     /// are left empty because nothing here is colored by them.
     /// </summary>
+    // Snippets are declined: nothing here steps through tab stops, and a server that sends one anyway
+    // has it reduced to plain text. Insert-and-replace ranges are what let Tab replace the rest of
+    // the word while Enter only replaces what was typed.
+    private static void WriteCompletionCapability(Utf8JsonWriter writer)
+    {
+        writer.WriteStartObject("completion");
+        writer.WriteBoolean("contextSupport", true);
+        writer.WriteStartObject("completionItem");
+        writer.WriteBoolean("snippetSupport", false);
+        writer.WriteBoolean("insertReplaceSupport", true);
+        writer.WriteEndObject();
+        writer.WriteStartObject("completionList");
+        writer.WriteStartArray("itemDefaults");
+        writer.WriteStringValue("editRange");
+        writer.WriteStringValue("insertTextFormat");
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
     private static void WriteSemanticTokensCapability(Utf8JsonWriter writer)
     {
         writer.WriteStartObject("semanticTokens");

@@ -90,7 +90,7 @@ public sealed class EditorCompletionTests
         var document = TextDocument.FromText("counter\nc");
         var session = new CompletionSession();
 
-        session.Typed(document, TextPosition.At(2, 1), () => [Word("counter")]);
+        session.Typed(document, TextPosition.At(2, 1), () => [Word("counter")], asking: false);
 
         Assert.True(session.IsOpen);
         Assert.Equal("c", session.Current!.Prefix);
@@ -102,7 +102,7 @@ public sealed class EditorCompletionTests
         var document = TextDocument.FromText("counter\nabc");
         var session = new CompletionSession();
 
-        session.Typed(document, TextPosition.At(2, 3), () => [Word("abcdef")]);
+        session.Typed(document, TextPosition.At(2, 3), () => [Word("abcdef")], asking: false);
 
         Assert.False(session.IsOpen);
     }
@@ -113,7 +113,7 @@ public sealed class EditorCompletionTests
         var document = TextDocument.FromText("x");
         var session = new CompletionSession();
 
-        session.Typed(document, TextPosition.At(1, 1), () => [Word("x")]);
+        session.Typed(document, TextPosition.At(1, 1), () => [Word("x")], asking: false);
 
         Assert.False(session.IsOpen);
     }
@@ -123,7 +123,7 @@ public sealed class EditorCompletionTests
     {
         var session = new CompletionSession();
         var document = TextDocument.FromText("c");
-        session.Typed(document, TextPosition.At(1, 1), () => [Word("counter"), Word("color")]);
+        session.Typed(document, TextPosition.At(1, 1), () => [Word("counter"), Word("color")], asking: false);
         Assert.Equal(2, session.Current!.Items.Count);
 
         document = TextDocument.FromText("co");
@@ -144,7 +144,7 @@ public sealed class EditorCompletionTests
     {
         var document = TextDocument.FromText("x c");
         var session = new CompletionSession();
-        session.Typed(document, TextPosition.At(1, 3), () => [Word("counter")]);
+        session.Typed(document, TextPosition.At(1, 3), () => [Word("counter")], asking: false);
 
         session.Follow(document, TextPosition.At(1, 1));
 
@@ -156,7 +156,7 @@ public sealed class EditorCompletionTests
     {
         var document = TextDocument.FromText("");
         var session = new CompletionSession();
-        session.Invoke(document, TextPosition.At(1, 0), () => [Word("aa"), Word("bb"), Word("cc")]);
+        session.Invoke(document, TextPosition.At(1, 0), () => [Word("aa"), Word("bb"), Word("cc")], asking: false);
 
         session.Move(-1);
         Assert.Equal(2, session.Current!.Selected);
@@ -171,16 +171,144 @@ public sealed class EditorCompletionTests
     {
         var document = TextDocument.FromText("coXYZ");
         var enter = new CompletionSession();
-        enter.Invoke(document, TextPosition.At(1, 2), () => [Word("counter")]);
+        enter.Invoke(document, TextPosition.At(1, 2), () => [Word("counter")], asking: false);
         var typed = enter.Accept(document, TextPosition.At(1, 2), wholeWord: false)!.Value;
         Assert.Equal(new TextRange(TextPosition.At(1, 0), TextPosition.At(1, 2)), typed.Range);
         Assert.Equal("counter", typed.Text);
 
         var tab = new CompletionSession();
-        tab.Invoke(document, TextPosition.At(1, 2), () => [Word("counter")]);
+        tab.Invoke(document, TextPosition.At(1, 2), () => [Word("counter")], asking: false);
         var whole = tab.Accept(document, TextPosition.At(1, 2), wholeWord: true)!.Value;
         Assert.Equal(new TextRange(TextPosition.At(1, 0), TextPosition.At(1, 5)), whole.Range);
         Assert.False(tab.IsOpen);
+    }
+
+    private static CompletionItem Served(string label, string text, int insertStart, int? replaceEnd = null,
+        params TextEdit[] additional) =>
+        new(label, new CompletionKind.Symbol(SymbolKind.Method))
+        {
+            Insert = new CompletionInsert.ServerEdit(
+                text,
+                TextPosition.At(1, insertStart),
+                replaceEnd is { } end ? TextPosition.At(1, end) : null,
+                additional),
+        };
+
+    [Fact]
+    public void AServerAnswerReplacesWhatTheFileOffered()
+    {
+        var document = TextDocument.FromText("Wr");
+        var session = new CompletionSession();
+        session.Invoke(document, TextPosition.At(1, 2), () => [Word("Wrong")], asking: true);
+
+        session.Answered(new FileLine(1), 0, [Served("WriteLine", "WriteLine", 0)], false, document, TextPosition.At(1, 2));
+
+        Assert.Equal(["WriteLine"], Labels(session.Current!.Items));
+        Assert.Equal(ServerCompletionState.Answered, session.Current.Server);
+    }
+
+    [Fact]
+    public void NoServerToAskLeavesTheFilesOwnWords()
+    {
+        var document = TextDocument.FromText("co");
+        var session = new CompletionSession();
+        session.Invoke(document, TextPosition.At(1, 2), () => [Word("counter")], asking: true);
+
+        session.Answered(new FileLine(1), 0, null, false, document, TextPosition.At(1, 2));
+
+        Assert.Equal(["counter"], Labels(session.Current!.Items));
+        Assert.Equal(ServerCompletionState.None, session.Current.Server);
+    }
+
+    [Fact]
+    public void AnAnswerForAListThatMovedOnIsIgnored()
+    {
+        var document = TextDocument.FromText("x co");
+        var session = new CompletionSession();
+        session.Invoke(document, TextPosition.At(1, 4), () => [Word("counter")], asking: true);
+
+        session.Answered(new FileLine(1), 0, [Served("Other", "Other", 0)], false, document, TextPosition.At(1, 4));
+
+        Assert.Equal(["counter"], Labels(session.Current!.Items));
+    }
+
+    [Fact]
+    public void AMemberListWaitsEmptyForItsServerAndSurvivesAnEmptyPrefix()
+    {
+        var document = TextDocument.FromText("Console.");
+        var session = new CompletionSession();
+
+        session.OpenForMembers(TextPosition.At(1, 8));
+        Assert.True(session.IsOpen);
+        Assert.Empty(session.Current!.Items);
+
+        session.Answered(new FileLine(1), 8, [Served("WriteLine", "WriteLine", 8), Served("Beep", "Beep", 8)],
+            false, document, TextPosition.At(1, 8));
+
+        Assert.Equal(["Beep", "WriteLine"], Labels(session.Current!.Items).Order());
+    }
+
+    [Fact]
+    public void AMemberListWithNothingFromItsServerCloses()
+    {
+        var document = TextDocument.FromText("x.");
+        var session = new CompletionSession();
+        session.OpenForMembers(TextPosition.At(1, 2));
+
+        session.Answered(new FileLine(1), 2, [], false, document, TextPosition.At(1, 2));
+
+        Assert.False(session.IsOpen);
+    }
+
+    [Fact]
+    public void AServerEditReachesAsFarAsTheServerSaidOnTab()
+    {
+        var document = TextDocument.FromText("x.WrXYZ");
+        var session = new CompletionSession();
+        session.OpenForMembers(TextPosition.At(1, 2));
+        session.Answered(new FileLine(1), 2, [Served("WriteLine", "WriteLine", 2, replaceEnd: 7)],
+            false, document, TextPosition.At(1, 4));
+
+        var edit = session.Accept(document, TextPosition.At(1, 4), wholeWord: true)!.Value;
+
+        Assert.Equal(new TextRange(TextPosition.At(1, 2), TextPosition.At(1, 7)), edit.Range);
+        Assert.Equal("WriteLine", edit.Text);
+    }
+
+    [Fact]
+    public void AnImportThatComesWithACompletionMovesTheCaretDownWithIt()
+    {
+        var session = EditorSession.Of("class C\n{\n    Li\n}");
+        var import = new TextEdit(TextRange.Caret(TextPosition.At(1, 0)), "using System.Collections.Generic;\n");
+
+        var after = session.Complete(
+            EditorSession.Caret(3, 6), new TextRange(TextPosition.At(3, 4), TextPosition.At(3, 6)), "List", [import]);
+
+        Assert.Equal("using System.Collections.Generic;\nclass C\n{\n    List\n}", session.Document.Text);
+        Assert.Equal(TextPosition.At(4, 8), after.Caret);
+        session.Undo();
+        Assert.Equal("class C\n{\n    Li\n}", session.Document.Text);
+    }
+
+    [Fact]
+    public void TheServersOrderBreaksTiesBetweenEqualMatches()
+    {
+        var ranked = CompletionMatcher.Rank("", [
+            new CompletionItem("zeta", CompletionKind.AWord) { SortText = "0" },
+            new CompletionItem("al", CompletionKind.AWord) { SortText = "1" },
+        ]);
+
+        Assert.Equal(["zeta", "al"], Labels(ranked));
+    }
+
+    [Fact]
+    public void AFilterTextIsMatchedWhereTheLabelIsNot()
+    {
+        var ranked = CompletionMatcher.Rank("wri", [
+            new CompletionItem("Console.WriteLine(string)", CompletionKind.AWord) { FilterText = "WriteLine" },
+        ]);
+
+        Assert.Single(ranked);
     }
 
     [Fact]

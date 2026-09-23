@@ -126,6 +126,23 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
 
     public bool AnswersSemanticTokens => _server.Capabilities is not { SemanticTokens: SemanticTokensSupport.None };
 
+    public async Task<CompletionReply> CompletionAsync(
+        string absolutePath, FileLine line, RawColumn column, CompletionAsk ask, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return CompletionReply.Unavailable.Instance;
+        if (!AnswersCompletions) return CompletionReply.Unavailable.Instance;
+        if (!await EnsurePreviewedAsync(absolutePath, cancel).ConfigureAwait(false))
+            return CompletionReply.Unavailable.Instance;
+
+        return await _session.CompletionAsync(At(line, column), ask).ConfigureAwait(false);
+    }
+
+    public bool AnswersCompletions => _server.Capabilities is not { Completion: CompletionSupport.None };
+
+    /// <summary>The characters the server wants to be asked on, or none before it has said.</summary>
+    public IReadOnlyList<char> CompletionTriggers =>
+        _server.Capabilities?.Completion is CompletionSupport.Offered(var triggers) ? triggers : [];
+
     public async Task PrepareAsync(string absolutePath, CancellationToken cancel)
     {
         if (await Handshaked().ConfigureAwait(false) is not null) return;

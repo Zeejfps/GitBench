@@ -50,6 +50,7 @@ public readonly record struct LspMethod(string Name)
     public static readonly LspMethod Hover = new("textDocument/hover");
     public static readonly LspMethod Definition = new("textDocument/definition");
     public static readonly LspMethod References = new("textDocument/references");
+    public static readonly LspMethod Completion = new("textDocument/completion");
     public static readonly LspMethod SemanticTokensFull = new("textDocument/semanticTokens/full");
     public static readonly LspMethod DidOpen = new("textDocument/didOpen");
     public static readonly LspMethod DidChange = new("textDocument/didChange");

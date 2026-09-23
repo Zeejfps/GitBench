@@ -178,14 +178,47 @@ internal sealed class EditSession
 
     /// <summary>Puts an accepted completion in place of the text it replaces, as its own undo step,
     /// with the caret after it.</summary>
-    public SelectionRange Complete(SelectionRange selection, TextRange replaced, string text)
+    /// <param name="additional">Edits elsewhere that come with it, such as an import. Applied in the
+    /// same step, bottom of the file first so each one's range still names the text it was given for.</param>
+    public SelectionRange Complete(
+        SelectionRange selection, TextRange replaced, string text, IReadOnlyList<TextEdit>? additional = null)
     {
         _goal = null;
         var current = Clamp(selection);
         var range = _document.Clamp(replaced);
-        var end = range.Start with { Column = new RawColumn(range.Start.Column.Value + text.Length) };
-        return Commit(current, new EditPlan(
-            EditKind.Boundary, new[] { new TextEdit(range, text) }, AnchorBias.After, SelectionRange.At(end)));
+
+        var edits = new List<TextEdit> { new(range, text) };
+        foreach (var extra in additional ?? [])
+        {
+            var clamped = _document.Clamp(extra.Range);
+            if (clamped.End <= range.Start || clamped.Start >= range.End) edits.Add(new TextEdit(clamped, extra.Replacement));
+        }
+        edits.Sort(static (a, b) => b.Range.Start.CompareTo(a.Range.Start));
+
+        var landing = EndOf(range.Start, text);
+        foreach (var extra in edits)
+        {
+            if (extra.Range.End > range.Start) continue;
+            var shift = BreakCount(extra.Replacement) - (extra.Range.End.Line.Value - extra.Range.Start.Line.Value);
+            landing = landing with { Line = new FileLine(landing.Line.Value + shift) };
+        }
+
+        return Commit(current, new EditPlan(EditKind.Boundary, edits, AnchorBias.After, SelectionRange.At(landing)));
+    }
+
+    private static TextPosition EndOf(TextPosition start, string text)
+    {
+        var lastBreak = text.LastIndexOf('\n');
+        return lastBreak < 0
+            ? start with { Column = new RawColumn(start.Column.Value + text.Length) }
+            : new TextPosition(new FileLine(start.Line.Value + BreakCount(text)), new RawColumn(text.Length - lastBreak - 1));
+    }
+
+    private static int BreakCount(string text)
+    {
+        var count = 0;
+        foreach (var c in text) if (c == '\n') count++;
+        return count;
     }
 
     /// <summary>Reverses the newest step, returning the selection it was made with, or null when

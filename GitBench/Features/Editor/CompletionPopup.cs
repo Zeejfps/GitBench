@@ -88,7 +88,9 @@ internal sealed class CompletionListView : View
     private const float Pad = 4f;
     private const float IconColumn = 20f;
     private const float MinWidth = 220f;
-    private const float MaxWidth = 560f;
+    private const float MaxWidth = 640f;
+    private const float DetailGap = 24f;
+    private const float MaxDetailWidth = 260f;
 
     /// <summary>How far right of the popup's edge a label starts, so the popup can be placed with
     /// its labels under the word they complete.</summary>
@@ -122,6 +124,15 @@ internal sealed class CompletionListView : View
     {
         FontFamily = MonoFonts.Bold,
         FontSize = FontSize.Body,
+        VerticalAlignment = TextAlignment.Center,
+        BaseDirection = BidiDirection.Ltr,
+    };
+
+    private readonly TextStyle _detail = new()
+    {
+        FontFamily = MonoFonts.Regular,
+        FontSize = FontSize.Caption,
+        HorizontalAlignment = TextAlignment.End,
         VerticalAlignment = TextAlignment.Center,
         BaseDirection = BidiDirection.Ltr,
     };
@@ -174,9 +185,16 @@ internal sealed class CompletionListView : View
     private float WidthFor(CompletionList list)
     {
         var widest = 0f;
+        var widestDetail = 0f;
         foreach (var ranked in list.Items)
+        {
             widest = MathF.Max(widest, _canvas.MeasureTextWidth(ranked.Item.Label, _plain));
-        return Math.Clamp(LabelInset + widest + Pad * 3, MinWidth, MaxWidth);
+            if (ranked.Item.Detail is { Length: > 0 } detail)
+                widestDetail = MathF.Max(widestDetail, _canvas.MeasureTextWidth(detail, _detail));
+        }
+
+        var details = widestDetail > 0 ? DetailGap + MathF.Min(widestDetail, MaxDetailWidth) : 0f;
+        return Math.Clamp(LabelInset + widest + details + Pad * 3, MinWidth, MaxWidth);
     }
 
     protected override void OnDrawSelf(ICanvas c)
@@ -263,6 +281,19 @@ internal sealed class CompletionListView : View
             x += width;
             runStart = runEnd;
         }
+
+        var room = right - x - DetailGap;
+        if (ranked.Item.Detail is not { Length: > 0 } detail || room <= 0) return;
+
+        _detail.TextColor = menu.ItemTextDisabled;
+        var shown = TextEllipsis.Truncate(c, detail, _detail, MathF.Min(room, MaxDetailWidth));
+        c.DrawText(new DrawTextInputs
+        {
+            Position = new RectF(right - MathF.Min(room, MaxDetailWidth), row.Bottom, MathF.Min(room, MaxDetailWidth), row.Height),
+            Text = shown,
+            Style = _detail,
+            ZIndex = z,
+        });
     }
 
     private (string Glyph, uint Tint) GlyphOf(CompletionKind kind)

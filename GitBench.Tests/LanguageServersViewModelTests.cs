@@ -221,6 +221,14 @@ public sealed class LanguageServersViewModelTests : IDisposable
         public Task<SemanticTokensReply> SemanticTokensAsync(string absolutePath, CancellationToken ct) =>
             Task.FromResult<SemanticTokensReply>(SemanticTokensReply.Unavailable.Instance);
 
+        public bool CanComplete(string absolutePath) => false;
+
+        public IReadOnlyList<char> CompletionTriggers(string absolutePath) => [];
+
+        public Task<CompletionReply> CompletionsAsync(
+            string absolutePath, FileLine line, RawColumn column, CompletionAsk ask, CancellationToken ct) =>
+            Task.FromResult<CompletionReply>(CompletionReply.Unavailable.Instance);
+
         public void ReloadConfig() => Reloads++;
 
         public void RetryServer(LanguageId language) => Restarted.Add(language);

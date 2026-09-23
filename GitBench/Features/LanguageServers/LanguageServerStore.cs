@@ -21,7 +21,8 @@ internal enum StarterConfigOutcome
     NotWritten,
 }
 
-internal interface ILanguageServerStore : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource
+internal interface ILanguageServerStore
+    : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource
 {
     IReadable<LanguageServerSnapshot> Active { get; }
 
@@ -159,6 +160,35 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
             return ReferenceReply.Unavailable.Instance;
         return await connection.ReferencesAsync(absolutePath, line, column, cancel).ConfigureAwait(false);
+    }
+
+    public bool CanComplete(string absolutePath)
+    {
+        if (_disposed) return false;
+        if (_config.ServerFor(absolutePath) is not { } entry) return false;
+        if (_registry.Active.Value is not { } repo) return false;
+
+        return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language)
+            is not { } connection || connection.AnswersCompletions;
+    }
+
+    public IReadOnlyList<char> CompletionTriggers(string absolutePath)
+    {
+        if (_disposed) return [];
+        if (_config.ServerFor(absolutePath) is not { } entry) return [];
+        if (_registry.Active.Value is not { } repo) return [];
+
+        return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language) is { } connection
+            ? connection.CompletionTriggers
+            : [];
+    }
+
+    public async Task<CompletionReply> CompletionsAsync(
+        string absolutePath, FileLine line, RawColumn column, CompletionAsk ask, CancellationToken cancel)
+    {
+        if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
+            return CompletionReply.Unavailable.Instance;
+        return await connection.CompletionAsync(absolutePath, line, column, ask, cancel).ConfigureAwait(false);
     }
 
     public bool CanClassify(string absolutePath)

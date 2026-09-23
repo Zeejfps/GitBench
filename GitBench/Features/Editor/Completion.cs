@@ -1,4 +1,5 @@
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 
 namespace GitBench.Features.Editor;
 
@@ -31,7 +32,43 @@ internal abstract record CompletionKind
     };
 }
 
-internal sealed record CompletionItem(string Label, CompletionKind Kind);
+/// <summary>What accepting a completion puts in the file.</summary>
+internal abstract record CompletionInsert
+{
+    private CompletionInsert() { }
+
+    /// <summary>The label itself, over the identifier being typed.</summary>
+    public sealed record TheLabel : CompletionInsert;
+
+    public static readonly TheLabel Label = new();
+
+    /// <summary>
+    /// What a server said to insert, and where. The ranges are where the server placed it when it
+    /// was asked; typing since only ever extends them to the caret.
+    /// </summary>
+    /// <param name="InsertStart">Where the text begins when it is inserted, or null to begin at the
+    /// identifier.</param>
+    /// <param name="ReplaceEnd">How far it reaches when it replaces the word, where the server said.</param>
+    /// <param name="Additional">Edits elsewhere that come with it — the import a name needs.</param>
+    public sealed record ServerEdit(
+        string Text, TextPosition? InsertStart, TextPosition? ReplaceEnd, IReadOnlyList<TextEdit> Additional)
+        : CompletionInsert;
+}
+
+/// <param name="Label">What the list shows, and what is matched when there is no filter text.</param>
+internal sealed record CompletionItem(string Label, CompletionKind Kind)
+{
+    /// <summary>The type or signature shown beside the label, where the server said.</summary>
+    public string? Detail { get; init; }
+
+    /// <summary>The server's own order, which breaks ties between equally good matches.</summary>
+    public string? SortText { get; init; }
+
+    /// <summary>What a prefix is matched against, where it is not the label.</summary>
+    public string? FilterText { get; init; }
+
+    public CompletionInsert Insert { get; init; } = CompletionInsert.Label;
+}
 
 /// <summary>How well a typed prefix matches a label, and which of the label's characters it
 /// matched, for the list to draw them emphasized.</summary>
@@ -58,30 +95,30 @@ internal static class CompletionMatcher
         if (pattern.Length > label.Length) return null;
 
         if (label.StartsWith(pattern, StringComparison.Ordinal))
-            return new CompletionMatch(ExactPrefix - label.Length, Range(0, pattern.Length));
+            return new CompletionMatch(ExactPrefix, Range(0, pattern.Length));
         if (label.StartsWith(pattern, StringComparison.OrdinalIgnoreCase))
-            return new CompletionMatch(Prefix - label.Length, Range(0, pattern.Length));
+            return new CompletionMatch(Prefix, Range(0, pattern.Length));
 
         if (HumpPositions(pattern, label) is { } humps)
         {
             var gaps = humps[^1] - humps[0] + 1 - humps.Length;
-            var score = (humps[0] == 0 ? HumpsFromStart : Humps) - gaps * 4 - label.Length;
+            var score = (humps[0] == 0 ? HumpsFromStart : Humps) - gaps * 4;
             return new CompletionMatch(score, humps);
         }
 
         var index = label.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
         return index >= 0
-            ? new CompletionMatch(Substring - index - label.Length, Range(index, pattern.Length))
+            ? new CompletionMatch(Substring - index, Range(index, pattern.Length))
             : null;
     }
 
-    /// <summary>Ranks a pool against a prefix, best first: score, then where it came from, then the
-    /// shorter label, then alphabetical.</summary>
+    /// <summary>Ranks a pool against a prefix, best first: how well it matched, then where it came
+    /// from, then the server's own order, then the shorter label, then alphabetical.</summary>
     public static IReadOnlyList<RankedCompletion> Rank(string pattern, IEnumerable<CompletionItem> pool)
     {
         var ranked = new List<RankedCompletion>();
         foreach (var item in pool)
-            if (Match(pattern, item.Label) is { } match)
+            if (MatchItem(pattern, item) is { } match)
                 ranked.Add(new RankedCompletion(item, match));
 
         ranked.Sort(static (a, b) =>
@@ -90,10 +127,24 @@ internal static class CompletionMatcher
             if (byScore != 0) return byScore;
             var byKind = a.Item.Kind.Precedence.CompareTo(b.Item.Kind.Precedence);
             if (byKind != 0) return byKind;
+            if (a.Item.SortText is { } left && b.Item.SortText is { } right)
+            {
+                var bySort = string.CompareOrdinal(left, right);
+                if (bySort != 0) return bySort;
+            }
             var byLength = a.Item.Label.Length.CompareTo(b.Item.Label.Length);
             return byLength != 0 ? byLength : string.CompareOrdinal(a.Item.Label, b.Item.Label);
         });
         return ranked;
+    }
+
+    /// <summary>Scored against the filter text where there is one; the characters drawn emphasized
+    /// are the label's, and none when the label itself does not match.</summary>
+    private static CompletionMatch? MatchItem(string pattern, CompletionItem item)
+    {
+        if (item.FilterText is not { } filter || filter == item.Label) return Match(pattern, item.Label);
+        if (Match(pattern, filter) is not { } scored) return null;
+        return Match(pattern, item.Label) is { } shown ? scored with { Positions = shown.Positions } : scored with { Positions = [] };
     }
 
     private static int[]? HumpPositions(string pattern, string label)

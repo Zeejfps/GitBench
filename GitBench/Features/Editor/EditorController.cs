@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using GitBench.Features.Diff;
 using GitBench.Input;
+using GitBench.Lsp;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 
@@ -86,15 +87,18 @@ internal sealed class EditorController
     private readonly IKeyMap _keys;
     private readonly ImeSession _ime;
     private readonly CompletionSession _completion = new();
+    private readonly CompletionFeed? _feed;
 
     private DiffTextPos _caret;
     private bool _hasCaret;
 
-    public EditorController(IEditorSurface surface, InputSystem input, IKeyMap keys)
+    /// <param name="feed">The language server's completions, or null where there is none to ask.</param>
+    public EditorController(IEditorSurface surface, InputSystem input, IKeyMap keys, CompletionFeed? feed = null)
     {
         _surface = surface;
         _keys = keys;
         _ime = new ImeSession(input);
+        _feed = feed;
     }
 
     /// <summary>Whether the surface has a file open for editing.</summary>
@@ -114,6 +118,7 @@ internal sealed class EditorController
     /// keystroke: focus leaving, another file opening.</summary>
     public void CloseCompletions()
     {
+        _feed?.Cancel();
         if (!_completion.IsOpen) return;
         _completion.Close();
         _surface.PresentCompletions(null);
@@ -185,7 +190,7 @@ internal sealed class EditorController
 
         Edit(editor, selection, editor.Session.Type(editor.SelectionOf(selection), e.Rune.ToString()));
         e.Consume();
-        CompleteTyped(editor, selection);
+        CompleteTyped(editor, selection, e.Rune);
     }
 
     /// <summary>Takes the composition the OS reports while a candidate is still being chosen. It is
@@ -410,6 +415,13 @@ internal sealed class EditorController
     {
         if (modifiers != InputModifiers.None) return false;
 
+        // A list still waiting on its server shows nothing, so it must not take Enter from the text.
+        if (_completion.Current is not { Items.Count: > 0 })
+        {
+            if (key == KeyboardKey.Escape) CloseCompletions();
+            return false;
+        }
+
         switch (key)
         {
             case KeyboardKey.UpArrow:
@@ -446,24 +458,28 @@ internal sealed class EditorController
         var current = editor.SelectionOf(selection);
         if (!current.IsEmpty) return;
 
-        if (!_completion.Invoke(editor.Document, current.Caret, () => Pool(editor, current.Caret)))
+        var serves = _feed?.Serves(editor.Path) == true;
+        if (!_completion.Invoke(editor.Document, current.Caret, () => Pool(editor, current.Caret), serves))
         {
             _surface.PresentCompletions(null);
             return;
         }
 
-        if (_completion.Current is { Items.Count: 1 })
+        // Only without a server: with one, the lone local match may not be the answer it brings.
+        if (!serves && _completion.Current is { Items.Count: 1 })
         {
             AcceptCompletion(editor, selection, wholeWord: false);
             return;
         }
 
+        if (serves) AskServer(editor, CompletionAsk.Invoked);
         _surface.PresentCompletions(_completion.Current);
     }
 
-    /// <summary>After a character lands: narrows an open list, or opens one on the first letter of
-    /// an identifier typed in code.</summary>
-    private void CompleteTyped(EditorBuffer editor, DiffSelectionModel selection)
+    /// <summary>After a character lands: narrows an open list, asking the server again where its
+    /// last answer said typing more would bring others; or opens one — on the first letter of an
+    /// identifier, or on a character the server asked to be told about.</summary>
+    private void CompleteTyped(EditorBuffer editor, DiffSelectionModel selection, Rune typed)
     {
         var current = editor.SelectionOf(selection);
         if (!current.IsEmpty)
@@ -473,16 +489,59 @@ internal sealed class EditorController
         }
 
         var caret = current.Caret;
-        if (!_completion.IsOpen)
+        var wasOpen = _completion.IsOpen;
+        if (wasOpen)
         {
-            var line = editor.Document.Line(caret.Line);
-            var options = editor.Session.Options;
-            if (LineContext.At(line, caret.Column.Value, options.Typing, options.LineComment) is not LineContext.Code)
-                return;
+            _completion.Follow(editor.Document, caret);
+            if (_completion.Current is { Server: ServerCompletionState.AnsweredIncomplete })
+                AskServer(editor, CompletionAsk.Narrowing);
         }
 
-        _completion.Typed(editor.Document, caret, () => Pool(editor, caret));
+        if (!_completion.IsOpen && InCode(editor, caret))
+        {
+            var serves = _feed?.Serves(editor.Path) == true;
+            if (serves && typed.IsBmp && _feed!.TriggersOn(editor.Path, (char)typed.Value))
+            {
+                _completion.OpenForMembers(caret);
+                AskServer(editor, new CompletionAsk.TypedTrigger((char)typed.Value));
+            }
+            else if (!wasOpen && _completion.Typed(editor.Document, caret, () => Pool(editor, caret), serves) && serves)
+            {
+                AskServer(editor, CompletionAsk.Invoked);
+            }
+        }
+
         _surface.PresentCompletions(_completion.Current);
+    }
+
+    /// <summary>Asks the server about the open list, and takes its answer into that list if it is
+    /// still open at the same place when the answer comes back.</summary>
+    private void AskServer(EditorBuffer editor, CompletionAsk ask)
+    {
+        if (_feed is null || _completion.Current is not { } list) return;
+
+        var caret = editor.SelectionOf(_surface.Selection).Caret;
+        var prefix = list.Prefix;
+        _completion.Asked();
+        _feed.Ask(editor.Path, caret, ask, answer =>
+        {
+            if (!ReferenceEquals(_surface.Editor, editor) || !_surface.Selection.IsActive) return;
+
+            var now = editor.SelectionOf(_surface.Selection).Caret;
+            _completion.Answered(list.Line, list.Start, answer.Items, answer.Incomplete, editor.Document, now);
+            // Typed past the question while it was out, and the answer admits it was partial.
+            if (_completion.Current is { Server: ServerCompletionState.AnsweredIncomplete } narrowed
+                && narrowed.Prefix != prefix)
+                AskServer(editor, CompletionAsk.Narrowing);
+            _surface.PresentCompletions(_completion.Current);
+        });
+    }
+
+    private static bool InCode(EditorBuffer editor, TextPosition caret)
+    {
+        var line = editor.Document.Line(caret.Line);
+        var options = editor.Session.Options;
+        return LineContext.At(line, caret.Column.Value, options.Typing, options.LineComment) is LineContext.Code;
     }
 
     private void FollowCompletions(EditorBuffer editor, DiffSelectionModel selection)
@@ -498,10 +557,11 @@ internal sealed class EditorController
     {
         var current = editor.SelectionOf(selection);
         var accepted = _completion.Accept(editor.Document, current.Caret, wholeWord);
+        _feed?.Cancel();
         _surface.PresentCompletions(null);
         if (accepted is not { } edit) return;
 
-        Edit(editor, selection, editor.Session.Complete(current, edit.Range, edit.Text));
+        Edit(editor, selection, editor.Session.Complete(current, edit.Range, edit.Text, edit.Additional));
     }
 
     private static IReadOnlyList<CompletionItem> Pool(EditorBuffer editor, TextPosition caret) =>

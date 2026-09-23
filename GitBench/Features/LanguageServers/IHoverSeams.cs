@@ -68,6 +68,20 @@ internal interface IReferenceSource
         string absolutePath, FileLine line, RawColumn column, CancellationToken ct);
 }
 
+internal interface ICompletionSource
+{
+    /// <summary>Whether a server may answer for this file. Optimistic while it has yet to launch:
+    /// the question costs one request, and the list falls back on the file's own words.</summary>
+    bool CanComplete(string absolutePath);
+
+    /// <summary>The characters that should open a list by themselves, or none where no running
+    /// server has said.</summary>
+    IReadOnlyList<char> CompletionTriggers(string absolutePath);
+
+    Task<CompletionReply> CompletionsAsync(
+        string absolutePath, FileLine line, RawColumn column, CompletionAsk ask, CancellationToken ct);
+}
+
 internal interface ISemanticTokenSource
 {
     /// <summary>Whether asking is worth it. Optimistic while the server has yet to launch, like

@@ -265,6 +265,29 @@ public static class LspRequests
             more.WriteEndObject();
         }), Lsp.References.Reader);
 
+    /// <summary>What could be typed at a position, and why it was asked.</summary>
+    public static LspRequest<LspCompletions> Completion(DocumentUri uri, LspPosition at, CompletionAsk ask) =>
+        new(LspMethod.Completion, writer => WriteTextDocumentPosition(writer, uri, at, more =>
+        {
+            more.WriteStartObject("context");
+            switch (ask)
+            {
+                case CompletionAsk.Requested:
+                    more.WriteNumber("triggerKind", 1);
+                    break;
+                case CompletionAsk.TypedTrigger(var character):
+                    more.WriteNumber("triggerKind", 2);
+                    more.WriteString("triggerCharacter", character.ToString());
+                    break;
+                case CompletionAsk.ForIncomplete:
+                    more.WriteNumber("triggerKind", 3);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(ask), ask, null);
+            }
+            more.WriteEndObject();
+        }), LspCompletions.Reader);
+
     /// <summary>What every name in a document is — a struct, an interface, a parameter — as the
     /// server's own compiler sees it, read against the legend the server announced.</summary>
     public static LspRequest<SemanticTokens> SemanticTokens(DocumentUri uri, SemanticTokensLegend legend) =>

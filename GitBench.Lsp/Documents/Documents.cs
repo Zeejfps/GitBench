@@ -133,6 +133,24 @@ public abstract record SemanticTokensReply
 }
 
 /// <summary>
+/// What a server offered to type at a position. Nobody to ask and an answer of nothing are kept
+/// apart: the list falls back on what the file itself offers only in the first case.
+/// </summary>
+public abstract record CompletionReply
+{
+    private CompletionReply() { }
+
+    /// <summary>No server for the file, one that does not complete, a refusal — or a file that
+    /// changed or left the screen before the answer arrived.</summary>
+    public sealed record Unavailable : CompletionReply
+    {
+        public static readonly Unavailable Instance = new();
+    }
+
+    public sealed record Answered(LspCompletions Completions) : CompletionReply;
+}
+
+/// <summary>
 /// One open document at a time: the handle the Files pane holds for the file on screen. Previewing
 /// a file opens it, previewing another closes it first, previewing it again with new text changes it
 /// in place where the server follows edits, and a file the preview truncated is never sent at all. Everything a server sends back is checked against the document that is open now,
@@ -306,6 +324,19 @@ public sealed class PreviewSession : IDisposable
         return response is LspResponse<SemanticTokens>.Ok(var tokens)
             ? new SemanticTokensReply.Answered(sent.Text, tokens)
             : SemanticTokensReply.Unavailable.Instance;
+    }
+
+    /// <summary>What could be typed at a position in the open file, for the text as it now stands.</summary>
+    public async Task<CompletionReply> CompletionAsync(LspPosition position, CompletionAsk ask)
+    {
+        if (Asking() is not (var uri, var version, var cancel)) return CompletionReply.Unavailable.Instance;
+
+        var response = await AskAsync(LspRequests.Completion(uri, position, ask), cancel).ConfigureAwait(false);
+        if (!StillShowing(uri, version)) return CompletionReply.Unavailable.Instance;
+
+        return response is LspResponse<LspCompletions>.Ok(var completions)
+            ? new CompletionReply.Answered(completions)
+            : CompletionReply.Unavailable.Instance;
     }
 
     public void Dispose()
