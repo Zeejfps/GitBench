@@ -144,7 +144,6 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         ISymbolExtractor extractor,
         RepoDocumentSaver saver,
         WorkingTreeSnapshots snapshots,
-        PairingTestCommands testCommands,
         AgentEndpoints endpoints,
         IServerEnvironment environment,
         ITerminalSessionStore terminals,
@@ -155,7 +154,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         (repo, goal, harness) =>
         {
             var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver);
-            var store = new PairingStore(goal, harness.Label, presentation, new GitPairingWorkspace(repo.Path, snapshots, testCommands), dispatcher, clock);
+            var store = new PairingStore(goal, harness.Label, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
             IAsyncDisposable driver = harness switch
             {
                 PairingHarness.Acp acp => AcpPairingDriver.Start(store, repo, acp.Harness, endpoints, environment, dispatcher),

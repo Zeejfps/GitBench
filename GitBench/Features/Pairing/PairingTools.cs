@@ -29,7 +29,6 @@ internal static class PairingTools
             new PairingStopTool(target),
             new PairingWaitTool(target),
             new PairingStateTool(target),
-            new PairingWriteTestTool(target),
             new PairingSayTool(target),
             new PairingShowTool(target),
             new PairingEndTool(target),
@@ -44,8 +43,6 @@ internal static class PairingTools
             PairingAction.Done => "done",
             PairingAction.Message => "message",
             PairingAction.Skipped => "skipped",
-            PairingAction.TestRan => "test_ran",
-            PairingAction.TestUndone => "test_undone",
             PairingAction.Ended => "ended",
             PairingAction.Pending => "pending",
             PairingAction.Cancelled => "cancelled",
@@ -64,8 +61,6 @@ internal static class PairingTools
                     DraftOutcome.AcceptedThenEdited => "accepted_then_edited",
                     _ => throw new ArgumentOutOfRangeException(nameof(action), done.Draft, "Unknown draft outcome."),
                 });
-                if (done.Test is { } test) WriteTest(writer, test);
-                if (done.Forced) writer.WriteBoolean("closed_red", true);
                 if (done.Problems.Count > 0)
                 {
                     writer.WriteStartArray("problems");
@@ -80,19 +75,6 @@ internal static class PairingTools
                 break;
             case PairingAction.Skipped:
                 break;
-            case PairingAction.TestRan ran:
-                WriteTest(writer, ran.Run);
-                writer.WriteString("meaning", ran.Run switch
-                {
-                    TestRun.Failed => "The test fails, as it should: the stop is open for the user. Call pairing_wait.",
-                    TestRun.Passed => "The test passed before any change, so it proves nothing, and it was taken back out. Write a test that fails, or change the stop.",
-                    TestRun.Unrunnable => "The test could not be run. The user can fix the test command; you can write the test again.",
-                    _ => throw new ArgumentOutOfRangeException(nameof(action), ran.Run, "Unknown run."),
-                });
-                break;
-            case PairingAction.TestUndone:
-                writer.WriteString("meaning", "The user took your test back out. Ask why in prose, or write a different one.");
-                break;
             case PairingAction.Ended:
             case PairingAction.Pending:
             case PairingAction.Cancelled:
@@ -101,32 +83,6 @@ internal static class PairingTools
                 throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action.");
         }
     });
-
-    internal static void WriteTest(Utf8JsonWriter writer, TestRun run)
-    {
-        writer.WritePropertyName("test");
-        writer.WriteStartObject();
-        switch (run)
-        {
-            case TestRun.Passed passed:
-                writer.WriteString("outcome", "passed");
-                writer.WriteString("output", passed.Output);
-                break;
-            case TestRun.Failed failed:
-                writer.WriteString("outcome", "failed");
-                writer.WriteNumber("exit_code", failed.ExitCode);
-                writer.WriteString("output", failed.Output);
-                break;
-            case TestRun.Unrunnable unrunnable:
-                writer.WriteString("outcome", "unrunnable");
-                writer.WriteString("reason", unrunnable.Reason);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(run), run, "Unknown test run.");
-        }
-
-        writer.WriteEndObject();
-    }
 
     internal static void WriteCaret(Utf8JsonWriter writer, EditorCaret caret, Func<string, string?> relative)
     {
@@ -246,12 +202,11 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
         + "the lines the code replaces (read them back and correct yourself with replace: true if "
         + "they are not what you meant); then call pairing_wait. Name the declaration, never a line "
         + "number: \"Class.Method\" or \"Method\". Fails while another stop is open, unless replace "
-        + "is true. kind \"test\" is for a stop that starts with a test you write with "
-        + "pairing_write_test; use \"edit\" otherwise.";
+        + "is true.";
 
     public string JsonSchema =>
         """
-        {"type":"object","properties":{"path":{"type":"string","description":"Repo-relative path of the file."},"symbol":{"type":"string","description":"The declaration to put the user on, e.g. Client.Fetch."},"after":{"type":"string","description":"For a declaration that doesn't exist yet: the declaration it goes after."},"title":{"type":"string","description":"One line: what to do here."},"reason":{"type":"string","description":"Markdown: why this is the next place, and what the change has to achieve. No code: the code goes in code."},"code":{"type":"string","description":"Your code for this stop: one block, exactly as it should read in the file, indented to fit."},"lines":{"type":"object","properties":{"from":{"type":"integer","minimum":1},"to":{"type":"integer","minimum":1}},"required":["from","to"],"additionalProperties":false,"description":"The lines code replaces, 1-based and inclusive, when not the whole declaration."},"after_line":{"type":"integer","minimum":1,"description":"The line code goes in after, when it replaces nothing."},"kind":{"type":"string","enum":["edit","test"],"description":"Default edit."},"replace":{"type":"boolean","description":"Take back the open stop and open this one instead. Default false."}},"required":["path","symbol","title","reason","code"],"additionalProperties":false}
+        {"type":"object","properties":{"path":{"type":"string","description":"Repo-relative path of the file."},"symbol":{"type":"string","description":"The declaration to put the user on, e.g. Client.Fetch."},"after":{"type":"string","description":"For a declaration that doesn't exist yet: the declaration it goes after."},"title":{"type":"string","description":"One line: what to do here."},"reason":{"type":"string","description":"Markdown: why this is the next place, and what the change has to achieve. No code: the code goes in code."},"code":{"type":"string","description":"Your code for this stop: one block, exactly as it should read in the file, indented to fit."},"lines":{"type":"object","properties":{"from":{"type":"integer","minimum":1},"to":{"type":"integer","minimum":1}},"required":["from","to"],"additionalProperties":false,"description":"The lines code replaces, 1-based and inclusive, when not the whole declaration."},"after_line":{"type":"integer","minimum":1,"description":"The line code goes in after, when it replaces nothing."},"replace":{"type":"boolean","description":"Take back the open stop and open this one instead. Default false."}},"required":["path","symbol","title","reason","code"],"additionalProperties":false}
         """;
 
     public bool IsWrite => false;
@@ -262,13 +217,6 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
             if (ToolJson.String(args, required) is not { Length: > 0 })
                 return Task.FromResult(ToolInvocation.Error($"{required} must be a non-empty string."));
 
-        var kind = ToolJson.String(args, "kind") switch
-        {
-            null or "edit" => PairingStopKind.Edit,
-            "test" => PairingStopKind.Test,
-            _ => (PairingStopKind?)null,
-        };
-        if (kind is not { } stopKind) return Task.FromResult(ToolInvocation.Error("kind must be \"edit\" or \"test\"."));
         if (ToolJson.String(args, "code") is not { } code) return Task.FromResult(ToolInvocation.Error("code must be a string."));
 
         DraftSpan span;
@@ -301,7 +249,7 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
 
         return target.OnStoreAsync(async store =>
         {
-            switch (await store.OpenStopAsync(stopTarget, title, reason, stopKind, new DraftRequest(code, span), replace, ct))
+            switch (await store.OpenStopAsync(stopTarget, title, reason, new DraftRequest(code, span), replace, ct))
             {
                 case StopOpening.Opened opened:
                     return ToolInvocation.Ok(Describe(opened.Stop, stopTarget.Path));
@@ -349,9 +297,7 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
                 throw new ArgumentOutOfRangeException(nameof(open), open.Draft.Place, "Unknown draft place.");
         }
 
-        writer.WriteString("next", open.Stop.Kind == PairingStopKind.Test
-            ? "Write the test with pairing_write_test, then call pairing_wait."
-            : "Call pairing_wait.");
+        writer.WriteString("next", "Call pairing_wait.");
     });
 }
 
@@ -362,7 +308,7 @@ internal sealed class PairingWaitTool(PairingTarget target) : IAssistantTool
 
     public string Description =>
         $"Waits for the user, for at most {(int)PairingStore.WaitTimeout.TotalSeconds} seconds. Returns "
-        + "{action:\"done\", stop, diff, test?} when they finish a stop — diff is exactly what they "
+        + "{action:\"done\", stop, diff, draft} when they finish a stop — diff is exactly what they "
         + "changed since the stop was shown, and draft says what they did with your code: "
         + "accepted_as_is, accepted_then_edited (read how they changed it: that is how they want it), "
         + "or not_accepted (they wrote it themselves); "
@@ -431,13 +377,6 @@ internal sealed class PairingStateTool(PairingTarget target) : IAssistantTool
                 writer.WriteString("title", open.Stop.Title);
                 writer.WriteString("path", open.Stop.Target.Path);
                 writer.WriteString("symbol", open.Stop.Target.Symbol);
-                writer.WriteString("kind", open.Stop.Kind == PairingStopKind.Test ? "test" : "edit");
-                if (open.Test is { } test)
-                {
-                    writer.WriteString("test_path", test.Path);
-                    writer.WriteString("test_name", test.Name);
-                }
-
                 writer.WriteEndObject();
             }
 
@@ -468,58 +407,6 @@ internal sealed class PairingEndTool(PairingTarget target) : IAssistantTool
         {
             store.End(summary);
             return ToolInvocation.Ok(ToolJson.Write(writer => writer.WriteBoolean("ok", true)));
-        }, ct);
-    }
-}
-
-/// <summary>Writes the open test stop's test: the one write the agent gets, to test files only.</summary>
-internal sealed class PairingWriteTestTool(PairingTarget target) : IAssistantTool
-{
-    public string Name => "pairing_write_test";
-
-    public string Description =>
-        "Writes one failing test for the open test stop (open it with pairing_stop kind \"test\" first). "
-        + "The only file write you get, and only to test files: a file under a test directory, or one "
-        + "named like FooTests.cs, foo.test.ts, foo_test.go or test_foo.py. content is the whole file. "
-        + "Build and runner configuration files are refused. The user reads the test and runs it with "
-        + "the repository's test command, filling {test} with test (one argument: no spaces, not "
-        + "starting with '-'); the result arrives through pairing_wait as {action:\"test_ran\", "
-        + "test:{outcome, output}}. It must fail: a test that passes before the user changes anything is "
-        + "taken back out. Suggest the command in command the first time (for example \"dotnet test "
-        + "--filter {test}\").";
-
-    public string JsonSchema =>
-        """
-        {"type":"object","properties":{"path":{"type":"string","description":"Repo-relative path of the test file."},"content":{"type":"string","description":"The whole file."},"test":{"type":"string","description":"The test to run: a name or filter the test command takes, e.g. FullyQualifiedName~CalculatorTests.Multiply."},"command":{"type":"string","description":"The test command you suggest, with {test} where the test goes. Used only if the repository has none yet."}},"required":["path","content","test"],"additionalProperties":false}
-        """;
-
-    // A write: MCP clients must not read it as safe to call unasked.
-    public bool IsWrite => true;
-
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        if (ToolJson.String(args, "path") is not { Length: > 0 } path) return Task.FromResult(ToolInvocation.Error("path must be a non-empty string."));
-        if (ToolJson.String(args, "content") is not { } content) return Task.FromResult(ToolInvocation.Error("content must be a string."));
-        if (ToolJson.String(args, "test") is not { Length: > 0 } test) return Task.FromResult(ToolInvocation.Error("test must be a non-empty string."));
-        var command = ToolJson.String(args, "command");
-        var relative = path.Trim().Replace('\\', '/').TrimStart('/');
-
-        return target.OnStoreAsync(async store =>
-        {
-            switch (await store.WriteTestAsync(relative, content, test.Trim(), command, ct))
-            {
-                case TestWriting.AwaitingUser:
-                    return ToolInvocation.Ok(ToolJson.Write(writer =>
-                    {
-                        writer.WriteString("written", relative);
-                        writer.WriteString("status", "awaiting_run");
-                        writer.WriteString("next", "The user reads the test and runs it. Call pairing_wait for the result.");
-                    }));
-                case TestWriting.Refused refused:
-                    return ToolInvocation.Error(refused.Message);
-                default:
-                    throw new InvalidOperationException("Unhandled test writing.");
-            }
         }, ct);
     }
 }
@@ -561,7 +448,7 @@ internal sealed class PairingShowTool(PairingTarget target) : IAssistantTool
 
     public string Description =>
         "Opens a file in DiffDino's editor for the user to look at, with the caret on a declaration "
-        + "or a line: the test you wrote, a caller, where something is used — whatever they asked to "
+        + "or a line: a test, a caller, where something is used — whatever they asked to "
         + "see. It is not a stop: the open stop stays open, and nothing is asked of the user. Name a "
         + "declaration in symbol, or pass line; with neither, the file opens at its top. Returns "
         + "where it landed; then answer with pairing_say or call pairing_wait.";

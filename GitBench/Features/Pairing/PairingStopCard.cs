@@ -25,8 +25,7 @@ internal sealed record PairingStopSlot : Widget
     {
         var store = Store;
         var actions = Actions;
-        // Keyed on the stop's number: the stop's test moving along must not rebuild the card and
-        // lose the note being typed.
+        // Keyed on the stop's number: a change within the stop doesn't rebuild the card.
         return new Switch<int>
         {
             Value = new Derived<int>(() => store.Stop.Value?.Stop.Number ?? 0),
@@ -40,8 +39,8 @@ internal sealed record PairingStopSlot : Widget
 }
 
 /// <summary>
-/// The stop the user is on, at the top of what the panel scrolls: its number and kind, the title,
-/// where it is — a click goes back there — and why, then its test and where the agent's code is.
+/// The stop the user is on, at the top of what the panel scrolls: its number, the title, where it
+/// is — a click goes back there — and why, then where the agent's code is.
 /// </summary>
 internal sealed record PairingStopCard : Widget
 {
@@ -76,26 +75,12 @@ internal sealed record PairingStopCard : Widget
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                new Row
+                                new Text
                                 {
-                                    Gap = Spacing.Sm,
-                                    CrossAxis = CrossAxisAlignment.Center,
-                                    Children =
-                                    [
-                                        new Text
-                                        {
-                                            Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingStopNumber(stop.Number)),
-                                            FontSize = FontSize.Caption,
-                                            Weight = FontWeight.Bold,
-                                            Color = Theme.Color(s => s.Palette.Accent),
-                                        },
-                                        new Text
-                                        {
-                                            Value = stop.Kind == PairingStopKind.Test ? L.T(s => s.PairingKindTest) : L.T(s => s.PairingKindEdit),
-                                            FontSize = FontSize.Caption,
-                                            Color = Theme.Color(s => s.Palette.TextSecondary),
-                                        },
-                                    ],
+                                    Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingStopNumber(stop.Number)),
+                                    FontSize = FontSize.Caption,
+                                    Weight = FontWeight.Bold,
+                                    Color = Theme.Color(s => s.Palette.Accent),
                                 },
                                 new Text
                                 {
@@ -126,13 +111,6 @@ internal sealed record PairingStopCard : Widget
                                 .WithTooltip(L.T(s => s.PairingGoToStop))
                                 .WithController<KbmController>(),
                                 new MarkdownText { Text = new State<string>(stop.Reason) },
-                                stop.Kind == PairingStopKind.Test
-                                    ? new Switch<StopTest?>
-                                    {
-                                        Value = new Derived<StopTest?>(() => store.Stop.Value?.Test),
-                                        Case = test => new PairingTestSection { Store = store, Test = test },
-                                    }
-                                    : Empty.Widget,
                                 new PairingDraftNote { Store = store, Draft = open.Draft },
                             ],
                         },
@@ -182,7 +160,6 @@ internal sealed record PairingStopActions : Widget
         var keys = ctx.KeyMap();
 
         var idle = new Derived<bool>(() => store.Activity.Value == StopActivity.Idle);
-        var canFinish = new Derived<bool>(() => idle.Value && store.Stop.Value is { } open && PairingStore.CanFinish(open));
         var accepted = new Derived<bool>(() => store.Stop.Value?.DraftState is DraftState.Taken);
 
         void AcceptAndNext() => _ = store.AcceptAndNextAsync();
@@ -195,7 +172,7 @@ internal sealed record PairingStopActions : Widget
         {
             Id = NextId,
             Style = primary ? ButtonStyle.Filled(static s => s.Palette.Accent) : ButtonStyle.Outline(static s => s.Palette.TextBody),
-            Command = new Command(Next, canFinish),
+            Command = new Command(Next, idle),
             Children = [new ButtonLabel { Value = L.T(s => s.PairingNext) }],
         }
         .WithTooltip(Tooltip(s => s.PairingNextTooltip, KeyCommand.PairingNext))
@@ -223,7 +200,6 @@ internal sealed record PairingStopActions : Widget
                                     Value = Prop.Bind<string?>(() => store.Activity.Value switch
                                     {
                                         StopActivity.Checking => loc.Strings.Value.PairingChecking,
-                                        StopActivity.RunningTest => loc.Strings.Value.PairingRunningTest,
                                         StopActivity.Accepting => loc.Strings.Value.PairingAccepting,
                                         StopActivity.Idle => null,
                                         _ => throw new InvalidOperationException("Unknown activity."),
@@ -253,7 +229,7 @@ internal sealed record PairingStopActions : Widget
                                                         {
                                                             Id = AcceptAndNextId,
                                                             Style = ButtonStyle.Filled(static s => s.Palette.Accent),
-                                                            Command = new Command(AcceptAndNext, canFinish),
+                                                            Command = new Command(AcceptAndNext, idle),
                                                             Children = [new ButtonLabel { Value = L.T(s => s.PairingAcceptAndNext) }],
                                                         }
                                                         .WithTooltip(Tooltip(s => s.PairingAcceptAndNextTooltip, KeyCommand.PairingAcceptAndNext))
@@ -292,7 +268,6 @@ internal sealed record PairingStopActions : Widget
         {
             var gates = new SubscriptionGroup();
             gates.Add(idle);
-            gates.Add(canFinish);
             gates.Add(accepted);
             return gates;
         });

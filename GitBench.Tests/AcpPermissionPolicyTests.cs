@@ -5,7 +5,7 @@ using Xunit;
 namespace GitBench.Tests;
 
 /// <summary>The ACP write guard, over permission requests as the three adapters really send them
-/// (captured by the Step 1 spike): writes and shell refused, reads allowed, the app's own MCP tools
+/// (captured by the Step 1 spike): file writes refused, reads and shell allowed, the app's own MCP tools
 /// allowed however each adapter names them, anything else left to the user.</summary>
 public sealed class AcpPermissionPolicyTests
 {
@@ -39,12 +39,12 @@ public sealed class AcpPermissionPolicyTests
     }
 
     [Fact]
-    public void ClaudeShell_IsRejected()
+    public void ClaudeShell_IsAllowedOnce_SoTheAgentRunsTheTests()
     {
         var decision = Decide("""
-            {"sessionId":"s","toolCall":{"toolCallId":"t1","title":"git commit","kind":"execute"},"options":
+            {"sessionId":"s","toolCall":{"toolCallId":"t1","title":"dotnet test","kind":"execute"},"options":
             """ + ClaudeOptions + "}");
-        AssertSelected(decision, "reject", AcpPermissionVerdict.Rejected);
+        AssertSelected(decision, "allow-once", AcpPermissionVerdict.Allowed);
     }
 
     [Fact]
@@ -78,13 +78,13 @@ public sealed class AcpPermissionPolicyTests
     }
 
     [Fact]
-    public void CodexMcpApproval_ForAnotherServer_IsJudgedByKind()
+    public void CodexMcpApproval_ForAnotherServer_IsLeftToTheUser_NotTakenForAShellCommand()
     {
         var decision = Decide("""
             {"sessionId":"s","toolCall":{"toolCallId":"exec-1","kind":"execute","status":"pending"},"_meta":{"is_mcp_tool_approval":true},
              "options":[{"optionId":"allow_once","name":"Allow","kind":"allow_once"},{"optionId":"cancel","name":"Cancel","kind":"reject_once"}]}
             """, new Dictionary<string, string> { ["exec-1"] = "filesystem" });
-        AssertSelected(decision, "cancel", AcpPermissionVerdict.Rejected);
+        Assert.IsType<AcpPermissionDecision.AskUser>(decision);
     }
 
     [Fact]

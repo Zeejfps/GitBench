@@ -62,9 +62,10 @@ internal enum AcpPermissionVerdict
 }
 
 /// <summary>
-/// The write guard for an agent run over ACP: reads are allowed, writes and shell are refused, and
-/// the app's own MCP tools are allowed each time they are asked about. The same rules for every
-/// harness, which is why the guard lives in the client rather than in each CLI's flags.
+/// The write guard for an agent run over ACP: reads and shell commands are allowed — the agent runs
+/// the tests itself — file edits are refused, and the app's own MCP tools are allowed each time they
+/// are asked about. The same rules for every harness, which is why the guard lives in the client
+/// rather than in each CLI's flags.
 /// </summary>
 internal static class AcpPermissionPolicy
 {
@@ -76,11 +77,13 @@ internal static class AcpPermissionPolicy
         if (request.McpServer is { } server && string.Equals(server, ownServer, StringComparison.OrdinalIgnoreCase))
             return Pick(request, AcpPermissionVerdict.Allowed, AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways);
 
+        // Codex files another server's MCP tool calls as execute: only a shell command is the agent's own.
         return request.Kind switch
         {
-            AcpToolKind.Read or AcpToolKind.Search or AcpToolKind.Think or AcpToolKind.Fetch =>
+            AcpToolKind.Execute when request.McpServer is not null => new AcpPermissionDecision.AskUser(),
+            AcpToolKind.Read or AcpToolKind.Search or AcpToolKind.Think or AcpToolKind.Fetch or AcpToolKind.Execute =>
                 Pick(request, AcpPermissionVerdict.Allowed, AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways),
-            AcpToolKind.Edit or AcpToolKind.Delete or AcpToolKind.Move or AcpToolKind.Execute =>
+            AcpToolKind.Edit or AcpToolKind.Delete or AcpToolKind.Move =>
                 Pick(request, AcpPermissionVerdict.Rejected, AcpPermissionOptionKind.RejectOnce, AcpPermissionOptionKind.RejectAlways),
             AcpToolKind.SwitchMode or AcpToolKind.Other => new AcpPermissionDecision.AskUser(),
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, "Unknown tool kind."),

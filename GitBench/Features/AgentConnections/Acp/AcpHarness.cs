@@ -19,7 +19,7 @@ internal sealed record AcpHarness(
 {
     public static readonly AcpHarness ClaudeCode = new(
         new AcpHarnessId("claude"), "Claude Code", "npx", ["-y", "@agentclientprotocol/claude-agent-acp"], "default",
-        """{"claudeCode":{"options":{"disallowedTools":["Edit","Write","MultiEdit","NotebookEdit","Bash","PowerShell"]}}}""");
+        """{"claudeCode":{"options":{"disallowedTools":["Edit","Write","MultiEdit","NotebookEdit"]}}}""");
 
     public static readonly AcpHarness Codex = new(
         new AcpHarnessId("codex"), "Codex", "npx", ["-y", "@agentclientprotocol/codex-acp"], "read-only");

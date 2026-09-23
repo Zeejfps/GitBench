@@ -102,24 +102,8 @@ internal sealed class ScriptedWorkspace : IPairingWorkspace
         Task.Run<SnapshotResult<string>>(() => new SnapshotResult<string>.Ok(
             from == to ? string.Empty : Diffs.GetValueOrDefault((from.TreeId, to.TreeId), $"diff {from.TreeId}..{to.TreeId}")));
 
-    public TestCommand? TestCommand { get; set; }
-
-    public void SaveTestCommand(TestCommand command) => TestCommand = command;
-
-    /// <summary>Test files as the fake working tree holds them.</summary>
+    /// <summary>Files as the fake working tree holds them.</summary>
     public Dictionary<string, string> Files { get; } = new();
-
-    /// <summary>What the next runs answer, in order; the last one repeats.</summary>
-    public Queue<TestRun> Runs { get; } = new();
-
-    public List<string> RunNames { get; } = new();
-
-    public Task<TestWrite> WriteTestAsync(string relativePath, string content, CancellationToken ct) => Task.Run<TestWrite>(() =>
-    {
-        var prior = Files.GetValueOrDefault(relativePath);
-        Files[relativePath] = content;
-        return new TestWrite.Written(new TestFileUndo(relativePath, prior is null ? null : System.Text.Encoding.UTF8.GetBytes(prior)));
-    });
 
     public Task<FileCreation> EnsureEmptyFileAsync(string relativePath, CancellationToken ct) => Task.Run<FileCreation>(() =>
     {
@@ -139,18 +123,6 @@ internal sealed class ScriptedWorkspace : IPairingWorkspace
                 Files.Remove(relativePath);
         return Task.CompletedTask;
     }
-
-    public Task RestoreAsync(TestFileUndo undo, CancellationToken ct) => Task.Run(() =>
-    {
-        if (undo.PriorContent is { } prior) Files[undo.RelativePath] = System.Text.Encoding.UTF8.GetString(prior);
-        else Files.Remove(undo.RelativePath);
-    });
-
-    public Task<TestRun> RunTestAsync(TestCommand command, string name, CancellationToken ct) => Task.Run(() =>
-    {
-        lock (RunNames) RunNames.Add(name);
-        return Runs.Count > 1 ? Runs.Dequeue() : Runs.Peek();
-    });
 }
 
 /// <summary>No repository has a pairing session.</summary>

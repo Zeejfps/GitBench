@@ -6,21 +6,13 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>What the user does at a stop: change the code, or first see a test the agent wrote go
-/// red and then make it pass.</summary>
-internal enum PairingStopKind
-{
-    Edit,
-    Test,
-}
-
 /// <summary>Where a stop sends the user: a repo-relative file and a declaration in it, named rather
 /// than numbered so it survives edits. A declaration that doesn't exist yet names the one it goes
 /// after.</summary>
 internal sealed record StopTarget(string Path, string Symbol, string? After);
 
 /// <summary>One stop on the loop, numbered from 1 in the order the agent sent them.</summary>
-internal sealed record PairingStop(int Number, StopTarget Target, string Title, string Reason, PairingStopKind Kind);
+internal sealed record PairingStop(int Number, StopTarget Target, string Title, string Reason);
 
 /// <summary>A coarse step of the roadmap, as the agent sent it.</summary>
 internal sealed record Milestone(string Title, bool Done);
@@ -89,17 +81,6 @@ internal abstract record StopPlacement
     public sealed record Missed(StopMiss Miss) : StopPlacement;
 }
 
-/// <summary>What happened when a test the agent wrote was run.</summary>
-internal abstract record TestRun
-{
-    public sealed record Passed(string Output) : TestRun;
-
-    public sealed record Failed(int ExitCode, string Output) : TestRun;
-
-    /// <summary>The command could not be run at all.</summary>
-    public sealed record Unrunnable(string Reason) : TestRun;
-}
-
 /// <summary>Where the agent asked its code for a stop to go, before it is checked against the file.</summary>
 internal abstract record DraftSpan
 {
@@ -150,39 +131,13 @@ internal enum DraftOutcome
 /// <summary>The stop the user is on, and what it has come to. <paramref name="CreatedFile"/>: the
 /// empty file the stop created, taken back out if the user moves on without writing anything into it.</summary>
 internal sealed record OpenStop(
-    PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test, StopDraft Draft, DraftState DraftState, string? CreatedFile);
-
-/// <summary>A test stop's test: the file the agent wrote, how to put it back, the test to run,
-/// and where it stands.</summary>
-internal sealed record StopTest(string Path, string Name, TestFileUndo Undo, TestState State);
-
-/// <summary>What a test file held before the agent wrote it: its bytes, or nothing for a new file.</summary>
-internal sealed record TestFileUndo(string RelativePath, byte[]? PriorContent);
-
-/// <summary>Where a stop's test stands.</summary>
-internal abstract record TestState
-{
-    /// <summary>Written and not yet run. The user runs it — the test is code the agent wrote, and
-    /// running it is the user's call — with the repository's command, or the agent's suggestion
-    /// the first time.</summary>
-    public sealed record AwaitingRun(string Command) : TestState;
-
-    public sealed record Running : TestState;
-
-    /// <summary>The test fails. <paramref name="AfterDone"/>: it still failed when the user pressed
-    /// Done, so the card offers to close it red.</summary>
-    public sealed record Red(TestRun.Failed Run, bool AfterDone) : TestState;
-
-    /// <summary>The command could not run the test.</summary>
-    public sealed record Unrunnable(string Reason) : TestState;
-}
+    PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopDraft Draft, DraftState DraftState, string? CreatedFile);
 
 /// <summary>What the stop card is busy with, if anything.</summary>
 internal enum StopActivity
 {
     Idle,
     Checking,
-    RunningTest,
     Accepting,
 }
 
@@ -191,10 +146,8 @@ internal enum StopActivity
 internal abstract record PairingAction(int Stop)
 {
     /// <summary>The user finished the stop: their diff since it was shown, what they did with the
-    /// agent's code, and for a test stop the run that closed it. Anything they wanted to say about it
-    /// they said in the conversation.</summary>
-    public sealed record Done(int Stop, string Diff, DraftOutcome Draft, TestRun? Test, bool Forced, IReadOnlyList<string> Problems)
-        : PairingAction(Stop);
+    /// agent's code. Anything they wanted to say about it they said in the conversation.</summary>
+    public sealed record Done(int Stop, string Diff, DraftOutcome Draft, IReadOnlyList<string> Problems) : PairingAction(Stop);
 
     /// <summary>The user said something to the agent — a question, or what they did instead — with
     /// where their caret was.</summary>
@@ -202,13 +155,6 @@ internal abstract record PairingAction(int Stop)
 
     /// <summary>The user passed on the stop without changing anything for it.</summary>
     public sealed record Skipped(int Stop) : PairingAction(Stop);
-
-    /// <summary>The test written for the stop was run before the user wrote anything. Red opens
-    /// the stop; green means the test proves nothing, and it was taken back out.</summary>
-    public sealed record TestRan(int Stop, TestRun Run) : PairingAction(Stop);
-
-    /// <summary>The user took the stop's test back out.</summary>
-    public sealed record TestUndone(int Stop) : PairingAction(Stop);
 
     /// <summary>The user ended the session.</summary>
     public sealed record Ended(int Stop) : PairingAction(Stop);

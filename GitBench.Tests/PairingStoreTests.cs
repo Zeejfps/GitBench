@@ -36,7 +36,7 @@ public sealed class PairingStoreTests : IDisposable
     private OpenStop Open(string symbol = "Fetch", bool replace = false, DraftRequest? draft = null)
     {
         var opening = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", symbol, null), "Retry " + symbol, "Because.", PairingStopKind.Edit, draft ?? Draft, replace, CancellationToken.None),
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", symbol, null), "Retry " + symbol, "Because.", draft ?? Draft, replace, CancellationToken.None),
             "the stop to open");
         return Assert.IsType<StopOpening.Opened>(opening).Stop;
     }
@@ -64,7 +64,7 @@ public sealed class PairingStoreTests : IDisposable
     public void TheAgentsCode_OnLinesTheFileDoesNotHave_IsRefused()
     {
         var opening = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Fetch", null), "t", "r", PairingStopKind.Edit,
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Fetch", null), "t", "r",
                 new DraftRequest("x", new DraftSpan.Lines(38, 45)), false, CancellationToken.None),
             "the refusal");
 
@@ -78,7 +78,7 @@ public sealed class PairingStoreTests : IDisposable
         Open();
 
         var second = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Send", null), "t", "r", PairingStopKind.Edit, Draft, false, CancellationToken.None),
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Send", null), "t", "r", Draft, false, CancellationToken.None),
             "the refusal");
 
         var refused = Assert.IsType<StopOpening.Refused>(second);
@@ -103,7 +103,7 @@ public sealed class PairingStoreTests : IDisposable
         _presentation.Answer = t => new StopPlacement.Missed(new StopMiss.NoSuchSymbol(t.Path, t.Symbol, ["Client", "Client.Send"]));
 
         var opening = Await(
-            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Nope", null), "t", "r", PairingStopKind.Edit, Draft, false, CancellationToken.None),
+            _store.OpenStopAsync(new StopTarget("src/Client.cs", "Nope", null), "t", "r", Draft, false, CancellationToken.None),
             "the refusal");
 
         var refused = Assert.IsType<StopOpening.Refused>(opening);

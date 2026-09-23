@@ -57,34 +57,12 @@ internal interface IPairingWorkspace
 
     Task<SnapshotResult<string>> DiffAsync(TreeSnapshot from, TreeSnapshot to, CancellationToken ct);
 
-    /// <summary>How tests run in the repository, or null until the user has said. UI thread.</summary>
-    TestCommand? TestCommand { get; }
-
-    /// <summary>Keeps the repository's test command. UI thread.</summary>
-    void SaveTestCommand(TestCommand command);
-
-    /// <summary>Writes a test file, remembering what it held.</summary>
-    Task<TestWrite> WriteTestAsync(string relativePath, string content, CancellationToken ct);
-
     /// <summary>Makes sure a new file's stop has a file to open: creates it empty, or finds it
     /// already there with nothing in it. Refused when it has content.</summary>
     Task<FileCreation> EnsureEmptyFileAsync(string relativePath, CancellationToken ct);
 
     /// <summary>Deletes a file a stop created, unless something was written into it.</summary>
     Task RemoveIfEmptyAsync(string relativePath, CancellationToken ct);
-
-    /// <summary>Puts a test file back the way it was before the agent wrote it.</summary>
-    Task RestoreAsync(TestFileUndo undo, CancellationToken ct);
-
-    Task<TestRun> RunTestAsync(TestCommand command, string name, CancellationToken ct);
-}
-
-/// <summary>How writing a test file went.</summary>
-internal abstract record TestWrite
-{
-    public sealed record Written(TestFileUndo Undo) : TestWrite;
-
-    public sealed record Refused(string Reason) : TestWrite;
 }
 
 /// <summary>How making sure of an empty file went.</summary>
@@ -95,15 +73,6 @@ internal abstract record FileCreation
     public sealed record AlreadyEmpty : FileCreation;
 
     public sealed record Refused(string Reason) : FileCreation;
-}
-
-/// <summary>What <c>pairing_write_test</c> came to.</summary>
-internal abstract record TestWriting
-{
-    /// <summary>Written; it runs when the user runs it, and the result arrives through the wait.</summary>
-    public sealed record AwaitingUser : TestWriting;
-
-    public sealed record Refused(string Message) : TestWriting;
 }
 
 /// <summary>How a request to open a stop came out.</summary>
@@ -158,8 +127,8 @@ internal sealed class PairingStore : IDisposable
     private IReadOnlyList<Milestone> _milestones = Array.Empty<Milestone>();
     private int _stopsSent;
 
-    // An agent call is changing the stop — opening one, or writing its test — across awaits; a
-    // second one meanwhile would work from the state the first is about to replace.
+    // An agent call is opening a stop across awaits; a second one meanwhile would work from the
+    // state the first is about to replace.
     private bool _changingStop;
     private Waiter? _waiter;
     private readonly CancellationTokenSource _lifetime = new();
@@ -211,9 +180,6 @@ internal sealed class PairingStore : IDisposable
     /// <summary>The repository-relative form of an absolute path, or null outside it. Any thread.</summary>
     public string? Relative(string absolutePath) => _presentation.Relative(absolutePath);
 
-    /// <summary>The repository's test command as the user last gave it, or null.</summary>
-    public string? TestCommandTemplate => _workspace.TestCommand?.Template;
-
     /// <summary>Whether the session can still take moves from either side.</summary>
     public bool IsLive => _phase.Value is PairingPhase.Starting or PairingPhase.Running;
 
@@ -236,7 +202,7 @@ internal sealed class PairingStore : IDisposable
     /// <summary>Opens a stop: places it and the agent's code for it in the editor, and captures the
     /// working tree it starts from. Refused while another stop is open, unless <paramref name="replace"/>.</summary>
     public async Task<StopOpening> OpenStopAsync(
-        StopTarget target, string title, string reason, PairingStopKind kind, DraftRequest draft, bool replace, CancellationToken ct)
+        StopTarget target, string title, string reason, DraftRequest draft, bool replace, CancellationToken ct)
     {
         ThrowIfDisposed();
         if (!IsLive) return new StopOpening.Refused("The session has ended.");
@@ -251,7 +217,7 @@ internal sealed class PairingStore : IDisposable
         _changingStop = true;
         try
         {
-            return await OpenStopLockedAsync(target, title, reason, kind, draft, replace, ct);
+            return await OpenStopLockedAsync(target, title, reason, draft, replace, ct);
         }
         finally
         {
@@ -261,7 +227,7 @@ internal sealed class PairingStore : IDisposable
     }
 
     private async Task<StopOpening> OpenStopLockedAsync(
-        StopTarget target, string title, string reason, PairingStopKind kind, DraftRequest request, bool replace, CancellationToken ct)
+        StopTarget target, string title, string reason, DraftRequest request, bool replace, CancellationToken ct)
     {
         StopLocation location;
         switch (await _presentation.LocateAsync(target, ct))
@@ -337,8 +303,8 @@ internal sealed class PairingStore : IDisposable
         }
 
         if (_stop.Value?.CreatedFile is { } previous && previous != created) TakeBack(previous);
-        var stop = new PairingStop(++_stopsSent, target, title, reason, kind);
-        var opened = new OpenStop(stop, location, baseline, Test: null, draft, new DraftState.Offered(), created);
+        var stop = new PairingStop(++_stopsSent, target, title, reason);
+        var opened = new OpenStop(stop, location, baseline, draft, new DraftState.Offered(), created);
         _stop.Value = opened;
         _presentation.RevealDraft(location, draft);
         _presentation.ShowDraft(location, draft, new SuggestionActions(() => _ = AcceptAsync(), () => _ = AcceptAndNextAsync()));
@@ -450,63 +416,20 @@ internal sealed class PairingStore : IDisposable
     // ── the user's side ──────────────────────────────────────────────────────────────────────
 
     /// <summary>Finishes the open stop: saves what was typed and hands the agent the diff since
-    /// the stop was shown. A test stop reruns its test first and only closes green;
-    /// still red, the card offers <see cref="CloseRedAsync"/>.</summary>
+    /// the stop was shown.</summary>
     public async Task DoneAsync()
     {
         if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return;
-        if (open.Stop.Kind == PairingStopKind.Edit)
-        {
-            _activity.Value = StopActivity.Checking;
-            await CloseAsync(open.Stop.Number, test: null, forced: false);
-            return;
-        }
-
-        if (open.Test is not { State: TestState.Red } test) return;
-        _activity.Value = StopActivity.RunningTest;
-        var saveProblems = _presentation.SaveUnsaved();
-        var run = await RunAsync(test.Name);
-        await OnUi();
-        _activity.Value = StopActivity.Idle;
-        if (!StillOn(open.Stop.Number)) return;
-        switch (run)
-        {
-            case TestRun.Passed:
-                _activity.Value = StopActivity.Checking;
-                await CloseAsync(open.Stop.Number, run, forced: false, saveProblems);
-                break;
-            case TestRun.Failed failed:
-                SetTest(test with { State = new TestState.Red(failed, AfterDone: true) });
-                break;
-            case TestRun.Unrunnable unrunnable:
-                SetTest(test with { State = new TestState.Unrunnable(unrunnable.Reason) });
-                break;
-            default:
-                throw new InvalidOperationException("Unhandled test run.");
-        }
-    }
-
-    /// <summary>Closes a test stop whose test is still red, and tells the agent so.</summary>
-    public async Task CloseRedAsync()
-    {
-        if (_disposed || _stop.Value is not { Test.State: TestState.Red { AfterDone: true } red } open) return;
-        if (_activity.Value != StopActivity.Idle) return;
         _activity.Value = StopActivity.Checking;
-        await CloseAsync(open.Stop.Number, red.Run, forced: true);
+        await CloseAsync(open.Stop.Number);
     }
 
     /// <summary>Puts the agent's code for the open stop into the file as one undo step, and stays on
-    /// the stop: the user may still change it before Next. On a test stop, only once the test is red.
-    /// Answers whether the code is in.</summary>
+    /// the stop: the user may still change it before Next. Answers whether the code is in.</summary>
     public async Task<bool> AcceptAsync()
     {
         if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return false;
         if (open.DraftState is DraftState.Taken) return true;
-        if (!CanFinish(open))
-        {
-            AddNotice("Run the test and see it fail first; then the code can go in.", NoticeTone.Info);
-            return false;
-        }
 
         _activity.Value = StopActivity.Accepting;
         _presentation.RevealDraft(open.Location, open.Draft);
@@ -534,15 +457,10 @@ internal sealed class PairingStore : IDisposable
         if (await AcceptAsync()) await DoneAsync();
     }
 
-    /// <summary>Whether Done can close the stop now: an edit stop any time, a test stop once its
-    /// test has gone red.</summary>
-    public static bool CanFinish(OpenStop open) =>
-        open.Stop.Kind == PairingStopKind.Edit || open.Test?.State is TestState.Red;
-
     // Saves, takes the diff since the stop's baseline, and hands it over as Done.
-    private async Task CloseAsync(int number, TestRun? test, bool forced, IReadOnlyList<string>? saved = null)
+    private async Task CloseAsync(int number)
     {
-        var problems = new List<string>(saved ?? _presentation.SaveUnsaved());
+        var problems = new List<string>(_presentation.SaveUnsaved());
         var baseline = _stop.Value!.Baseline;
 
         var diff = string.Empty;
@@ -595,7 +513,7 @@ internal sealed class PairingStore : IDisposable
         _stop.Value = null;
         _presentation.ClearDraft();
         ClearConversation();
-        Deliver(new PairingAction.Done(number, diff, outcome, test, forced, problems));
+        Deliver(new PairingAction.Done(number, diff, outcome, problems));
     }
 
     // Accepted code the user changed afterwards is worth the agent's attention: the diff shows how
@@ -606,158 +524,6 @@ internal sealed class PairingStore : IDisposable
         if (taken.FileText is null) return DraftOutcome.AcceptedAsIs;
         var now = await _presentation.ReadTextAsync(open.Location);
         return now is null || now == taken.FileText ? DraftOutcome.AcceptedAsIs : DraftOutcome.AcceptedThenEdited;
-    }
-
-    // ── test stops ───────────────────────────────────────────────────────────────────────────
-
-    /// <summary>Writes the open test stop's test — the one write an agent gets — for the user to
-    /// look at and run. A test already written for the stop is taken back out first.</summary>
-    public async Task<TestWriting> WriteTestAsync(string path, string content, string name, string? suggestion, CancellationToken ct)
-    {
-        ThrowIfDisposed();
-        if (_stop.Value is not { } open)
-            return new TestWriting.Refused("No stop is open. Open a test stop with pairing_stop kind \"test\" first.");
-        if (open.Stop.Kind != PairingStopKind.Test)
-            return new TestWriting.Refused($"Stop {open.Stop.Number} is an edit stop; tests are written for test stops only.");
-        if (_activity.Value != StopActivity.Idle) return new TestWriting.Refused("The stop's test is running right now. Call pairing_wait.");
-        if (!TestFiles.IsTestPath(path))
-            return new TestWriting.Refused(
-                $"{path} is not a test file. Only test files can be written: a file under a test directory, or one named like FooTests.cs, foo.test.ts or test_foo.py.");
-        if (!TestCommand.IsPlainName(name))
-            return new TestWriting.Refused($"'{name}' can't be passed to the test command. Use a plain test name or filter: no spaces, and not starting with '-'.");
-        if (_changingStop) return new TestWriting.Refused("Another pairing call is still changing the stop. Wait for it to return.");
-
-        _changingStop = true;
-        try
-        {
-            return await WriteTestLockedAsync(open, path, content, name, suggestion, ct);
-        }
-        finally
-        {
-            await OnUi();
-            _changingStop = false;
-        }
-    }
-
-    private async Task<TestWriting> WriteTestLockedAsync(
-        OpenStop open, string path, string content, string name, string? suggestion, CancellationToken ct)
-    {
-        var number = open.Stop.Number;
-        if (open.Test is { } previous)
-        {
-            await _workspace.RestoreAsync(previous.Undo, ct);
-            await OnUi();
-            if (!StillOn(number)) return new TestWriting.Refused("The stop closed.");
-            SetTest(null);
-        }
-
-        TestFileUndo undo;
-        switch (await _workspace.WriteTestAsync(path, content, ct))
-        {
-            case TestWrite.Written written:
-                undo = written.Undo;
-                break;
-            case TestWrite.Refused refused:
-                await OnUi();
-                return new TestWriting.Refused(refused.Reason);
-            default:
-                throw new InvalidOperationException("Unhandled test write.");
-        }
-
-        await OnUi();
-        if (!StillOn(number))
-        {
-            await _workspace.RestoreAsync(undo, CancellationToken.None);
-            return new TestWriting.Refused("The stop closed.");
-        }
-
-        var command = _workspace.TestCommand?.Template ?? suggestion ?? string.Empty;
-        SetTest(new StopTest(path, name, undo, new TestState.AwaitingRun(command)));
-        return new TestWriting.AwaitingUser();
-    }
-
-    /// <summary>The user runs the stop's test with this command, which is kept for the repository.</summary>
-    public void RunTest(string template)
-    {
-        if (_disposed || string.IsNullOrWhiteSpace(template)) return;
-        _workspace.SaveTestCommand(new TestCommand(template.Trim()));
-        if (_stop.Value is not { Test: { State: TestState.AwaitingRun or TestState.Unrunnable } test } open) return;
-        if (_activity.Value != StopActivity.Idle) return;
-        if (_workspace.TestCommand?.For(test.Name) is null)
-        {
-            SetTest(test with { State = new TestState.Unrunnable($"'{test.Name}' can't be passed to the test command.") });
-            return;
-        }
-
-        SetTest(test with { State = new TestState.Running() });
-        _ = RunRedAsync(open.Stop.Number);
-    }
-
-    /// <summary>Takes the stop's test back out of the working tree; the agent is told.</summary>
-    public async Task UndoTestAsync()
-    {
-        if (_disposed || _stop.Value is not { Test: { } test } open || _activity.Value != StopActivity.Idle) return;
-        if (_changingStop) return;
-        await _workspace.RestoreAsync(test.Undo, _lifetime.Token);
-        await OnUi();
-        if (!StillOn(open.Stop.Number)) return;
-        SetTest(null);
-        Deliver(new PairingAction.TestUndone(open.Stop.Number));
-    }
-
-    // Runs a freshly written test, which must fail: red opens the stop for the user with the
-    // baseline moved past the test, green takes the test back out as proving nothing.
-    private async Task RunRedAsync(int number)
-    {
-        if (_stop.Value?.Test is not { } test) return;
-        _activity.Value = StopActivity.RunningTest;
-        var run = await RunAsync(test.Name);
-        await OnUi();
-        _activity.Value = StopActivity.Idle;
-        if (!StillOn(number)) return;
-        switch (run)
-        {
-            case TestRun.Failed failed:
-                var baseline = await _workspace.CaptureAsync(_lifetime.Token);
-                await OnUi();
-                if (!StillOn(number)) return;
-                if (baseline is SnapshotResult<TreeSnapshot>.Ok moved) _stop.Value = _stop.Value! with { Baseline = moved.Value };
-                SetTest(test with { State = new TestState.Red(failed, AfterDone: false) });
-                AddNotice($"{test.Name} fails, as it should. Make it pass.", NoticeTone.Info);
-                break;
-            case TestRun.Passed:
-                await _workspace.RestoreAsync(test.Undo, _lifetime.Token);
-                await OnUi();
-                if (!StillOn(number)) return;
-                SetTest(null);
-                AddNotice($"{test.Name} passed before any change, so it proves nothing. It was taken back out.", NoticeTone.Refused);
-                break;
-            case TestRun.Unrunnable unrunnable:
-                SetTest(test with { State = new TestState.Unrunnable(unrunnable.Reason) });
-                break;
-            default:
-                throw new InvalidOperationException("Unhandled test run.");
-        }
-
-        Deliver(new PairingAction.TestRan(number, run));
-    }
-
-    private async Task<TestRun> RunAsync(string name)
-    {
-        if (_workspace.TestCommand is not { } command) return new TestRun.Unrunnable("No test command is set for this repository.");
-        try
-        {
-            return await _workspace.RunTestAsync(command, name, _lifetime.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return new TestRun.Unrunnable("The run was stopped.");
-        }
-    }
-
-    private void SetTest(StopTest? test)
-    {
-        if (_stop.Value is { } open) _stop.Value = open with { Test = test };
     }
 
     private bool StillOn(int number) => !_disposed && _stop.Value?.Stop.Number == number;
@@ -792,12 +558,6 @@ internal sealed class PairingStore : IDisposable
         var at = StopNumber;
         _queued.Clear();
         Finish(new PairingPhase.Ended(null), new PairingAction.Ended(at));
-    }
-
-    /// <summary>Opens the stop's test, so the user can read what the agent wrote before running it.</summary>
-    public void OpenTest()
-    {
-        if (_stop.Value?.Test is { } test) _presentation.ShowFile(test.Path, 1);
     }
 
     /// <summary>Takes the user to a place the agent points at while they talk: a declaration, or a
@@ -886,8 +646,7 @@ internal sealed class PairingStore : IDisposable
 
     private static bool IsMove(PairingAction action) => action switch
     {
-        PairingAction.Done or PairingAction.Message or PairingAction.Skipped
-            or PairingAction.TestRan or PairingAction.TestUndone => true,
+        PairingAction.Done or PairingAction.Message or PairingAction.Skipped => true,
         PairingAction.Ended or PairingAction.Pending or PairingAction.Cancelled => false,
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action."),
     };

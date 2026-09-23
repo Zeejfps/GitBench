@@ -300,6 +300,14 @@ this says so and why.
 
 ### Step 3
 
+**Test stops were removed; the agent runs the tests itself.** The app-side test machinery —
+`kind: "test"`, `pairing_write_test`, the per-repository test command, the stop card's run/red/undo
+section — was custom plumbing for what the agent's own shell already does. Now the guard allows
+shell commands (`execute` is allowed once; an `execute` that is really another server's MCP call, as
+Codex files them, is asked), Claude Code no longer has Bash/PowerShell disallowed, and the
+instructions tell the agent to run the tests itself and to write a test first as an ordinary stop in
+the test file. File edits are still refused. The notes below describe the removed design.
+
 - **Test output is shown on the stop card** (its tail), not streamed into a terminal tab: the
   terminal has no tap on its output, and the app needs the output anyway to hand to the agent.
 - **Test files are recognised by built-in rules** (`TestFiles`): a test directory on the path, or a

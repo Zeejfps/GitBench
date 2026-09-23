@@ -347,7 +347,6 @@ internal static class AppServices
                 ctx.Require<ISymbolExtractor>(),
                 ctx.Require<RepoDocumentSaver>(),
                 new WorkingTreeSnapshots(ctx.Require<IRepoActivityTracker>()),
-                new PairingTestCommands(ctx.Require<PreferencesService>()),
                 ctx.Require<AgentEndpoints>(),
                 new MapServerEnvironment(LoginShellEnvironment.ForChildProcess),
                 ctx.Require<ITerminalSessionStore>(),

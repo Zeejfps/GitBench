@@ -26,8 +26,8 @@ internal abstract record AcpStart
 
 /// <summary>
 /// One agent run over the Agent Client Protocol: the adapter process, its one session, and the
-/// write guard. Every permission request goes through <see cref="AcpPermissionPolicy"/> — reads
-/// and the app's own MCP tools pass, writes and shell are refused, the rest is asked — and the
+/// write guard. Every permission request goes through <see cref="AcpPermissionPolicy"/> — reads,
+/// shell commands and the app's own MCP tools pass, file edits are refused, the rest is asked — and the
 /// session is put in its harness's asking mode first, so that no write is decided inside the CLI.
 /// Events are raised on the reader's thread.
 /// </summary>
