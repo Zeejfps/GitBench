@@ -33,7 +33,7 @@ internal abstract record ContentPlace
 /// <para>
 /// A trail per repository, because a place names things that belong to one: a terminal instance, a
 /// file under a working tree. Switching repositories is therefore not a step — it swaps which trail
-/// the arrows walk.
+/// the arrows walk — and it puts back the tab that repository was left on.
 /// </para>
 /// </remarks>
 internal interface IContentNavigator
@@ -62,14 +62,21 @@ internal sealed class ContentNavigator : IContentNavigator, IHostedService, IDis
     // because a repository leaving takes its browser with it: a trail names terminals and files
     // belonging to one working tree, and outliving that tree would be holding both open.
     private readonly ConditionalWeakTable<FileBrowserViewModel, NavigationHistory<ContentPlace>> _trails = new();
+
+    // The tab each repository was left on. Only what the reader chose: a tab handed back because it
+    // stopped existing is not recorded, so a repository whose terminals are switched away first
+    // does not forget it was on them.
+    private readonly ConditionalWeakTable<FileBrowserViewModel, StrongBox<MainViewMode>> _leftOn = new();
     private readonly State<bool> _canGoBack = new(false);
     private readonly State<bool> _canGoForward = new(false);
 
     private IDisposable? _activeBrowserSub;
     private IDisposable? _activeTabsSub;
     private IDisposable? _activeShellSub;
+    private IDisposable? _modeSub;
 
     private bool _navigating;
+    private bool _leaving;
     private bool _started;
 
     public ContentNavigator(
@@ -94,12 +101,20 @@ internal sealed class ContentNavigator : IContentNavigator, IHostedService, IDis
         _browsers.FileShown += OnFileShown;
         _browsers.AllFilesClosed += OnAllFilesClosed;
 
-        // Two things follow a repository switch. A repository with nothing open cannot show a
-        // file, so switching to one out of a file tab would leave the panel on a tab the strip does
-        // not have; and the arrows read that repository's trail, so they have to be re-read.
+        _modeSub = _mode.Subscribe(mode =>
+        {
+            if (!_leaving && Browser is { } browser) _leftOn.GetOrCreateValue(browser).Value = mode;
+        });
+
+        // Three things follow a repository switch. The panel goes back to the tab that repository
+        // was left on. A repository with nothing open cannot show a file, nor one without a shell a
+        // terminal, so either would leave the panel on a tab the strip does not have. And the
+        // arrows read that repository's trail, so they have to be re-read.
         _activeBrowserSub = _browsers.Active.Subscribe(browser =>
         {
+            if (browser is not null && _leftOn.TryGetValue(browser, out var left)) _mode.Value = left.Value;
             if (browser?.ActiveTab.Value is null) LeaveIf(MainViewMode.Files);
+            if (Shells?.Active.Value is null) LeaveIf(MainViewMode.Terminal);
             Update();
         });
 
@@ -221,7 +236,17 @@ internal sealed class ContentNavigator : IContentNavigator, IHostedService, IDis
     /// Not a step: nobody navigated, the place simply went.</summary>
     private void LeaveIf(MainViewMode showing)
     {
-        if (_mode.Value == showing) _mode.Value = MainViewMode.LocalChanges;
+        if (_mode.Value != showing) return;
+
+        _leaving = true;
+        try
+        {
+            _mode.Value = MainViewMode.LocalChanges;
+        }
+        finally
+        {
+            _leaving = false;
+        }
     }
 
     private void Push(ContentPlace place)
@@ -247,6 +272,7 @@ internal sealed class ContentNavigator : IContentNavigator, IHostedService, IDis
     {
         _browsers.FileShown -= OnFileShown;
         _browsers.AllFilesClosed -= OnAllFilesClosed;
+        _modeSub?.Dispose();
         _activeBrowserSub?.Dispose();
         _activeShellSub?.Dispose();
         _activeTabsSub?.Dispose();
