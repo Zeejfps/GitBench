@@ -78,25 +78,38 @@ internal sealed class GitPairingWorkspace : IPairingWorkspace
         }
     }, ct);
 
-    public Task<FileCreation> CreateFileAsync(string relativePath, string content, CancellationToken ct) => Task.Run<FileCreation>(() =>
+    public Task<FileCreation> EnsureEmptyFileAsync(string relativePath, CancellationToken ct) => Task.Run<FileCreation>(() =>
     {
         if (Absolute(relativePath) is not { } path) return new FileCreation.Refused($"{relativePath} is outside the repository.");
         try
         {
+            if (File.Exists(path))
+                return IsEmpty(path)
+                    ? new FileCreation.AlreadyEmpty()
+                    : new FileCreation.Refused($"{relativePath} has content now. Name a declaration in it.");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
-            file.Write(Utf8.GetBytes(content));
+            new FileStream(path, FileMode.CreateNew, FileAccess.Write).Dispose();
             return new FileCreation.Created();
-        }
-        catch (IOException) when (File.Exists(path))
-        {
-            return new FileCreation.Refused($"{relativePath} exists now. Write it yourself, or skip the stop.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return new FileCreation.Refused($"{relativePath} could not be created: {e.Message}");
         }
     }, ct);
+
+    public Task RemoveIfEmptyAsync(string relativePath, CancellationToken ct) => Task.Run(() =>
+    {
+        if (Absolute(relativePath) is not { } path) return;
+        try
+        {
+            if (File.Exists(path) && IsEmpty(path)) File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }, ct);
+
+    private static bool IsEmpty(string path) => File.ReadAllText(path).Trim().Length == 0;
 
     public Task RestoreAsync(TestFileUndo undo, CancellationToken ct) => Task.Run(() =>
     {

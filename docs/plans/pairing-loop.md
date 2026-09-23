@@ -332,6 +332,14 @@ level before the useful thing — the code — showed up. Now:
   Done does; the `done` action says `accepted: true`. A test stop still has to go green. If the
   editor can't take it (the file never came on screen), the stop stays open with a notice.
 - A different draft for the open stop is a `pairing_stop` with `replace: true`.
+- **A new file is built up in blocks, not written in one go.** Its stop creates the file empty and
+  opens it; the code is only the skeleton (imports, the type's outline), shown in the editor with
+  the Accept pill like any other block, and members come at later stops. A file the stop created is
+  deleted again if the user skips or ends while it is still empty; an empty file that was already
+  there is left alone.
+- Accept is also a pill on the first line of the suggestion in the editor, like hunk Stage.
+- Replaced lines are drawn as removed and the suggestion as added, with changed characters
+  emphasised; lines the agent sent back unchanged at either end are left out of the replacement.
 - A draft line counts as typed when a line reading the same (trimmed) is in the run the user has
   written below the anchor — down to the last typed line with real content — so a lone brace of
   the file's own doesn't swallow the draft's.

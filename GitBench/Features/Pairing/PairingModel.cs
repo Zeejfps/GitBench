@@ -65,7 +65,8 @@ internal abstract record StopLocation
     /// <summary>A declaration still to be written: the end of the one it goes after.</summary>
     public sealed record Insertion(string AbsolutePath, TextPosition At, string After, IReadOnlyList<string> Lines) : StopLocation;
 
-    /// <summary>The file doesn't exist yet: the user creates it.</summary>
+    /// <summary>The file doesn't exist yet, or has nothing in it: the stop opens it empty and the
+    /// agent's code is its first block.</summary>
     public sealed record NewFile(string AbsolutePath) : StopLocation;
 }
 
@@ -121,9 +122,6 @@ internal abstract record DraftPlace
     public sealed record Replace(LineSpan Lines) : DraftPlace;
 
     public sealed record InsertAfter(FileLine Line) : DraftPlace;
-
-    /// <summary>The whole of a file that doesn't exist yet.</summary>
-    public sealed record NewFile : DraftPlace;
 }
 
 /// <summary>The agent's code for one stop — one block — and where it goes. The user accepts it
@@ -131,8 +129,10 @@ internal abstract record DraftPlace
 internal sealed record StopDraft(string Code, DraftPlace Place);
 
 /// <summary>The stop the user is on, and what it has come to. <paramref name="DraftTaken"/>: the
-/// user accepted the agent's code into the file.</summary>
-internal sealed record OpenStop(PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test, StopDraft Draft, bool DraftTaken);
+/// user accepted the agent's code into the file. <paramref name="CreatedFile"/>: the empty file the
+/// stop created, taken back out if the user moves on without writing anything into it.</summary>
+internal sealed record OpenStop(
+    PairingStop Stop, StopLocation Location, TreeSnapshot Baseline, StopTest? Test, StopDraft Draft, bool DraftTaken, string? CreatedFile);
 
 /// <summary>A test stop's test: the file the agent wrote, how to put it back, the test to run,
 /// and where it stands.</summary>

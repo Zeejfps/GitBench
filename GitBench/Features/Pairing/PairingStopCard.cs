@@ -154,7 +154,6 @@ internal sealed record PairingStopCard : Widget
     {
         DraftPlace.Replace replace => replace.Lines.From,
         DraftPlace.InsertAfter insert => insert.Line.Value,
-        DraftPlace.NewFile => 1,
         _ => throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place."),
     };
 }

@@ -43,7 +43,7 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
 
     public List<StopDraft> Drafts { get; } = new();
 
-    public void ShowDraft(StopLocation location, StopDraft draft)
+    public void ShowDraft(StopLocation location, StopDraft draft, Action accept)
     {
         Calls.Add("show draft");
         Drafts.Add(draft);
@@ -113,12 +113,24 @@ internal sealed class ScriptedWorkspace : IPairingWorkspace
         return new TestWrite.Written(new TestFileUndo(relativePath, prior is null ? null : System.Text.Encoding.UTF8.GetBytes(prior)));
     });
 
-    public Task<FileCreation> CreateFileAsync(string relativePath, string content, CancellationToken ct) => Task.Run<FileCreation>(() =>
+    public Task<FileCreation> EnsureEmptyFileAsync(string relativePath, CancellationToken ct) => Task.Run<FileCreation>(() =>
     {
-        if (Files.ContainsKey(relativePath)) return new FileCreation.Refused($"{relativePath} exists.");
-        Files[relativePath] = content;
-        return new FileCreation.Created();
+        lock (Files)
+        {
+            if (Files.TryGetValue(relativePath, out var content))
+                return content.Length == 0 ? new FileCreation.AlreadyEmpty() : new FileCreation.Refused($"{relativePath} has content.");
+            Files[relativePath] = string.Empty;
+            return new FileCreation.Created();
+        }
     });
+
+    public Task RemoveIfEmptyAsync(string relativePath, CancellationToken ct)
+    {
+        lock (Files)
+            if (Files.TryGetValue(relativePath, out var content) && content.Length == 0)
+                Files.Remove(relativePath);
+        return Task.CompletedTask;
+    }
 
     public Task RestoreAsync(TestFileUndo undo, CancellationToken ct) => Task.Run(() =>
     {

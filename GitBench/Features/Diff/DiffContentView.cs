@@ -208,7 +208,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private FileLine? _ghostAnchor;
     private FileLine? _ghostFrom;
     private (string Path, Action<bool> Done)? _pendingTake;
-    private ReplacedLine[] _replaced = [];
+    private ReplacedLine?[] _replaced = [];
     private Features.Editor.EditorBuffer? _ghostBuffer;
     private bool _ghostRefreshPosted;
     private FileSpan? _pendingSearchReveal;
@@ -614,6 +614,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public void SetHints(Features.Editor.EditorHints? hints)
     {
         _hints = hints;
+        _surface.AcceptSuggestion = hints?.Accept;
         (_ghostFrom, _ghostAnchor) = hints?.Ghost.Place switch
         {
             null => (null, null),
@@ -698,7 +699,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private Features.Editor.GhostLines Replacement(Features.Editor.TextDocument document, FileLine from, FileLine to, IReadOnlyList<string> lines)
     {
         var count = Math.Clamp(to.Value - from.Value + 1, 0, Math.Max(0, document.LineCount - from.Value + 1));
-        var replaced = new ReplacedLine[count];
+        var replaced = new ReplacedLine?[count];
         var added = new IReadOnlyList<CharRange>?[lines.Count];
         for (var k = 0; k < count; k++)
         {
@@ -711,7 +712,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 if (@new.Count > 0) added[k] = @new;
             }
 
-            replaced[k] = new ReplacedLine(emphasis);
+            // A blank line going is not worth a red band: it is how an empty file reads.
+            replaced[k] = document.Line(new FileLine(from.Value + k)).Trim().Length == 0 ? null : new ReplacedLine(emphasis);
         }
 
         _replaced = replaced;

@@ -86,7 +86,8 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
             case StopLocation.Insertion insertion:
                 Browser()?.PlaceCaret(insertion.AbsolutePath, insertion.At);
                 break;
-            case StopLocation.NewFile:
+            case StopLocation.NewFile newFile:
+                Browser()?.PlaceCaret(newFile.AbsolutePath, TextPosition.At(1, 0));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(location), location, "Unknown location.");
@@ -104,8 +105,6 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
             case DraftPlace.InsertAfter insert:
                 Browser()?.PlaceCaret(path, TextPosition.At(insert.Line.Value, int.MaxValue));
                 break;
-            case DraftPlace.NewFile:
-                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place.");
         }
@@ -118,19 +117,18 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         return true;
     }
 
-    public void ShowDraft(StopLocation location, StopDraft draft)
+    public void ShowDraft(StopLocation location, StopDraft draft, Action accept)
     {
-        GhostPlace? place = draft.Place switch
+        GhostPlace place = draft.Place switch
         {
             DraftPlace.Replace replace => new GhostPlace.Replace(new FileLine(replace.Lines.From), new FileLine(replace.Lines.To)),
             DraftPlace.InsertAfter insert => new GhostPlace.Insert(insert.Line),
-            DraftPlace.NewFile => null,
             _ => throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place."),
         };
-        if (place is null || PathOf(location) is not { } path || Browser() is not { } browser) return;
+        if (PathOf(location) is not { } path || Browser() is not { } browser) return;
         ClearDraft();
         _hinted = browser;
-        browser.ShowHints(new EditorHints(path, new EditorGhost(place, CodeLines(draft.Code))));
+        browser.ShowHints(new EditorHints(path, new EditorGhost(place, CodeLines(draft.Code)), accept));
     }
 
     public void ClearDraft()
@@ -159,7 +157,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
     {
         StopLocation.OnSymbol symbol => symbol.AbsolutePath,
         StopLocation.Insertion insertion => insertion.AbsolutePath,
-        StopLocation.NewFile => null,
+        StopLocation.NewFile newFile => newFile.AbsolutePath,
         _ => throw new ArgumentOutOfRangeException(nameof(location), location, "Unknown location."),
     };
 

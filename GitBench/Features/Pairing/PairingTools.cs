@@ -232,7 +232,9 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
         + "this stop only. By default it replaces the whole declaration from the line with its name "
         + "to its last line (so it starts with the signature, without doc comments or attributes "
         + "above it); for a declaration that doesn't exist yet it goes in after the one named in "
-        + "after; for a file that doesn't exist yet it is the whole file. For a small edit inside a "
+        + "after; for a file that doesn't exist yet the file is created empty and code is its first "
+        + "block only: the imports and the outline of its type, with members added at later stops. "
+        + "For a small edit inside a "
         + "large declaration, pass lines (the lines code replaces) or after_line (the line code goes "
         + "in after) instead, as numbered in the file now. Returns at once with where it landed and "
         + "the lines the code replaces (read them back and correct yourself with replace: true if "
@@ -323,6 +325,7 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
                 break;
             case StopLocation.NewFile:
                 writer.WriteString("placed", "new_file");
+                writer.WriteString("created", "The file was created empty and opened; your code is its first block.");
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location.");
@@ -335,9 +338,6 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
                 break;
             case DraftPlace.InsertAfter insert:
                 writer.WriteString("code_goes", $"after line {insert.Line.Value}");
-                break;
-            case DraftPlace.NewFile:
-                writer.WriteString("code_goes", "as the new file");
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(open), open.Draft.Place, "Unknown draft place.");

@@ -13,8 +13,9 @@ internal interface IPairingPresentation
     /// Moves nothing.</summary>
     Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct);
 
-    /// <summary>Draws the agent's code for the stop into its file where it goes.</summary>
-    void ShowDraft(StopLocation location, StopDraft draft);
+    /// <summary>Draws the agent's code for the stop into its file where it goes, with an Accept on
+    /// it that runs <paramref name="accept"/>.</summary>
+    void ShowDraft(StopLocation location, StopDraft draft, Action accept);
 
     /// <summary>Takes the agent's code off the editor.</summary>
     void ClearDraft();
@@ -61,8 +62,12 @@ internal interface IPairingWorkspace
     /// <summary>Writes a test file, remembering what it held.</summary>
     Task<TestWrite> WriteTestAsync(string relativePath, string content, CancellationToken ct);
 
-    /// <summary>Creates a file the user accepted from the agent. Refused when it exists.</summary>
-    Task<FileCreation> CreateFileAsync(string relativePath, string content, CancellationToken ct);
+    /// <summary>Makes sure a new file's stop has a file to open: creates it empty, or finds it
+    /// already there with nothing in it. Refused when it has content.</summary>
+    Task<FileCreation> EnsureEmptyFileAsync(string relativePath, CancellationToken ct);
+
+    /// <summary>Deletes a file a stop created, unless something was written into it.</summary>
+    Task RemoveIfEmptyAsync(string relativePath, CancellationToken ct);
 
     /// <summary>Puts a test file back the way it was before the agent wrote it.</summary>
     Task RestoreAsync(TestFileUndo undo, CancellationToken ct);
@@ -78,10 +83,12 @@ internal abstract record TestWrite
     public sealed record Refused(string Reason) : TestWrite;
 }
 
-/// <summary>How creating a file went.</summary>
+/// <summary>How making sure of an empty file went.</summary>
 internal abstract record FileCreation
 {
     public sealed record Created : FileCreation;
+
+    public sealed record AlreadyEmpty : FileCreation;
 
     public sealed record Refused(string Reason) : FileCreation;
 }
@@ -278,6 +285,26 @@ internal sealed class PairingStore : IDisposable
         }
 
         await OnUi();
+        string? created = null;
+        if (location is StopLocation.NewFile)
+        {
+            var ensured = await _workspace.EnsureEmptyFileAsync(target.Path, ct);
+            await OnUi();
+            switch (ensured)
+            {
+                case FileCreation.Created:
+                    created = target.Path;
+                    break;
+                case FileCreation.AlreadyEmpty:
+                    created = _stop.Value?.CreatedFile == target.Path ? target.Path : null;
+                    break;
+                case FileCreation.Refused refused:
+                    return new StopOpening.Refused(refused.Reason);
+                default:
+                    throw new InvalidOperationException("Unhandled file creation.");
+            }
+        }
+
         TreeSnapshot baseline;
         switch (await _workspace.CaptureAsync(ct))
         {
@@ -286,20 +313,31 @@ internal sealed class PairingStore : IDisposable
                 break;
             case SnapshotResult<TreeSnapshot>.Failed failed:
                 await OnUi();
+                TakeBack(created);
                 return new StopOpening.Refused($"The working tree could not be read: {failed.Reason}");
             default:
                 throw new InvalidOperationException("Unhandled snapshot result.");
         }
 
         await OnUi();
-        if (!IsLive) return new StopOpening.Refused("The session has ended.");
+        if (!IsLive)
+        {
+            TakeBack(created);
+            return new StopOpening.Refused("The session has ended.");
+        }
+
         if (_activity.Value != StopActivity.Idle || (_stop.Value is not null && !replace))
+        {
+            TakeBack(created);
             return new StopOpening.Refused("The user moved on while the stop was being placed. Call pairing_wait.");
+        }
+
+        if (_stop.Value?.CreatedFile is { } previous && previous != created) TakeBack(previous);
         var stop = new PairingStop(++_stopsSent, target, title, reason, kind);
-        var opened = new OpenStop(stop, location, baseline, Test: null, draft, DraftTaken: false);
+        var opened = new OpenStop(stop, location, baseline, Test: null, draft, DraftTaken: false, created);
         _stop.Value = opened;
         _presentation.RevealDraft(location, draft);
-        _presentation.ShowDraft(location, draft);
+        _presentation.ShowDraft(location, draft, () => _ = AcceptAsync());
         CloseNarration();
         return new StopOpening.Opened(opened);
     }
@@ -457,7 +495,13 @@ internal sealed class PairingStore : IDisposable
     /// would: the code is the user's to accept. A test stop still has to go green.</summary>
     public async Task AcceptAsync()
     {
-        if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle || !CanFinish(open)) return;
+        if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return;
+        if (!CanFinish(open))
+        {
+            AddNotice("Run the test and see it fail first; then the code can go in.", NoticeTone.Info);
+            return;
+        }
+
         if (open.DraftTaken)
         {
             await DoneAsync();
@@ -465,31 +509,15 @@ internal sealed class PairingStore : IDisposable
         }
 
         _activity.Value = StopActivity.Accepting;
-        string? failure;
-        if (open.Draft.Place is DraftPlace.NewFile)
-        {
-            var created = await _workspace.CreateFileAsync(open.Stop.Target.Path, open.Draft.Code + "\n", _lifetime.Token);
-            await OnUi();
-            failure = created switch
-            {
-                FileCreation.Created => null,
-                FileCreation.Refused refused => refused.Reason,
-                _ => throw new InvalidOperationException("Unhandled file creation."),
-            };
-        }
-        else
-        {
-            _presentation.RevealDraft(open.Location, open.Draft);
-            var taken = await _presentation.TakeDraftAsync(open.Location);
-            await OnUi();
-            failure = taken ? null : $"The agent's code could not be put into {open.Stop.Target.Path}. Open the file and accept again.";
-        }
+        _presentation.RevealDraft(open.Location, open.Draft);
+        var taken = await _presentation.TakeDraftAsync(open.Location);
+        await OnUi();
 
         _activity.Value = StopActivity.Idle;
         if (!StillOn(open.Stop.Number)) return;
-        if (failure is not null)
+        if (!taken)
         {
-            AddNotice(failure, NoticeTone.Error);
+            AddNotice($"The agent's code could not be put into {open.Stop.Target.Path}. Open the file and accept again.", NoticeTone.Error);
             return;
         }
 
@@ -715,6 +743,7 @@ internal sealed class PairingStore : IDisposable
         if (_disposed || _stop.Value is not { } open || _activity.Value != StopActivity.Idle) return;
         _stop.Value = null;
         _presentation.ClearDraft();
+        TakeBack(open.CreatedFile);
         ClearConversation();
         Deliver(new PairingAction.Skipped(open.Stop.Number));
     }
@@ -800,12 +829,19 @@ internal sealed class PairingStore : IDisposable
 
     private void Finish(PairingPhase phase, PairingAction? lastWord = null)
     {
+        TakeBack(_stop.Value?.CreatedFile);
         _stop.Value = null;
         _presentation.ClearDraft();
         _activity.Value = StopActivity.Idle;
         CloseNarration();
         _phase.Value = phase;
         ResolveWaiter(lastWord ?? new PairingAction.Cancelled(StopNumber));
+    }
+
+    // A file a stop created for the user to fill goes again if they moved on and left it empty.
+    private void TakeBack(string? createdFile)
+    {
+        if (createdFile is not null) _ = _workspace.RemoveIfEmptyAsync(createdFile, CancellationToken.None);
     }
 
     private void Deliver(PairingAction action)

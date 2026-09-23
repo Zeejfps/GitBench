@@ -13,10 +13,11 @@ internal static class StopResolver
 {
     private const int KnownLimit = 40;
 
-    /// <param name="text">The file's text, or null when there is no such file yet.</param>
+    /// <param name="text">The file's text, or null when there is no such file yet. A file with
+    /// nothing in it counts as new.</param>
     public static StopPlacement Resolve(string absolutePath, string? text, FileOutline? outline, StopTarget target)
     {
-        if (text is null) return new StopPlacement.Placed(new StopLocation.NewFile(absolutePath));
+        if (text is null || text.Trim().Length == 0) return new StopPlacement.Placed(new StopLocation.NewFile(absolutePath));
         var lines = text.Split('\n');
         var fileLines = Array.ConvertAll(lines, l => l.TrimEnd('\r'));
 
@@ -166,7 +167,7 @@ internal abstract record DraftPlacement
 
 /// <summary>
 /// Where the agent's code for a stop goes: in place of the stop's declaration, after the one a new
-/// declaration follows, or as the whole of a new file — unless the agent named the lines itself.
+/// declaration follows, or as the first block of a new file — unless the agent named the lines itself.
 /// Lines at either end of a replacement that read the same as the file's are left out of it, so
 /// only what changes is lit up, and code that only adds lines goes in as an insertion.
 /// </summary>
@@ -178,9 +179,9 @@ internal static class DraftPlacing
         switch (location, request.Span)
         {
             case (StopLocation.NewFile, DraftSpan.Declaration):
-                return Placed(code, new DraftPlace.NewFile());
+                return Placed(code, new DraftPlace.Replace(new LineSpan(1, 1)));
             case (StopLocation.NewFile, _):
-                return new DraftPlacement.Refused("The file doesn't exist yet: send the whole new file as code, without lines or after_line.");
+                return new DraftPlacement.Refused("The file is new and empty: send its first block as code, without lines or after_line.");
             case (StopLocation.OnSymbol symbol, DraftSpan.Declaration):
                 return Replacing(code, new LineSpan(symbol.At.Line.Value, symbol.LastLine.Value), symbol.Lines);
             case (StopLocation.Insertion insertion, DraftSpan.Declaration):

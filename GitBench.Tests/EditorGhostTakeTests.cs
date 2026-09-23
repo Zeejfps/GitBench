@@ -95,6 +95,28 @@ public sealed class EditorGhostTakeTests
     }
 
     [Fact]
+    public void TheSuggestionsAcceptPill_OnItsFirstRow_RunsItsAccept()
+    {
+        var (harness, view, _) = Show("a", "b", "c");
+        var accepted = 0;
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Insert(new FileLine(2)), ["X", "Y"]), () => accepted++));
+
+        var pill = Assert.Single(harness.Render().Texts, t => t.Inputs.Text == "Accept").Inputs.Position;
+        harness.Click(pill.Center.X, pill.Center.Y);
+
+        Assert.Equal(1, accepted);
+    }
+
+    [Fact]
+    public void ASuggestionWithNoAccept_HasNoPill()
+    {
+        var (harness, view, _) = Show("a", "b", "c");
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Insert(new FileLine(2)), ["X"])));
+
+        Assert.DoesNotContain(harness.Render().Texts, t => t.Inputs.Text == "Accept");
+    }
+
+    [Fact]
     public void ASuggestionOverAnotherFile_IsNotTaken()
     {
         var (_, view, buffer) = Show("a", "b");

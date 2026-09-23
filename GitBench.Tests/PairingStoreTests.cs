@@ -266,18 +266,38 @@ public sealed class PairingStoreTests : IDisposable
     }
 
     [Fact]
-    public void Accept_ForAFileStillToBeCreated_CreatesIt()
+    public void ANewFileStop_CreatesTheFileEmpty_AndItsCodeIsTheFirstBlock()
+    {
+        _presentation.Answer = t => new StopPlacement.Placed(new StopLocation.NewFile("C:/repo/" + t.Path));
+
+        var stop = Open(draft: new DraftRequest("class Retry {}", new DraftSpan.Declaration()));
+
+        Assert.Equal(string.Empty, _workspace.Files["src/Client.cs"]);
+        Assert.Equal(new DraftPlace.Replace(new LineSpan(1, 1)), stop.Draft.Place);
+        Assert.Contains("show draft", _presentation.Calls);
+    }
+
+    [Fact]
+    public void ANewFile_LeftEmpty_GoesWhenTheStopIsSkipped()
     {
         _presentation.Answer = t => new StopPlacement.Placed(new StopLocation.NewFile("C:/repo/" + t.Path));
         Open(draft: new DraftRequest("class Retry {}", new DraftSpan.Declaration()));
-        var wait = _store.WaitAsync(CancellationToken.None);
 
-        var accept = _store.AcceptAsync();
-        Pump.WaitFor(_dispatcher, () => accept.IsCompleted && wait.IsCompleted, "Accept to reach the agent");
+        _store.Skip();
 
-        Assert.Equal("class Retry {}\n", _workspace.Files["src/Client.cs"]);
-        Assert.True(Assert.IsType<PairingAction.Done>(wait.Result).Accepted);
-        Assert.DoesNotContain("take draft", _presentation.Calls);
+        Assert.False(_workspace.Files.ContainsKey("src/Client.cs"));
+    }
+
+    [Fact]
+    public void AnEmptyFileThatWasAlreadyThere_StaysWhenTheStopIsSkipped()
+    {
+        _workspace.Files["src/Client.cs"] = string.Empty;
+        _presentation.Answer = t => new StopPlacement.Placed(new StopLocation.NewFile("C:/repo/" + t.Path));
+        Open(draft: new DraftRequest("class Retry {}", new DraftSpan.Declaration()));
+
+        _store.Skip();
+
+        Assert.True(_workspace.Files.ContainsKey("src/Client.cs"));
     }
 
     [Fact]

@@ -33,6 +33,7 @@ internal sealed class DiffRowSurface
     private int _hoveredExpanderRow = -1;
     private int _hoveredFoldRow = -1;
     private int _hoveredLensRow = -1;
+    private bool _acceptHovered;
 
     public DiffRowSurface(
         VirtualRowListView list, DiffRowPainter painter, HunkButtonBar buttonBar, DiffListScroll scroll,
@@ -76,6 +77,10 @@ internal sealed class DiffRowSurface
     public Action<int, GapExpandDirection>? ExpandGapToDeclaration { get; set; }
     public Action<string>? ToggleFold { get; set; }
     public Action<UsageLensTarget, PointF>? ActivateLens { get; set; }
+
+    /// <summary>Takes the suggestion drawn among the rows into the file; null when it can't be
+    /// taken from here, and then its first row carries no Accept pill.</summary>
+    public Action? AcceptSuggestion { get; set; }
 
     public static void ResolveMetrics(DiffRowPainter painter, ICanvas c)
     {
@@ -212,7 +217,19 @@ internal sealed class DiffRowSurface
     public static UsageLensTarget TargetOf(DiffRow.Lens lens) => new(lens.Id, lens.At, lens.NameLine, lens.NameColumn);
 
     public bool IsInteractiveAt(PointF point) =>
-        ExpanderAt(point) != null || FoldAt(point) != null || LensAt(point) != null || HunkButtonAt(point) != null;
+        ExpanderAt(point) != null || FoldAt(point) != null || LensAt(point) != null || HunkButtonAt(point) != null
+        || AcceptAt(point);
+
+    private bool IsFirstSuggestionRow(int row) =>
+        row >= 0 && row < Rows.Rows.Count && Rows.Rows[row] is DiffRow.Ghost
+        && (row == 0 || Rows.Rows[row - 1] is not DiffRow.Ghost);
+
+    public bool AcceptAt(PointF point)
+    {
+        if (AcceptSuggestion is null) return false;
+        var row = RowAt(point);
+        return IsFirstSuggestionRow(row) && TryGetRowRect(row, out var rect) && _buttonBar.HitAccept(point, Frame.Right, rect);
+    }
 
     public MouseCursor CursorAt(PointF point)
     {
@@ -225,6 +242,7 @@ internal sealed class DiffRowSurface
         SetHover(ref _hoveredExpanderRow, ExpanderAt(point)?.Row ?? -1);
         SetHover(ref _hoveredFoldRow, FoldAt(point)?.Row ?? -1);
         SetHover(ref _hoveredLensRow, LensAt(point)?.Row ?? -1);
+        SetAcceptHover(AcceptAt(point));
 
         var hunk = -1;
         var button = HunkAction.None;
@@ -241,7 +259,15 @@ internal sealed class DiffRowSurface
         SetHover(ref _hoveredExpanderRow, -1);
         SetHover(ref _hoveredFoldRow, -1);
         SetHover(ref _hoveredLensRow, -1);
+        SetAcceptHover(false);
         SetHunkHover(-1, HunkAction.None);
+    }
+
+    private void SetAcceptHover(bool hovered)
+    {
+        if (_acceptHovered == hovered) return;
+        _acceptHovered = hovered;
+        _redraw();
     }
 
     private void SetHover(ref int field, int row)
@@ -260,7 +286,14 @@ internal sealed class DiffRowSurface
     }
 
     public bool Click(PointF point, InputModifiers modifiers) =>
-        ClickLens(point) || ClickFold(point) || ClickHunkButton(point) || ClickExpander(point, modifiers);
+        ClickAccept(point) || ClickLens(point) || ClickFold(point) || ClickHunkButton(point) || ClickExpander(point, modifiers);
+
+    public bool ClickAccept(PointF point)
+    {
+        if (!AcceptAt(point)) return false;
+        AcceptSuggestion?.Invoke();
+        return true;
+    }
 
     public bool ClickLens(PointF point)
     {
@@ -327,6 +360,11 @@ internal sealed class DiffRowSurface
     public void DrawRow(ICanvas c, RectF rowRect, int row, int z, DiffRow drawn, in DiffRowPaint paint)
     {
         _painter.DrawRow(c, drawn, paint);
+        if (AcceptSuggestion is not null && IsFirstSuggestionRow(row))
+        {
+            _buttonBar.EnsureMetrics(c);
+            _buttonBar.DrawAccept(c, Frame.Right, rowRect, _acceptHovered, ButtonStyles, z + 7);
+        }
 
         var hunk = HunkIndexOf(row);
         if (hunk < 0 || hunk != _hoveredHunk || !HunkButtons || RangeOf(hunk) is not { } range) return;

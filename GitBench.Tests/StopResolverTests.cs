@@ -85,6 +85,7 @@ public sealed class StopResolverTests
     public void NoFile_IsANewFile()
     {
         Assert.IsType<StopLocation.NewFile>(Placed(StopResolver.Resolve(Path, null, null, new StopTarget("src/Client.cs", "Client", null))));
+        Assert.IsType<StopLocation.NewFile>(Placed(StopResolver.Resolve(Path, "\n", null, new StopTarget("src/Client.cs", "Client", null))));
     }
 
     [Fact]

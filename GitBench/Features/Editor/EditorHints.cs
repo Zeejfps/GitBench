@@ -8,8 +8,9 @@ internal readonly record struct LineSpan(int From, int To)
     public bool Contains(int line) => From <= line && line <= To;
 }
 
-/// <summary>Suggested code a guide has laid over one file in the editor.</summary>
-internal sealed record EditorHints(string Path, EditorGhost Ghost);
+/// <summary>Suggested code a guide has laid over one file in the editor, and what taking it from
+/// the editor does — null where it can only be taken elsewhere.</summary>
+internal sealed record EditorHints(string Path, EditorGhost Ghost, Action? Accept = null);
 
 /// <summary>Suggested code, and where in the file it goes.</summary>
 internal sealed record EditorGhost(GhostPlace Place, IReadOnlyList<string> Lines);

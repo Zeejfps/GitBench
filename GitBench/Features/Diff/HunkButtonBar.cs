@@ -34,6 +34,7 @@ internal sealed class HunkButtonBar
     private float _stageWidth;
     private float _unstageWidth;
     private float _discardWidth;
+    private float _acceptWidth;
     private bool _metricsResolved;
 
     public HunkButtonBar(ILocalizationService loc) => _loc = loc;
@@ -79,6 +80,7 @@ internal sealed class HunkButtonBar
         _stageWidth = c.MeasureTextWidth(s.DiffHunkStage, LabelStyle);
         _unstageWidth = c.MeasureTextWidth(s.DiffHunkUnstage, LabelStyle);
         _discardWidth = c.MeasureTextWidth(s.DiffHunkDiscard, LabelStyle);
+        _acceptWidth = c.MeasureTextWidth(s.DiffAcceptSuggestion, LabelStyle);
         _metricsResolved = _stageWidth > 0;
     }
 
@@ -126,6 +128,45 @@ internal sealed class HunkButtonBar
 
             x += width + ButtonGap;
         }
+    }
+
+    /// <summary>The Accept pill on the first row of a suggestion, right-aligned inside the row
+    /// rather than hanging above it: the row before is the file's, not the suggestion's.</summary>
+    public void DrawAccept(ICanvas c, float rightEdge, RectF rowRect, bool hovered, DiffHunkButtonStyles styles, int z)
+    {
+        if (!_metricsResolved) return;
+        var rect = AcceptRect(rightEdge, rowRect);
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = rect,
+            Style = new RectStyle
+            {
+                BackgroundColor = hovered ? styles.BackgroundHover : styles.BackgroundIdle,
+                BorderColor = BorderColorStyle.All(styles.Border),
+                BorderSize = BorderSizeStyle.All(1),
+                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            },
+            ZIndex = z,
+        });
+
+        LabelStyle.TextColor = styles.Text;
+        c.DrawText(new DrawTextInputs
+        {
+            Position = rect,
+            Text = _loc.Strings.Value.DiffAcceptSuggestion,
+            Style = LabelStyle,
+            ZIndex = z + 1,
+        });
+    }
+
+    public bool HitAccept(PointF point, float rightEdge, RectF rowRect) =>
+        _metricsResolved && AcceptRect(rightEdge, rowRect).ContainsPoint(point);
+
+    private RectF AcceptRect(float rightEdge, RectF rowRect)
+    {
+        var height = Math.Min(ButtonHeight, Math.Max(0f, rowRect.Height - 2f));
+        var width = _acceptWidth + PaddingX * 2;
+        return new RectF(rightEdge - MarginRight - width, rowRect.Bottom + (rowRect.Height - height) / 2f, width, height);
     }
 
     public HunkAction HitTest(PointF point, float rightEdge, float rowTop, HunkAction[] actions)
