@@ -11,6 +11,9 @@ namespace GitBench.Features.Pairing;
 internal interface IPairingSessions
 {
     PairingStore? StoreFor(Guid repoId);
+
+    /// <summary>Opens a session the agent asked for, in the repository's conversation.</summary>
+    AgentPairingStart StartByAgent(Guid repoId, string goal);
 }
 
 /// <summary>
@@ -25,6 +28,7 @@ internal static class PairingTools
         var target = new PairingTarget(repo, sessions, dispatcher);
         return
         [
+            new PairingStartTool(target),
             new PairingRoadmapTool(target),
             new PairingStopTool(target),
             new PairingWaitTool(target),
@@ -122,8 +126,8 @@ internal sealed class PairingTarget
                 completion.TrySetResult(_sessions.StoreFor(_repo.Id) is { } store
                     ? work(store)
                     : Task.FromResult(ToolInvocation.Error(
-                        $"No pairing session is running for '{_repo.DisplayName}'. The user starts one in DiffDino "
-                        + "with New pairing session.")));
+                        $"No pairing session is running for '{_repo.DisplayName}'. Call pairing_start once the user "
+                        + "asks to pair, or they start one in DiffDino with New pairing session.")));
             }
             catch (Exception ex)
             {
@@ -136,6 +140,61 @@ internal sealed class PairingTarget
 
     public Task<ToolInvocation> OnStoreAsync(Func<PairingStore, ToolInvocation> work, CancellationToken ct) =>
         OnStoreAsync(store => Task.FromResult(work(store)), ct);
+
+    /// <summary>Opens a session for the repository on the UI thread.</summary>
+    public async Task<AgentPairingStart> StartAsync(string goal, CancellationToken ct)
+    {
+        var completion = new TaskCompletionSource<AgentPairingStart>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _dispatcher.Post(() =>
+        {
+            try
+            {
+                completion.TrySetResult(_sessions.StartByAgent(_repo.Id, goal));
+            }
+            catch (Exception ex)
+            {
+                completion.TrySetException(ex);
+            }
+        });
+        return await completion.Task.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    public string RepoName => _repo.DisplayName;
+}
+
+/// <summary>Opens a pairing session in the conversation the user is having with the agent.</summary>
+internal sealed class PairingStartTool(PairingTarget target) : IAssistantTool
+{
+    public string Name => "pairing_start";
+
+    public string Description =>
+        "Starts a pairing session on the repository, in the conversation the user is having with you in "
+        + "DiffDino's panel: call it once the user asks to pair on a change, or agrees to your offer to. "
+        + "The Pairing panel shows the goal; you navigate with the other pairing_* tools and the user "
+        + "writes the code. Returns how the session runs; follow it, starting with pairing_roadmap.";
+
+    public string JsonSchema =>
+        """
+        {"type":"object","properties":{"goal":{"type":"string","description":"The change to make, in a sentence or two, as the user would put it."}},"required":["goal"],"additionalProperties":false}
+        """;
+
+    public bool IsWrite => false;
+
+    public async Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
+    {
+        if (ToolJson.String(args, "goal") is not { } goal || string.IsNullOrWhiteSpace(goal))
+            return ToolInvocation.Error("goal must be a non-empty string.");
+        return await target.StartAsync(goal, ct).ConfigureAwait(false) switch
+        {
+            AgentPairingStart.Started => ToolInvocation.Ok(ToolJson.Write(writer => writer.WriteString("instructions", PairingInstructions.Started))),
+            AgentPairingStart.AlreadyRunning running => ToolInvocation.Error(
+                $"A pairing session is already running: \"{running.Store.Goal}\". Carry it on, or call pairing_end first."),
+            AgentPairingStart.NoConversation => ToolInvocation.Error(
+                $"No conversation with an agent is open for '{target.RepoName}' in DiffDino, so there is nowhere to "
+                + "show the session. The user starts one there with New pairing session."),
+            _ => throw new InvalidOperationException("Unhandled pairing start."),
+        };
+    }
 }
 
 /// <summary>Replaces the roadmap shown in the Pairing panel.</summary>

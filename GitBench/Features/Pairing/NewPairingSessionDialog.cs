@@ -52,22 +52,25 @@ internal sealed record NewPairingSessionDialog : Widget
         var preferences = ctx.Require<PreferencesService>();
         var terminalCommand = new State<string>(preferences.Current.PairingTerminalCommand);
         var error = new State<string?>(repos.Active.Value is null ? s.PairingNoRepo : null);
+        // A conversation already under way keeps its agent, and with it what it knows.
+        var ongoing = repos.Active.Value is { } activeRepo ? sessions.LiveConversation(activeRepo.Id) : null;
         var canStart = new Derived<bool>(() => goal.Value.Trim().Length > 0 && repos.Active.Value is not null
-            && (agent.Value != PairingAgentChoice.Terminal || terminalCommand.Value.Trim().Length > 0));
+            && (ongoing is not null || agent.Value != PairingAgentChoice.Terminal || terminalCommand.Value.Trim().Length > 0));
 
         void Start()
         {
             if (repos.Active.Value is not { } repo || goal.Value.Trim().Length == 0) return;
-            PairingHarness harness = agent.Value == PairingAgentChoice.Terminal
+            PairingHarness harness = ongoing?.Harness ?? (agent.Value == PairingAgentChoice.Terminal
                 ? new PairingHarness.Terminal(loc.Strings.Value.PairingAgentTerminal, terminalCommand.Value.Trim())
-                : new PairingHarness.Acp(HarnessOf(agent.Value));
+                : new PairingHarness.Acp(HarnessOf(agent.Value)));
             switch (sessions.Start(repo, goal.Value, harness))
             {
                 case PairingStart.Started:
-                    preferences.Update(p => p with
-                    {
-                        PairingTerminalCommand = agent.Value == PairingAgentChoice.Terminal ? terminalCommand.Value.Trim() : p.PairingTerminalCommand,
-                    });
+                    if (ongoing is null)
+                        preferences.Update(p => p with
+                        {
+                            PairingTerminalCommand = agent.Value == PairingAgentChoice.Terminal ? terminalCommand.Value.Trim() : p.PairingTerminalCommand,
+                        });
                     mode.Value = MainViewMode.Files;
                     onClose();
                     break;
@@ -95,41 +98,47 @@ internal sealed record NewPairingSessionDialog : Widget
                     new Raw { View = goalField },
                 ],
             },
-            new LabeledRow
-            {
-                Label = s.PairingAgent,
-                Value = new OptionDropdown<PairingAgentChoice>
-                {
-                    Selected = agent,
-                    Options =
-                    [
-                        (PairingAgentChoice.ClaudeCode, AcpHarness.ClaudeCode.Label, s.PairingAgentClaudeDetail),
-                        (PairingAgentChoice.Codex, AcpHarness.Codex.Label, s.PairingAgentCodexDetail),
-                        (PairingAgentChoice.Gemini, AcpHarness.Gemini.Label, s.PairingAgentGeminiDetail),
-                        (PairingAgentChoice.Terminal, s.PairingAgentTerminal, s.PairingAgentTerminalDetail),
-                    ],
-                },
-            },
-            new Show
-            {
-                When = new Derived<bool>(() => agent.Value == PairingAgentChoice.Terminal),
-                Then = () => new Column
-                {
-                    Gap = Spacing.Sm,
-                    CrossAxis = CrossAxisAlignment.Stretch,
-                    Children =
-                    [
-                        new LabeledInput
-                        {
-                            Label = s.PairingTerminalCommand,
-                            Value = terminalCommand,
-                            Hint = s.PairingTerminalCommandHint(prompt: "{prompt}", promptFile: "{promptFile}", mcpUrl: "{mcpUrl}", mcpConfigFile: "{mcpConfigFile}", cwd: "{cwd}"),
-                        },
-                        new DialogBodyText { Value = s.PairingNoWriteGuard },
-                    ],
-                },
-            },
         ];
+        if (ongoing is not null)
+            body.Add(new DialogBodyText { Value = s.PairingContinuesWith(ongoing.Harness.Label) });
+        else
+            body.AddRange(
+            [
+                new LabeledRow
+                {
+                    Label = s.PairingAgent,
+                    Value = new OptionDropdown<PairingAgentChoice>
+                    {
+                        Selected = agent,
+                        Options =
+                        [
+                            (PairingAgentChoice.ClaudeCode, AcpHarness.ClaudeCode.Label, s.PairingAgentClaudeDetail),
+                            (PairingAgentChoice.Codex, AcpHarness.Codex.Label, s.PairingAgentCodexDetail),
+                            (PairingAgentChoice.Gemini, AcpHarness.Gemini.Label, s.PairingAgentGeminiDetail),
+                            (PairingAgentChoice.Terminal, s.PairingAgentTerminal, s.PairingAgentTerminalDetail),
+                        ],
+                    },
+                },
+                new Show
+                {
+                    When = new Derived<bool>(() => agent.Value == PairingAgentChoice.Terminal),
+                    Then = () => new Column
+                    {
+                        Gap = Spacing.Sm,
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                        Children =
+                        [
+                            new LabeledInput
+                            {
+                                Label = s.PairingTerminalCommand,
+                                Value = terminalCommand,
+                                Hint = s.PairingTerminalCommandHint(prompt: "{prompt}", promptFile: "{promptFile}", mcpUrl: "{mcpUrl}", mcpConfigFile: "{mcpConfigFile}", cwd: "{cwd}"),
+                            },
+                            new DialogBodyText { Value = s.PairingNoWriteGuard },
+                        ],
+                    },
+                },
+            ]);
         if (endpoints.WillEnable) body.Add(new DialogBodyText { Value = s.PairingEnablesConnections });
 
         return new Dialog

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace GitBench.Features.AgentConnections.Acp;
 
@@ -33,7 +34,8 @@ internal enum AcpToolKind
 /// options offered, and whatever the adapter says about which MCP server the tool belongs to.
 /// Adapters name that differently — Claude on the tool call, Codex on the earlier
 /// <c>tool_call</c> update, Gemini only in its "Always Allow &lt;server&gt;" option — so the parse
-/// collects every marker into <see cref="McpServer"/>.
+/// collects every marker into <see cref="McpServer"/>. <see cref="Command"/> is the command line
+/// of a shell call, where the adapter passes it in the tool call's input.
 /// </summary>
 internal sealed record AcpPermissionRequest(
     string ToolCallId,
@@ -41,7 +43,8 @@ internal sealed record AcpPermissionRequest(
     AcpToolKind Kind,
     string? McpServer,
     bool IsMcpApproval,
-    IReadOnlyList<AcpPermissionOption> Options);
+    IReadOnlyList<AcpPermissionOption> Options,
+    string? Command = null);
 
 /// <summary>What the client answers a permission request with.</summary>
 internal abstract record AcpPermissionDecision
@@ -63,11 +66,11 @@ internal enum AcpPermissionVerdict
 
 /// <summary>
 /// The write guard for an agent run over ACP: reads and shell commands are allowed — the agent runs
-/// the tests itself — file edits are refused, and the app's own MCP tools are allowed each time they
-/// are asked about. The same rules for every harness, which is why the guard lives in the client
-/// rather than in each CLI's flags.
+/// the tests itself — except a push, which is put to the user; file edits are refused, and the app's
+/// own MCP tools are allowed each time they are asked about. The same rules for every harness, which
+/// is why the guard lives in the client rather than in each CLI's flags.
 /// </summary>
-internal static class AcpPermissionPolicy
+internal static partial class AcpPermissionPolicy
 {
     public static AcpPermissionDecision Decide(AcpPermissionRequest request, string ownServer)
     {
@@ -81,6 +84,7 @@ internal static class AcpPermissionPolicy
         return request.Kind switch
         {
             AcpToolKind.Execute when request.McpServer is not null => new AcpPermissionDecision.AskUser(),
+            AcpToolKind.Execute when Pushes(request.Command ?? request.Title) => new AcpPermissionDecision.AskUser(),
             AcpToolKind.Read or AcpToolKind.Search or AcpToolKind.Think or AcpToolKind.Fetch or AcpToolKind.Execute =>
                 Pick(request, AcpPermissionVerdict.Allowed, AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways),
             AcpToolKind.Edit or AcpToolKind.Delete or AcpToolKind.Move =>
@@ -89,6 +93,13 @@ internal static class AcpPermissionPolicy
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, "Unknown tool kind."),
         };
     }
+
+    /// <summary>Whether a command line runs <c>git push</c> anywhere in it, global options between
+    /// the two words included.</summary>
+    public static bool Pushes(string command) => GitPush().IsMatch(command);
+
+    [GeneratedRegex(@"(?<![\w-])git(?:\.exe)?(?:\s+(?:-C|-c|--git-dir|--work-tree)\s+\S+|\s+-\S+)*\s+push\b", RegexOptions.IgnoreCase)]
+    private static partial Regex GitPush();
 
     private static AcpPermissionDecision Pick(
         AcpPermissionRequest request, AcpPermissionVerdict verdict, AcpPermissionOptionKind first, AcpPermissionOptionKind second)
@@ -131,8 +142,18 @@ internal static class AcpPermissionPolicy
             ParseToolKind(Text(toolCall["kind"])),
             server,
             isMcpApproval,
-            options);
+            options,
+            CommandOf(toolCall["rawInput"]));
     }
+
+    // Claude and Gemini pass the command as a string; Codex as an argv array, which may be a shell
+    // running a script.
+    private static string? CommandOf(JsonNode? input) => input?["command"] switch
+    {
+        JsonValue value => Text(value),
+        JsonArray argv => string.Join(' ', argv.Select(Text).OfType<string>()),
+        _ => null,
+    };
 
     /// <summary>The MCP server a <c>tool_call</c> update names, where the adapter says so there
     /// (Codex puts it in <c>rawInput.server</c>).</summary>

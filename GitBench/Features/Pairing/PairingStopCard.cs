@@ -281,11 +281,11 @@ internal sealed record PairingAskField : Widget
     public const string InputId = "pairing-ask";
     public const string SendId = "pairing-ask-send";
 
-    public required PairingStore Store { get; init; }
+    public required AgentConversation Conversation { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var store = Store;
+        var conversation = Conversation;
         var loc = ctx.Localization();
 
         var field = new GrowingDescriptionField(ctx, 0f, 120f) { Id = InputId };
@@ -295,7 +295,7 @@ internal sealed record PairingAskField : Widget
         void Send()
         {
             if (!hasText.Value) return;
-            store.Say(field.Text.ToString());
+            conversation.Say(field.Text.ToString());
             field.Clear();
         }
 

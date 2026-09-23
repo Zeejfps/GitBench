@@ -129,6 +129,8 @@ internal sealed class ScriptedWorkspace : IPairingWorkspace
 internal sealed class NoPairingSessions : IPairingSessions
 {
     public PairingStore? StoreFor(Guid repoId) => null;
+
+    public AgentPairingStart StartByAgent(Guid repoId, string goal) => new AgentPairingStart.NoConversation();
 }
 
 /// <summary>Pairing sessions the test puts in place by hand.</summary>
@@ -137,4 +139,17 @@ internal sealed class FixedPairingSessions : IPairingSessions
     public Dictionary<Guid, PairingStore> Stores { get; } = new();
 
     public PairingStore? StoreFor(Guid repoId) => Stores.GetValueOrDefault(repoId);
+
+    /// <summary>What <see cref="StartByAgent"/> opens a session with; null answers that no
+    /// conversation is open.</summary>
+    public Func<string, PairingStore>? Starter { get; set; }
+
+    public AgentPairingStart StartByAgent(Guid repoId, string goal)
+    {
+        if (Stores.TryGetValue(repoId, out var live) && live.IsLive) return new AgentPairingStart.AlreadyRunning(live);
+        if (Starter is not { } start) return new AgentPairingStart.NoConversation();
+        var store = start(goal);
+        Stores[repoId] = store;
+        return new AgentPairingStart.Started(store);
+    }
 }

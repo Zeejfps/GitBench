@@ -155,4 +155,44 @@ public sealed class AcpPermissionPolicyTests
             """);
         Assert.IsType<AcpPermissionDecision.AskUser>(decision);
     }
+
+    [Fact]
+    public void ClaudePush_IsPutToTheUser()
+    {
+        var decision = Decide("""
+            {"sessionId":"s","toolCall":{"toolCallId":"t1","title":"`git push origin main`","kind":"execute","rawInput":{"command":"git push origin main"}},"options":
+            """ + ClaudeOptions + "}");
+        Assert.IsType<AcpPermissionDecision.AskUser>(decision);
+    }
+
+    [Fact]
+    public void CodexPush_InAnArgv_IsPutToTheUser()
+    {
+        var decision = Decide("""
+            {"sessionId":"s","toolCall":{"toolCallId":"t1","title":"Run command","kind":"execute","rawInput":{"command":["bash","-lc","git add -A && git commit -m wip && git push"]}},"options":
+            """ + ClaudeOptions + "}");
+        Assert.IsType<AcpPermissionDecision.AskUser>(decision);
+    }
+
+    [Fact]
+    public void Commit_IsAllowedOnce()
+    {
+        var decision = Decide("""
+            {"sessionId":"s","toolCall":{"toolCallId":"t1","title":"`git commit -m \"Add retry\"`","kind":"execute","rawInput":{"command":"git commit -m \"Add retry\""}},"options":
+            """ + ClaudeOptions + "}");
+        AssertSelected(decision, "allow-once", AcpPermissionVerdict.Allowed);
+    }
+
+    [Theory]
+    [InlineData("git push", true)]
+    [InlineData("git -C ../repo push --force-with-lease", true)]
+    [InlineData("git --no-pager -c push.default=current push", true)]
+    [InlineData("cd src && GIT push", true)]
+    [InlineData("git.exe push origin HEAD", true)]
+    [InlineData("git status && git log --oneline -5", false)]
+    [InlineData("git commit -m \"push the retry\"", false)]
+    [InlineData("git stash push -m wip", false)]
+    [InlineData("legit push", false)]
+    public void Pushes_FindsGitPush(string command, bool pushes) =>
+        Assert.Equal(pushes, AcpPermissionPolicy.Pushes(command));
 }

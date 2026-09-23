@@ -61,14 +61,16 @@ internal static class TerminalAgentCommand
 }
 
 /// <summary>
-/// Runs a session's agent from a terminal preset: the command, filled with the opening prompt and
-/// the app's MCP server, starts in a terminal tab of the repository. The loop's tools are the same
-/// MCP tools, so the stops work unchanged; what is weaker is said up front — no
-/// write is refused by the app, and what the agent says stays in the terminal.
+/// Runs a conversation's agent from a terminal preset: the command, filled with the opening prompt
+/// and the app's MCP server, starts in a terminal tab of the repository. The loop's tools are the
+/// same MCP tools, so the stops work unchanged; what is weaker is said up front — no write is
+/// refused by the app, and what the agent says stays in the terminal, which is also where the user
+/// talks to it between sessions.
 /// </summary>
-internal sealed class TerminalPairingDriver : IAsyncDisposable
+internal sealed class TerminalPairingDriver : IAgentDriver
 {
-    private readonly PairingStore _store;
+    private readonly AgentConversation _conversation;
+    private readonly string _opening;
     private readonly Repo _repo;
     private readonly string _label;
     private readonly string _template;
@@ -81,13 +83,15 @@ internal sealed class TerminalPairingDriver : IAsyncDisposable
     private readonly string _scratch = Path.Combine(Path.GetTempPath(), $"diffdino-pairing-{Guid.NewGuid():N}");
     private IDisposable? _watch;
     private TerminalInstance? _terminal;
+    private int _told;
 
     private TerminalPairingDriver(
-        PairingStore store, Repo repo, string label, string template, AgentEndpoints endpoints,
+        AgentConversation conversation, string opening, string label, string template, AgentEndpoints endpoints,
         ITerminalSessionStore terminals, CommandLaunchFactory launches, IContentNavigator navigator, IUiDispatcher dispatcher)
     {
-        _store = store;
-        _repo = repo;
+        _conversation = conversation;
+        _opening = opening;
+        _repo = conversation.Repo;
         _label = label;
         _template = template;
         _endpoints = endpoints;
@@ -97,14 +101,36 @@ internal sealed class TerminalPairingDriver : IAsyncDisposable
         _dispatcher = dispatcher;
     }
 
-    /// <summary>Starts the agent's terminal for a session. UI thread.</summary>
+    /// <summary>Starts the agent's terminal for a conversation, with <paramref name="opening"/> as
+    /// its first prompt. UI thread.</summary>
     public static TerminalPairingDriver Start(
-        PairingStore store, Repo repo, string label, string template, AgentEndpoints endpoints,
+        AgentConversation conversation, string opening, string label, string template, AgentEndpoints endpoints,
         ITerminalSessionStore terminals, CommandLaunchFactory launches, IContentNavigator navigator, IUiDispatcher dispatcher)
     {
-        var driver = new TerminalPairingDriver(store, repo, label, template, endpoints, terminals, launches, navigator, dispatcher);
+        var driver = new TerminalPairingDriver(conversation, opening, label, template, endpoints, terminals, launches, navigator, dispatcher);
         _ = driver.RunAsync();
         return driver;
+    }
+
+    // The prompt goes in a file and the terminal is handed one line naming it: typed into a CLI
+    // mid-conversation, a many-line prompt would be sent line by line.
+    public void Tell(string prompt)
+    {
+        if (_terminal is not { } terminal || _stop.IsCancellationRequested) return;
+        var file = Path.Combine(_scratch, $"prompt-{++_told}.md");
+        try
+        {
+            File.WriteAllText(file, prompt);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _conversation.Transcript.AddNotice($"The prompt for {_label} could not be written: {e.Message}", NoticeTone.Error);
+            return;
+        }
+
+        terminal.Paste($"Read {file} and follow it.");
+        terminal.SendInput("\r"u8);
+        _navigator.Show(new ContentPlace.Shell(terminal));
     }
 
     // Starts on the UI thread and does not come back to it: every touch of the store and the
@@ -120,7 +146,7 @@ internal sealed class TerminalPairingDriver : IAsyncDisposable
                     url = listening.Url;
                     break;
                 case AgentEndpoint.Unavailable unavailable:
-                    Post(() => _store.Fail($"DiffDino's agent connections server is not available: {unavailable.Reason}"));
+                    Post(() => _conversation.Fail($"DiffDino's agent connections server is not available: {unavailable.Reason}"));
                     return;
                 default:
                     throw new InvalidOperationException("Unhandled endpoint.");
@@ -131,7 +157,7 @@ internal sealed class TerminalPairingDriver : IAsyncDisposable
             return;
         }
 
-        var prompt = PairingInstructions.Opening(_store.Goal, _repo.Path);
+        var prompt = _opening;
         var promptFile = Path.Combine(_scratch, "prompt.md");
         var configFile = Path.Combine(_scratch, "mcp.json");
         try
@@ -148,7 +174,7 @@ internal sealed class TerminalPairingDriver : IAsyncDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Post(() => _store.Fail($"The agent's files could not be written: {e.Message}"));
+            Post(() => _conversation.Fail($"The agent's files could not be written: {e.Message}"));
             return;
         }
 
@@ -160,28 +186,28 @@ internal sealed class TerminalPairingDriver : IAsyncDisposable
         if (_stop.IsCancellationRequested) return;
         if (TerminalAgentCommand.Build(_template, ShellCommand.Family, values) is not { } command)
         {
-            _store.Fail("The command template can't be filled safely for this shell. Use {promptFile} instead of {prompt}.");
+            _conversation.Fail("The command template can't be filled safely for this shell. Use {promptFile} instead of {prompt}.");
             return;
         }
 
         var terminal = _terminals.StartIn(_repo, _launches(_label, _repo.Path, command));
         _terminal = terminal;
         _navigator.Show(new ContentPlace.Shell(terminal));
-        _store.MarkRunning();
-        _store.AddNotice(
+        _conversation.MarkRunning();
+        _conversation.Transcript.AddNotice(
             $"{_label} runs in a terminal with no enforced write guard: keeping it read-only is up to the command's own flags.",
             NoticeTone.Refused);
         _watch = terminal.Render.Subscribe(state =>
         {
             if (state is TerminalRenderState.Exited or TerminalRenderState.Failed or TerminalRenderState.Faulted)
-                _store.MarkDisconnected($"{_label}'s terminal exited.");
+                _conversation.Disconnect($"{_label}'s terminal exited.");
         });
     }
 
     private void Post(Action action) => _dispatcher.Post(action);
 
-    /// <summary>Ends the agent with its terminal, so it can't drive the repository's next session.
-    /// UI thread.</summary>
+    /// <summary>Ends the agent with its terminal, so it can't drive the repository's next
+    /// conversation. UI thread.</summary>
     public ValueTask DisposeAsync()
     {
         _stop.Cancel();

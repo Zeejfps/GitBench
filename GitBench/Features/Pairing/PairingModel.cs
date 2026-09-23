@@ -166,10 +166,16 @@ internal abstract record PairingAction(int Stop)
     public sealed record Cancelled(int Stop) : PairingAction(Stop);
 }
 
-/// <summary>One entry of the conversation about the open stop — it starts afresh as the user
-/// moves on from each one.</summary>
+/// <summary>One entry of the conversation with the agent. Within a pairing session it starts
+/// afresh as the user moves on from each stop.</summary>
 internal abstract record PairingMessage
 {
+    /// <summary>A pairing session began here.</summary>
+    public sealed record SessionStarted(string Goal) : PairingMessage;
+
+    /// <summary>A pairing session finished, and how.</summary>
+    public sealed record SessionOver(PairingPhase Outcome) : PairingMessage;
+
     /// <summary>What the user said.</summary>
     public sealed record FromUser(string Text) : PairingMessage;
 

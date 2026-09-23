@@ -8,8 +8,9 @@ internal static class PairingInstructions
 {
     public static readonly string Protocol =
         "Pairing: you navigate and propose, the user writes or accepts.\n"
-        + "- A pairing session is started by the user in DiffDino; the pairing_* tools only work while "
-        + "one is running for the repository.\n"
+        + "- A pairing session is started by the user in DiffDino, or by you with pairing_start once the "
+        + "user asks to pair on something; the other pairing_* tools only work while one is running for "
+        + "the repository.\n"
         + "- You never edit the user's code yourself: your own file edits are refused. Read the code "
         + "with your own read tools as much as you need. Your shell works: use it to build and run the "
         + "tests, never to change files.\n"
@@ -54,15 +55,37 @@ internal static class PairingInstructions
         + "compile, and when they fail, say what failed with pairing_say and make the fix the next stop.\n"
         + "- When the roadmap is done, call pairing_end with a short summary.";
 
+    /// <summary>What the agent is for between sessions, as the conversation outlives each one.</summary>
+    public static readonly string BetweenSessions =
+        "Between sessions: when a session ends, the conversation goes on in DiffDino's panel. The user "
+        + "may ask for anything there — commit what was done, push it, run the tests, explain code — "
+        + "and you answer and do it with your own tools, in plain replies rather than pairing_say. "
+        + "Your file edits stay refused: when the code needs changing, offer to pair on it, and once "
+        + "the user agrees call pairing_start with the goal. Git works through your shell; a push is "
+        + "put to the user before it runs.";
+
+    private const string Begin = "Begin: read what you need, send the roadmap, then the first stop, then wait.";
+
     /// <summary>The first turn of an agent the app started for a session.</summary>
     public static string Opening(string goal, string repoPath) =>
         "We are pairing in DiffDino. You navigate me through the change one stop at a time and propose "
         + "the code for each, and I accept it or write it myself. Use the DiffDino MCP tools (pairing_roadmap, pairing_stop, pairing_wait, pairing_say, "
-        + "pairing_show, pairing_state, pairing_end).\n"
+        + "pairing_show, pairing_state, pairing_end, pairing_start).\n"
         + $"Pass repo: \"{repoPath}\" on every DiffDino call.\n\n"
         + $"The goal:\n{goal}\n\n"
         + Protocol + "\n\n"
-        + "Begin: read what you need, send the roadmap, then the first stop, then wait.";
+        + BetweenSessions + "\n\n"
+        + Begin;
+
+    /// <summary>The turn that tells the agent the user started a new session in the conversation.</summary>
+    public static string Resumed(string goal, string repoPath) =>
+        $"I started a new pairing session in DiffDino for repo \"{repoPath}\". The goal:\n{goal}\n\n"
+        + Protocol + "\n\n"
+        + Begin;
+
+    /// <summary>What <c>pairing_start</c> answers the agent with once the session is open.</summary>
+    public static readonly string Started =
+        "The session is open in DiffDino's Pairing panel.\n\n" + Protocol + "\n\n" + Begin;
 
     /// <summary>What an agent whose turn ended mid-session is told.</summary>
     public const string Continue =

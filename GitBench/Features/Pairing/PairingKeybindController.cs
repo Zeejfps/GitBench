@@ -23,7 +23,7 @@ internal sealed class PairingKeybindController : KeyboardMouseController
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
         if (e.State != InputState.Pressed || e.Phase != EventPhase.Bubbling) return;
-        if (_sessions.Active.Value?.Store is not { Stop.Value: not null } store) return;
+        if (_sessions.Active.Value?.Session.Value?.Store is not { Stop.Value: not null } store) return;
 
         if (_keys.Matches(KeyCommand.PairingAcceptAndNext, e.Key, e.Modifiers))
         {

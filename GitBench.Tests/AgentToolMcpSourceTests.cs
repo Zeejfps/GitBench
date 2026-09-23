@@ -374,7 +374,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
     }
     private PairingStore StartPairing()
     {
-        var store = new PairingStore("Add a retry", "Test agent", new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _clock);
+        var store = new PairingStore("Add a retry", "Test agent", new AgentTranscript(), new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _clock);
         store.MarkRunning();
         _pairing.Stores[_repo.Id] = store;
         return store;
@@ -416,6 +416,32 @@ public sealed class AgentToolMcpSourceTests : IDisposable
         await _client.Initialize();
 
         var result = Await(_client.Call("pairing_state", new { repo = _dir.Path }), "the call");
+
+        Assert.True(McpTestClient.IsError(result));
+        Assert.Contains("New pairing session", McpTestClient.TextOf(result));
+    }
+
+    [Fact]
+    public async Task PairingStart_OpensASession_AndHandsTheAgentTheProtocol()
+    {
+        await _client.Initialize();
+        _pairing.Starter = goal => new PairingStore(
+            goal, "Test agent", new AgentTranscript(), new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _clock);
+
+        var result = Await(_client.Call("pairing_start", new { repo = _dir.Path, goal = "Add a retry" }), "the call");
+
+        Assert.False(McpTestClient.IsError(result));
+        Assert.Contains("pairing_roadmap", McpTestClient.TextOf(result));
+        Assert.Equal("Add a retry", _pairing.Stores[_repo.Id].Goal);
+        _pairing.Stores[_repo.Id].Dispose();
+    }
+
+    [Fact]
+    public async Task PairingStart_WithoutAConversation_SaysWhereTheUserStartsOne()
+    {
+        await _client.Initialize();
+
+        var result = Await(_client.Call("pairing_start", new { repo = _dir.Path, goal = "Add a retry" }), "the call");
 
         Assert.True(McpTestClient.IsError(result));
         Assert.Contains("New pairing session", McpTestClient.TextOf(result));

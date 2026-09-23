@@ -92,7 +92,7 @@ internal abstract record Showing
 }
 
 /// <summary>
-/// One pairing session's loop: the goal, the roadmap, the stop the user is on, the conversation,
+/// One pairing session's loop: the goal, the roadmap, the stop the user is on, its part of the conversation,
 /// and the hand-off between the agent and the user. The agent proposes a stop and waits; the user
 /// edits and presses Done, and the wait completes with their diff since the stop was shown. Every
 /// member is UI-thread only; the wait's task is what crosses to a tool thread.
@@ -119,10 +119,9 @@ internal sealed class PairingStore : IDisposable
     private readonly State<IReadOnlyList<RoadmapEntry>> _roadmap = new(Array.Empty<RoadmapEntry>());
     private readonly State<OpenStop?> _stop = new(null);
     private readonly State<StopActivity> _activity = new(StopActivity.Idle);
-    private readonly State<State<string>?> _openNarration = new(null);
-    private readonly ObservableList<PairingMessage> _messages = new();
+    private readonly AgentTranscript _transcript;
+    private readonly int _transcriptStart;
     private readonly Queue<PairingAction> _queued = new();
-    private readonly Derived<bool> _isComposing;
 
     private IReadOnlyList<Milestone> _milestones = Array.Empty<Milestone>();
     private int _stopsSent;
@@ -137,6 +136,7 @@ internal sealed class PairingStore : IDisposable
     public PairingStore(
         string goal,
         string harness,
+        AgentTranscript transcript,
         IPairingPresentation presentation,
         IPairingWorkspace workspace,
         IUiDispatcher dispatcher,
@@ -148,8 +148,8 @@ internal sealed class PairingStore : IDisposable
         _workspace = workspace;
         _dispatcher = dispatcher;
         _clock = clock;
-        _isComposing = new Derived<bool>(() =>
-            _phase.Value is PairingPhase.Starting or PairingPhase.Running { Waiting: false } && _openNarration.Value is null);
+        _transcript = transcript;
+        _transcriptStart = transcript.Count;
     }
 
     public string Goal { get; }
@@ -167,12 +167,6 @@ internal sealed class PairingStore : IDisposable
 
     /// <summary>What Done is busy with.</summary>
     public IReadable<StopActivity> Activity => _activity;
-
-    public ObservableList<PairingMessage> Messages => _messages;
-
-
-    /// <summary>True while the agent is at work and nothing it writes has landed yet.</summary>
-    public IReadable<bool> IsComposing => _isComposing;
 
     /// <summary>Where the user is in the editor.</summary>
     public IReadable<EditorCaret?> Caret => _presentation.Caret;
@@ -308,7 +302,7 @@ internal sealed class PairingStore : IDisposable
         _stop.Value = opened;
         _presentation.RevealDraft(location, draft);
         _presentation.ShowDraft(location, draft, new SuggestionActions(() => _ = AcceptAsync(), () => _ = AcceptAndNextAsync()));
-        CloseNarration();
+        _transcript.CloseNarration();
         return new StopOpening.Opened(opened);
     }
 
@@ -325,7 +319,7 @@ internal sealed class PairingStore : IDisposable
         var waiter = new Waiter(StopNumber);
         _waiter = waiter;
         SetWaiting(true);
-        CloseNarration();
+        _transcript.CloseNarration();
         waiter.Timer = _clock.CreateTimer(
             _ => _dispatcher.Post(() => OnTimeout(waiter)), null, WaitTimeout, Timeout.InfiniteTimeSpan);
         waiter.Registration = ct.Register(() =>
@@ -357,60 +351,19 @@ internal sealed class PairingStore : IDisposable
         Finish(new PairingPhase.Disconnected(reason));
     }
 
-    /// <summary>Streams the agent's prose onto the message its current turn is writing.</summary>
-    public void AppendNarration(string text)
-    {
-        if (_disposed) return;
-        if (_openNarration.Value is { } open)
-        {
-            open.Value += text;
-            return;
-        }
-
-        var lead = text.TrimStart();
-        if (lead.Length == 0) return;
-        var opened = new State<string>(lead);
-        _openNarration.Value = opened;
-        _messages.Add(new PairingMessage.Narration(opened));
-    }
-
-    /// <summary>A whole reply from the agent, said through <c>pairing_say</c>: a message of its own,
-    /// whatever its turn streamed before it.</summary>
+    /// <summary>A whole reply from the agent, said through <c>pairing_say</c>.</summary>
     public void AddReply(string markdown)
     {
-        if (_disposed || string.IsNullOrWhiteSpace(markdown)) return;
-        CloseNarration();
-        _messages.Add(new PairingMessage.Narration(new State<string>(markdown.Trim())));
+        if (!_disposed) _transcript.AddReply(markdown);
     }
 
-    /// <summary>The agent's turn ended; its next prose is a message of its own.</summary>
-    public void CloseNarration() => _openNarration.Value = null;
-
-    // Moving on from a stop starts the conversation afresh: what was said about one stop is noise
-    // under the next. The agent keeps its own memory of it. A question still waiting on the user
-    // stays, since the agent is blocked on the answer.
-    private void ClearConversation()
-    {
-        CloseNarration();
-        var waiting = _messages.OfType<PairingMessage.Approval>().Where(a => a.Pending.IsPending.Value).ToList();
-        _messages.Clear();
-        foreach (var approval in waiting) _messages.Add(approval);
-    }
-
-    /// <summary>Puts a tool call the write guard has no rule for in front of the user.</summary>
-    public PendingToolApproval AskPermission(string title, string details)
-    {
-        var pending = new PendingToolApproval(title, details);
-        CloseNarration();
-        _messages.Add(new PairingMessage.Approval(pending));
-        return pending;
-    }
+    // Moving on from a stop starts the session's part of the conversation afresh: what was said
+    // about one stop is noise under the next. The agent keeps its own memory of it.
+    private void ClearConversation() => _transcript.ClearFrom(_transcriptStart);
 
     public void AddNotice(string text, NoticeTone tone)
     {
-        if (_disposed) return;
-        CloseNarration();
-        _messages.Add(new PairingMessage.Notice(text, tone));
+        if (!_disposed) _transcript.AddNotice(text, tone);
     }
 
     // ── the user's side ──────────────────────────────────────────────────────────────────────
@@ -546,8 +499,7 @@ internal sealed class PairingStore : IDisposable
     {
         if (_disposed || !IsLive || string.IsNullOrWhiteSpace(text)) return;
         var said = text.Trim();
-        CloseNarration();
-        _messages.Add(new PairingMessage.FromUser(said));
+        _transcript.AddFromUser(said);
         Deliver(new PairingAction.Message(StopNumber, said, _presentation.Caret.Value));
     }
 
@@ -605,7 +557,6 @@ internal sealed class PairingStore : IDisposable
         _disposed = true;
         _lifetime.Cancel();
         ResolveWaiter(new PairingAction.Cancelled(StopNumber));
-        _isComposing.Dispose();
     }
 
     // ── internals ────────────────────────────────────────────────────────────────────────────
@@ -618,7 +569,7 @@ internal sealed class PairingStore : IDisposable
         _stop.Value = null;
         _presentation.ClearDraft();
         _activity.Value = StopActivity.Idle;
-        CloseNarration();
+        _transcript.CloseNarration();
         _phase.Value = phase;
         ResolveWaiter(lastWord ?? new PairingAction.Cancelled(StopNumber));
     }

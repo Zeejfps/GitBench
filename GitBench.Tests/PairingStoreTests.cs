@@ -15,11 +15,12 @@ public sealed class PairingStoreTests : IDisposable
     private readonly ScriptedWorkspace _workspace = new();
     private readonly QueuedDispatcher _dispatcher = new();
     private readonly ManualTimeProvider _clock = new();
+    private readonly AgentTranscript _transcript = new();
     private readonly PairingStore _store;
 
     public PairingStoreTests()
     {
-        _store = new PairingStore("Add a retry", "Claude Code", _presentation, _workspace, _dispatcher, _clock);
+        _store = new PairingStore("Add a retry", "Claude Code", _transcript, _presentation, _workspace, _dispatcher, _clock);
         _store.MarkRunning();
     }
 
@@ -167,7 +168,7 @@ public sealed class PairingStoreTests : IDisposable
 
         var ask = Assert.IsType<PairingAction.Message>(wait.Result);
         Assert.Equal("retries", ask.Caret!.SelectedText);
-        Assert.Contains(_store.Messages, m => m is PairingMessage.FromUser { Text: "Is this the right place?" });
+        Assert.Contains(_transcript.Messages, m => m is PairingMessage.FromUser { Text: "Is this the right place?" });
     }
 
     [Fact]
@@ -302,7 +303,7 @@ public sealed class PairingStoreTests : IDisposable
         Assert.False(wait.IsCompleted);
         Assert.NotNull(_store.Stop.Value);
         Assert.Equal(StopActivity.Idle, _store.Activity.Value);
-        Assert.Equal(NoticeTone.Error, Assert.IsType<PairingMessage.Notice>(Assert.Single(_store.Messages)).Tone);
+        Assert.Equal(NoticeTone.Error, Assert.IsType<PairingMessage.Notice>(Assert.Single(_transcript.Messages)).Tone);
     }
 
     [Fact]
@@ -356,12 +357,12 @@ public sealed class PairingStoreTests : IDisposable
     [Fact]
     public void Narration_StreamsOntoOneMessagePerTurn()
     {
-        _store.AppendNarration("  Let's ");
-        _store.AppendNarration("start.");
-        _store.CloseNarration();
-        _store.AppendNarration("Next.");
+        _transcript.AppendNarration("  Let's ");
+        _transcript.AppendNarration("start.");
+        _transcript.CloseNarration();
+        _transcript.AppendNarration("Next.");
 
-        var narrations = _store.Messages.OfType<PairingMessage.Narration>().Select(n => n.Text.Value).ToList();
+        var narrations = _transcript.Messages.OfType<PairingMessage.Narration>().Select(n => n.Text.Value).ToList();
         Assert.Equal(["Let's start.", "Next."], narrations);
     }
 
@@ -400,15 +401,15 @@ public sealed class PairingStoreTests : IDisposable
     {
         Open();
         _store.Say("Why here?");
-        _store.AppendNarration("Because it's the entry point.");
-        Assert.Equal(2, _store.Messages.Count);
+        _transcript.AppendNarration("Because it's the entry point.");
+        Assert.Equal(2, _transcript.Messages.Count);
 
         var done = _store.DoneAsync();
         Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to finish");
 
-        Assert.Empty(_store.Messages);
-        _store.AppendNarration("Next, the caller.");
-        Assert.Single(_store.Messages);
+        Assert.Empty(_transcript.Messages);
+        _transcript.AppendNarration("Next, the caller.");
+        Assert.Single(_transcript.Messages);
     }
 
     [Fact]
@@ -416,11 +417,11 @@ public sealed class PairingStoreTests : IDisposable
     {
         Open();
         _store.Say("Skip this one");
-        var approval = _store.AskPermission("Switch mode", "SwitchMode");
+        var approval = _transcript.AskPermission("Switch mode", "SwitchMode");
 
         _store.Skip();
 
-        var kept = Assert.Single(_store.Messages);
+        var kept = Assert.Single(_transcript.Messages);
         Assert.Same(approval, Assert.IsType<PairingMessage.Approval>(kept).Pending);
     }
 

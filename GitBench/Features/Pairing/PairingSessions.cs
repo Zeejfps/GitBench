@@ -33,111 +33,138 @@ internal abstract record PairingHarness
     }
 }
 
-/// <summary>One pairing session: the repository, the loop, and whatever runs the agent.</summary>
-internal sealed class PairingSession : IAsyncDisposable
+/// <summary>One pairing session: the repository, the loop, and the editor it shows in. The agent
+/// that drives it belongs to the conversation the session runs in.</summary>
+internal sealed class PairingSession : IDisposable
 {
-    private readonly IAsyncDisposable? _driver;
     private readonly IDisposable _presentation;
 
-    public PairingSession(Repo repo, PairingHarness harness, PairingStore store, IDisposable presentation, IAsyncDisposable? driver)
+    public PairingSession(Repo repo, PairingStore store, IDisposable presentation)
     {
         Repo = repo;
-        Harness = harness;
         Store = store;
         _presentation = presentation;
-        _driver = driver;
     }
 
     public Repo Repo { get; }
 
-    public PairingHarness Harness { get; }
-
     public PairingStore Store { get; }
 
-    /// <summary>Ends the session. Called on the UI thread, where the store and the presentation are
-    /// let go before anything is awaited; the driver's own teardown may finish elsewhere.</summary>
-    public async ValueTask DisposeAsync()
+    /// <summary>Ends the session. UI thread.</summary>
+    public void Dispose()
     {
         Store.EndByUser();
         _presentation.Dispose();
         Store.Dispose();
-        if (_driver is not null) await _driver.DisposeAsync().ConfigureAwait(false);
     }
 }
 
-/// <summary>How starting a session came out.</summary>
+/// <summary>How the user starting a session came out.</summary>
 internal abstract record PairingStart
 {
-    public sealed record Started(PairingSession Session) : PairingStart;
+    public sealed record Started(AgentConversation Conversation) : PairingStart;
 
     /// <summary>A live session already runs for the repository.</summary>
-    public sealed record AlreadyRunning(PairingSession Session) : PairingStart;
+    public sealed record AlreadyRunning(AgentConversation Conversation) : PairingStart;
+}
+
+/// <summary>How the agent starting a session came out.</summary>
+internal abstract record AgentPairingStart
+{
+    public sealed record Started(PairingStore Store) : AgentPairingStart;
+
+    /// <summary>A live session already runs for the repository.</summary>
+    public sealed record AlreadyRunning(PairingStore Store) : AgentPairingStart;
+
+    /// <summary>No conversation with an agent is open for the repository in DiffDino.</summary>
+    public sealed record NoConversation : AgentPairingStart;
 }
 
 /// <summary>
-/// Every repository's pairing session, one at most per repository, and the one for the repository
-/// on screen. A finished session stays until the user closes it or starts another, so its summary
-/// can be read. UI thread only.
+/// Every repository's agent conversation, one at most per repository, and the one for the
+/// repository on screen. A conversation stays until the user closes it, across the pairing
+/// sessions run in it. UI thread only.
 /// </summary>
 internal sealed class PairingSessions : IPairingSessions, IDisposable
 {
     private readonly IRepoRegistry _repos;
-    private readonly Func<Repo, string, PairingHarness, PairingSession> _create;
-    private readonly Dictionary<Guid, PairingSession> _sessions = new();
-    private readonly State<PairingSession?> _active = new(null);
+    private readonly Func<Repo, PairingHarness, string, AgentConversation> _create;
+    private readonly Dictionary<Guid, AgentConversation> _conversations = new();
+    private readonly State<AgentConversation?> _active = new(null);
     private readonly IDisposable _following;
 
-    public PairingSessions(IRepoRegistry repos, Func<Repo, string, PairingHarness, PairingSession> create)
+    public PairingSessions(IRepoRegistry repos, Func<Repo, PairingHarness, string, AgentConversation> create)
     {
         _repos = repos;
         _create = create;
         _following = repos.Active.Subscribe(_ => Refresh());
     }
 
-    /// <summary>The session of the repository on screen, if it has one.</summary>
-    public IReadable<PairingSession?> Active => _active;
+    /// <summary>The conversation of the repository on screen, if it has one.</summary>
+    public IReadable<AgentConversation?> Active => _active;
 
-    public PairingStore? StoreFor(Guid repoId) => _sessions.TryGetValue(repoId, out var session) ? session.Store : null;
+    /// <summary>The repository's conversation while its agent is still there.</summary>
+    public AgentConversation? LiveConversation(Guid repoId) =>
+        _conversations.TryGetValue(repoId, out var conversation) && !conversation.IsGone ? conversation : null;
 
+    public PairingStore? StoreFor(Guid repoId) =>
+        _conversations.TryGetValue(repoId, out var conversation) ? conversation.Session.Value?.Store : null;
+
+    /// <summary>The user starts a session: in the repository's conversation while its agent is
+    /// there, which keeps the agent it has, or in a new one with <paramref name="harness"/>.</summary>
     public PairingStart Start(Repo repo, string goal, PairingHarness harness)
     {
-        if (_sessions.TryGetValue(repo.Id, out var existing))
+        if (_conversations.TryGetValue(repo.Id, out var existing))
         {
-            if (existing.Store.IsLive) return new PairingStart.AlreadyRunning(existing);
-            _sessions.Remove(repo.Id);
+            if (!existing.IsGone)
+            {
+                if (existing.IsPairing) return new PairingStart.AlreadyRunning(existing);
+                existing.BeginSession(goal.Trim());
+                return new PairingStart.Started(existing);
+            }
+
+            _conversations.Remove(repo.Id);
             _ = existing.DisposeAsync().AsTask();
         }
 
-        var session = _create(repo, goal.Trim(), harness);
-        _sessions[repo.Id] = session;
+        var conversation = _create(repo, harness, goal.Trim());
+        _conversations[repo.Id] = conversation;
         Refresh();
-        return new PairingStart.Started(session);
+        return new PairingStart.Started(conversation);
     }
 
-    /// <summary>Ends a repository's session, if it is still running, and takes it off screen.</summary>
+    public AgentPairingStart StartByAgent(Guid repoId, string goal)
+    {
+        if (LiveConversation(repoId) is not { } conversation) return new AgentPairingStart.NoConversation();
+        if (conversation.Session.Value is { Store.IsLive: true } running) return new AgentPairingStart.AlreadyRunning(running.Store);
+        return new AgentPairingStart.Started(conversation.StartSession(goal.Trim()).Store);
+    }
+
+    /// <summary>Ends a repository's conversation — its session, if one runs, and its agent — and
+    /// takes it off screen.</summary>
     public void Close(Guid repoId)
     {
-        if (!_sessions.Remove(repoId, out var session)) return;
-        _ = session.DisposeAsync().AsTask();
+        if (!_conversations.Remove(repoId, out var conversation)) return;
+        _ = conversation.DisposeAsync().AsTask();
         Refresh();
     }
 
     private void Refresh()
     {
-        var active = _repos.Active.Value is { } repo && _sessions.TryGetValue(repo.Id, out var session) ? session : null;
+        var active = _repos.Active.Value is { } repo && _conversations.TryGetValue(repo.Id, out var conversation) ? conversation : null;
         if (!ReferenceEquals(_active.Value, active)) _active.Value = active;
     }
 
     public void Dispose()
     {
         _following.Dispose();
-        foreach (var session in _sessions.Values) _ = session.DisposeAsync().AsTask();
-        _sessions.Clear();
+        foreach (var conversation in _conversations.Values) _ = conversation.DisposeAsync().AsTask();
+        _conversations.Clear();
     }
 
-    /// <summary>The factory the app runs sessions with: the Files pane as the surface, git for the
-    /// snapshots, and the harness's own driver.</summary>
-    public static Func<Repo, string, PairingHarness, PairingSession> Factory(
+    /// <summary>The factory the app runs conversations with: the Files pane as the surface of their
+    /// sessions, git for the snapshots, and the harness's own driver, opened on the first goal.</summary>
+    public static Func<Repo, PairingHarness, string, AgentConversation> Factory(
         IRepoRegistry repos,
         IFileBrowserStore browsers,
         IFileTextSource texts,
@@ -151,17 +178,25 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         IContentNavigator navigator,
         IUiDispatcher dispatcher,
         TimeProvider clock) =>
-        (repo, goal, harness) =>
+        (repo, harness, goal) =>
         {
-            var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver);
-            var store = new PairingStore(goal, harness.Label, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
-            IAsyncDisposable driver = harness switch
+            var conversation = new AgentConversation(repo, harness, (sessionGoal, transcript) =>
             {
-                PairingHarness.Acp acp => AcpPairingDriver.Start(store, repo, acp.Harness, endpoints, environment, dispatcher),
+                var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver);
+                var store = new PairingStore(
+                    sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
+                return new PairingSession(repo, store, presentation);
+            }, dispatcher);
+            conversation.StartSession(goal);
+            var opening = PairingInstructions.Opening(goal, repo.Path);
+            IAgentDriver driver = harness switch
+            {
+                PairingHarness.Acp acp => AcpPairingDriver.Start(conversation, opening, acp.Harness, endpoints, environment, dispatcher),
                 PairingHarness.Terminal terminal => TerminalPairingDriver.Start(
-                    store, repo, terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
+                    conversation, opening, terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
                 _ => throw new ArgumentOutOfRangeException(nameof(harness), harness, "Unknown harness."),
             };
-            return new PairingSession(repo, harness, store, presentation, driver);
+            conversation.Attach(driver);
+            return conversation;
         };
 }

@@ -368,6 +368,23 @@ level before the useful thing — the code — showed up. Now:
   shell tools disallowed. On Windows the shell stays open after the agent exits, so a session there
   only learns the agent is gone when the user ends it.
 
+### The conversation outlives the session
+
+- The panel now holds an `AgentConversation` per repository: the agent (driver), the transcript, and
+  the pairing session running in it, if any. A session that ends becomes a `SessionOver` entry in
+  the transcript and the agent stays, so the user can ask it to commit or push, or to pair again.
+  Close ends the conversation and stops the agent; End ends only the session.
+- Between sessions an ACP agent gets what the user types as a plain turn. A terminal agent is talked
+  to in its terminal; a session the user starts later reaches it as one pasted line naming a prompt
+  file.
+- `pairing_start(goal)` opens a session in the repository's conversation; with no conversation open
+  in DiffDino it refuses. The New pairing session dialog starts the session in the existing
+  conversation and keeps its agent.
+- Edits stay refused between sessions. A shell command that runs `git push` is put to the user
+  (`AcpPermissionPolicy.Pushes`). A push that the CLI's own allow rules already cover never reaches
+  the client, and the terminal preset has no guard at all.
+- Moving on from a stop clears only the session's own part of the transcript.
+
 ### Verified by hand
 
 Claude Code over ACP, in a scratch repository: a session start to finish with a correction stop;
