@@ -208,6 +208,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private FileLine? _ghostAnchor;
     private FileLine? _ghostFrom;
     private (string Path, Action<bool> Done)? _pendingTake;
+    private ReplacedLine[] _replaced = [];
     private Features.Editor.EditorBuffer? _ghostBuffer;
     private bool _ghostRefreshPosted;
     private FileSpan? _pendingSearchReveal;
@@ -279,7 +280,6 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             _styles = s.DiffContent;
             _surface.ButtonStyles = s.DiffHunkButton;
             _painter.Styles = s.DiffContent;
-            _painter.SpotlightBand = s.ReviewSpotlight.Band;
             SetDirty();
         });
 
@@ -684,11 +684,38 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private static bool IsHinted(string documentPath, string hintedPath) =>
         PathKey.Comparer.Equals(PathKey.Normalize(documentPath), PathKey.Normalize(hintedPath));
 
-    private bool SpotlitAt(int rowIndex)
+    private ReplacedLine? ReplacedAt(int rowIndex)
     {
-        if (_ghostFrom is not { } from || _ghostAnchor is not { } to || _hints is not { } hints) return false;
-        if (Document is not { } editor || !IsHinted(editor.Path, hints.Path)) return false;
-        return RowSource.NewLineAt(new RowIndex(rowIndex)) is { } line && from.Value <= line.Value && line.Value <= to.Value;
+        if (_ghostFrom is not { } from || _hints is not { } hints) return null;
+        if (Document is not { } editor || !IsHinted(editor.Path, hints.Path)) return null;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } line) return null;
+        var index = line.Value - from.Value;
+        return index >= 0 && index < _replaced.Length ? _replaced[index] : null;
+    }
+
+    // The suggestion under the lines it replaces, paired with them line by line as a diff's replace
+    // block is, so each pair shows the characters that change.
+    private Features.Editor.GhostLines Replacement(Features.Editor.TextDocument document, FileLine from, FileLine to, IReadOnlyList<string> lines)
+    {
+        var count = Math.Clamp(to.Value - from.Value + 1, 0, Math.Max(0, document.LineCount - from.Value + 1));
+        var replaced = new ReplacedLine[count];
+        var added = new IReadOnlyList<CharRange>?[lines.Count];
+        for (var k = 0; k < count; k++)
+        {
+            IReadOnlyList<CharRange>? emphasis = null;
+            if (k < lines.Count)
+            {
+                var (old, @new) = IntraLineDiff.ForPair(
+                    DiffText.ExpandTabs(document.Line(new FileLine(from.Value + k))), DiffText.ExpandTabs(lines[k]));
+                if (old.Count > 0) emphasis = old;
+                if (@new.Count > 0) added[k] = @new;
+            }
+
+            replaced[k] = new ReplacedLine(emphasis);
+        }
+
+        _replaced = replaced;
+        return new Features.Editor.GhostLines(to, lines, added);
     }
 
     // Draws the suggestion into the buffer on screen when it is the hinted file, and takes it out of
@@ -712,9 +739,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         if (target is null || _hints?.Ghost is not { } ghost || _ghostAnchor is not { } anchor) return;
         var document = target.Document;
-        target.Rows.SetGhost(_ghostFrom is null
-            ? Features.Editor.GhostMatch.Remaining(ghost.Lines, anchor, document.LineCount, n => document.Line(new FileLine(n)))
-            : new Features.Editor.GhostLines(anchor, ghost.Lines));
+        target.Rows.SetGhost(_ghostFrom is { } from
+            ? Replacement(document, from, anchor, ghost.Lines)
+            : Features.Editor.GhostMatch.Remaining(ghost.Lines, anchor, document.LineCount, n => document.Line(new FileLine(n))));
         ReconcileRows();
         if (_pendingTake is not null) _dispatcher?.Post(RunPendingTake);
     }
@@ -883,7 +910,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 Diagnostics = MarksOnRow(rowIndex),
                 Link = LinkOnRow(rowIndex),
                 Search = SearchOnRow(rowIndex),
-                Spotlit = SpotlitAt(rowIndex),
+                Replaced = ReplacedAt(rowIndex),
             };
         _surface.DrawRow(c, rowRect, rowIndex, z, composing?.Line ?? Recolored(rows[rowIndex]), paint);
 

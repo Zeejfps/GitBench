@@ -16,7 +16,10 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
 
     public Func<StopTarget, StopPlacement> Answer { get; set; } = target =>
         new StopPlacement.Placed(new StopLocation.OnSymbol(
-            "C:/repo/" + target.Path, TextPosition.At(10, 4), "void " + target.Symbol + "()", new FileLine(14), 40));
+            "C:/repo/" + target.Path, TextPosition.At(10, 4), "void " + target.Symbol + "()", new FileLine(14), FileLines));
+
+    /// <summary>The stop's file: 40 lines reading "line 1" to "line 40".</summary>
+    public static readonly IReadOnlyList<string> FileLines = Enumerable.Range(1, 40).Select(n => $"line {n}").ToArray();
 
     public List<string> SaveProblems { get; } = new();
 

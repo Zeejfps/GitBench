@@ -59,11 +59,11 @@ internal abstract record PairingPhase
 internal abstract record StopLocation
 {
     /// <summary>On the declaration's name. <paramref name="LastLine"/> is where the declaration
-    /// ends; <paramref name="LineCount"/> is the file's.</summary>
-    public sealed record OnSymbol(string AbsolutePath, TextPosition At, string LineText, FileLine LastLine, int LineCount) : StopLocation;
+    /// ends; <paramref name="Lines"/> are the file's, as it was found.</summary>
+    public sealed record OnSymbol(string AbsolutePath, TextPosition At, string LineText, FileLine LastLine, IReadOnlyList<string> Lines) : StopLocation;
 
     /// <summary>A declaration still to be written: the end of the one it goes after.</summary>
-    public sealed record Insertion(string AbsolutePath, TextPosition At, string After, int LineCount) : StopLocation;
+    public sealed record Insertion(string AbsolutePath, TextPosition At, string After, IReadOnlyList<string> Lines) : StopLocation;
 
     /// <summary>The file doesn't exist yet: the user creates it.</summary>
     public sealed record NewFile(string AbsolutePath) : StopLocation;

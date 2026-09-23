@@ -35,7 +35,11 @@ internal readonly record struct DiffRowPaint(
     UsageLensState? Usages = null,
     bool LensHovered = false,
     IReadOnlyList<SearchMark>? Search = null,
-    bool Spotlit = false);
+    ReplacedLine? Replaced = null);
+
+/// <summary>A line that suggested code would replace, drawn as a removed line, with the characters
+/// that change, if the suggestion pairs with it.</summary>
+internal sealed record ReplacedLine(IReadOnlyList<CharRange>? Emphasis);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -420,16 +424,18 @@ internal sealed class DiffRowPainter
     private void DrawLineRow(ICanvas c, DiffRow.Line l, in DiffRowPaint p)
     {
         DrawRowBackground(c, l, p);
-        if (p.Spotlit)
+        if (p.Replaced is not null)
             c.DrawRect(new DrawRectInputs
             {
                 Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
-                Style = SolidBgStyle(SpotlightBand),
+                Style = SolidBgStyle(Styles.LineRemovedBackground),
                 ZIndex = p.Z,
             });
         var textLeft = DrawGutterAndGlyph(c, l, p);
         if (l.Emphasis is { Count: > 0 } ranges)
-            DrawIntraLineEmphasis(c, l, ranges, textLeft, p.Bottom, p.Z);
+            DrawIntraLineEmphasis(c, l.Text.Expanded, ranges, EmphasisOf(l.Kind), textLeft, p.Bottom, p.Z);
+        if (p.Replaced is { Emphasis: { Count: > 0 } replaced })
+            DrawIntraLineEmphasis(c, l.Text.Expanded, replaced, Styles.LineRemovedEmphasisBackground, textLeft, p.Bottom, p.Z);
         // Above the emphasis wash (same layer, drawn after) and below the text, which stays
         // fully legible through the selection tint. A link's wash goes under a selection's, so
         // selecting across a link still reads as one continuous selection.
@@ -456,12 +462,8 @@ internal sealed class DiffRowPainter
             DrawFoldChip(c, l, chip, textLeft, p);
     }
 
-    /// <summary>The wash a line lit up for the reader is drawn under; set from the theme by the
-    /// surface that draws spotlights.</summary>
-    public uint SpotlightBand { get; set; }
-
-    // A suggestion, not a line: no gutter number, in the muted color the usages rows use, over the
-    // spotlight wash so it reads as something laid over the file.
+    // A suggestion, not a line: no gutter number, drawn as an added line so a suggestion that
+    // replaces lines reads as a diff against them.
     private void DrawGhostRow(ICanvas c, DiffRow.Ghost ghost, in DiffRowPaint p)
     {
         c.DrawRect(new DrawRectInputs
@@ -473,12 +475,14 @@ internal sealed class DiffRowPainter
         c.DrawRect(new DrawRectInputs
         {
             Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
-            Style = SolidBgStyle(SpotlightBand),
+            Style = SolidBgStyle(Styles.LineAddedBackground),
             ZIndex = p.Z,
         });
         var textLeft = TextOriginOf(p);
+        if (ghost.Emphasis is { Count: > 0 } ranges)
+            DrawIntraLineEmphasis(c, ghost.Text, ranges, Styles.LineAddedEmphasisBackground, textLeft, p.Bottom, p.Z);
         DrawMonoText(c, ghost.Text, textLeft, p.Bottom, Math.Max(0f, p.Left + p.Width - textLeft),
-            Styles.UsageLensText, TextAlignment.Start, p.Z + 2);
+            Styles.LineText, TextAlignment.Start, p.Z + 2);
     }
 
     // Text and nothing else. A usages row has no line of its own in the file, so a number in the
@@ -837,13 +841,13 @@ internal sealed class DiffRowPainter
     // Intra-line emphasis: a stronger background tint over the changed characters, layered between
     // the line bg (z) and the text (z + 2). Walk the ranges incrementally, carrying cx forward
     // exactly as DrawLineText does, never re-measuring from column 0.
+    private uint EmphasisOf(DiffLineKind kind) => kind == DiffLineKind.Removed
+        ? Styles.LineRemovedEmphasisBackground
+        : Styles.LineAddedEmphasisBackground;
+
     private void DrawIntraLineEmphasis(
-        ICanvas c, DiffRow.Line l, IReadOnlyList<CharRange> ranges, float textLeft, float bottom, int z)
+        ICanvas c, string text, IReadOnlyList<CharRange> ranges, uint emBg, float textLeft, float bottom, int z)
     {
-        var emBg = l.Kind == DiffLineKind.Removed
-            ? Styles.LineRemovedEmphasisBackground
-            : Styles.LineAddedEmphasisBackground;
-        var text = l.Text.Expanded;
         var len = text.Length;
         var col = 0;
         var cx = textLeft;

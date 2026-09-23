@@ -394,3 +394,44 @@ public sealed class PairingStoreTests : IDisposable
         Assert.Contains("missing.cs", Assert.IsType<Showing.Refused>(shown).Message);
     }
 }
+
+public sealed class DraftPlacingTests
+{
+    private static readonly StopLocation Stop = new StopLocation.OnSymbol(
+        "C:/repo/a.ts", TextPosition.At(26, 0), "line 26", new FileLine(27), RecordingPairingPresentation.FileLines);
+
+    private static StopDraft Place(string code, DraftSpan? span = null) =>
+        Assert.IsType<DraftPlacement.Placed>(DraftPlacing.Place(Stop, new DraftRequest(code, span ?? new DraftSpan.Declaration()))).Draft;
+
+    [Fact]
+    public void LinesThatReadTheSame_AreLeftOut_SoAddedLinesGoInAsAnInsertion()
+    {
+        var draft = Place("line 26\nline 27\nauthorId?: string");
+
+        Assert.Equal(new StopDraft("authorId?: string", new DraftPlace.InsertAfter(new FileLine(27))), draft);
+    }
+
+    [Fact]
+    public void OnlyTheLinesThatChange_AreReplaced()
+    {
+        var draft = Place("line 20\nchanged\nline 22", new DraftSpan.Lines(20, 22));
+
+        Assert.Equal(new StopDraft("changed", new DraftPlace.Replace(new LineSpan(21, 21))), draft);
+    }
+
+    [Fact]
+    public void LinesAddedAboveTheFirstLine_KeepItInTheReplacement()
+    {
+        var draft = Place("import x\nline 1", new DraftSpan.Lines(1, 1));
+
+        Assert.Equal(new StopDraft("import x\nline 1", new DraftPlace.Replace(new LineSpan(1, 1))), draft);
+    }
+
+    [Fact]
+    public void CodeThatChangesNothing_IsRefused()
+    {
+        var placement = DraftPlacing.Place(Stop, new DraftRequest("line 26\nline 27", new DraftSpan.Declaration()));
+
+        Assert.Contains("changes nothing", Assert.IsType<DraftPlacement.Refused>(placement).Message);
+    }
+}

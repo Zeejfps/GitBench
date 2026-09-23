@@ -69,5 +69,5 @@ internal abstract record DiffRow
     /// them: it has no number, and nothing selects it, types into it, or searches it. Tabs are
     /// already expanded.
     /// </summary>
-    public sealed record Ghost(string Text) : DiffRow;
+    public sealed record Ghost(string Text, IReadOnlyList<CharRange>? Emphasis = null) : DiffRow;
 }

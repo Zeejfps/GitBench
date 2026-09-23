@@ -307,7 +307,7 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         var line = LineOfRow(index);
         var own = RowOfLine(line);
         if (index > own && _ghost is { } ghost)
-            return new DiffRow.Ghost(DiffText.ExpandTabs(ghost.Lines[index - own - 1]));
+            return new DiffRow.Ghost(DiffText.ExpandTabs(ghost.Lines[index - own - 1]), ghost.Emphasis?[index - own - 1]);
         if (own != index)
             return _plan.LensAt(line)
                 ?? throw new InvalidOperationException(
@@ -624,12 +624,31 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
     }
 }
 
-/// <summary>Lines suggested to the reader, drawn after a line of the file. Compared by content, so
-/// setting the same suggestion again changes nothing.</summary>
-internal sealed record GhostLines(FileLine After, IReadOnlyList<string> Lines)
+/// <summary>Lines suggested to the reader, drawn after a line of the file, with the characters that
+/// differ from the lines they replace, if any. Compared by content, so setting the same suggestion
+/// again changes nothing.</summary>
+internal sealed record GhostLines(FileLine After, IReadOnlyList<string> Lines, IReadOnlyList<IReadOnlyList<CharRange>?>? Emphasis = null)
 {
     public bool Equals(GhostLines? other) =>
-        other is not null && After == other.After && Lines.SequenceEqual(other.Lines);
+        other is not null && After == other.After && Lines.SequenceEqual(other.Lines) && SameEmphasis(Emphasis, other.Emphasis);
+
+    private static bool SameEmphasis(IReadOnlyList<IReadOnlyList<CharRange>?>? a, IReadOnlyList<IReadOnlyList<CharRange>?>? b)
+    {
+        if (a is null || b is null) return a is null && b is null;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (a[i] is null || b[i] is null)
+            {
+                if (a[i] is not null || b[i] is not null) return false;
+                continue;
+            }
+
+            if (!a[i]!.SequenceEqual(b[i]!)) return false;
+        }
+
+        return true;
+    }
 
     public override int GetHashCode() => HashCode.Combine(After, Lines.Count);
 }

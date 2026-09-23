@@ -85,6 +85,16 @@ public sealed class EditorGhostTakeTests
     }
 
     [Fact]
+    public void AReplacement_ShowsTheCharactersThatChange_OnTheLineItReplaces()
+    {
+        var (_, view, buffer) = Show("a", "int count = 1;", "d");
+        view.SetHints(new EditorHints(Path, new EditorGhost(new GhostPlace.Replace(new FileLine(2), new FileLine(2)), ["int total = 1;"])));
+
+        var ghost = Assert.Single(buffer.Rows.Rows.OfType<DiffRow.Ghost>());
+        Assert.Equal([new CharRange(4, 5)], ghost.Emphasis);
+    }
+
+    [Fact]
     public void ASuggestionOverAnotherFile_IsNotTaken()
     {
         var (_, view, buffer) = Show("a", "b");
