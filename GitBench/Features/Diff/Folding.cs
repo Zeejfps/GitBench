@@ -67,7 +67,7 @@ internal sealed class FoldPlan
         if (folds is null && !usageLens) return Nothing;
 
         var plan = new FoldPlan(usageLens);
-        plan.Walk(outline.Roots, parentPath: null, folds, lines);
+        plan.Walk(outline.Roots, parentPath: null, folds, lines, insideBody: false);
         plan.Normalize();
         return plan;
     }
@@ -107,16 +107,20 @@ internal sealed class FoldPlan
     /// <summary>The usages row that goes above a line, or null where none does.</summary>
     public DiffRow.Lens? LensAt(int line) => _lenses.TryGetValue(line, out var lens) ? lens : null;
 
+    /// <param name="insideBody">Whether these declarations sit inside code that runs — a method's
+    /// body, a function's — where none of them gets a usages row.</param>
     private void Walk(
-        IReadOnlyList<OutlineNode> nodes, string? parentPath, FoldState? folds, IReadOnlyList<string> lines)
+        IReadOnlyList<OutlineNode> nodes, string? parentPath, FoldState? folds, IReadOnlyList<string> lines,
+        bool insideBody)
     {
         foreach (var node in nodes)
         {
             var path = FileOutline.PathOf(parentPath, node);
+            var childrenInsideBody = insideBody || RunsCode(node.Kind);
 
             // StartLine already skips attributes, decorators and annotations, so the lens sits
             // directly above the signature rather than above whatever decorates it.
-            if (_usageLens && HasLens(node.Kind))
+            if (_usageLens && !insideBody && HasLens(node.Kind))
                 _lenses[node.StartLine] = new DiffRow.Lens(
                     new FileLine(node.StartLine),
                     path,
@@ -128,7 +132,7 @@ internal sealed class FoldPlan
             // hides, so every declaration below is still reached.
             if (folds is null)
             {
-                Walk(node.Children, path, folds, lines);
+                Walk(node.Children, path, folds, lines, childrenInsideBody);
                 continue;
             }
 
@@ -137,7 +141,7 @@ internal sealed class FoldPlan
             // methods, positional records, delegates and enum members alike.
             if (node.SignatureEndLine >= node.EndLine)
             {
-                Walk(node.Children, path, folds, lines);
+                Walk(node.Children, path, folds, lines, childrenInsideBody);
                 continue;
             }
 
@@ -145,7 +149,7 @@ internal sealed class FoldPlan
             Mark(node.StartLine, path, collapsed, chevron: true, chip: false);
             if (!collapsed)
             {
-                Walk(node.Children, path, folds, lines);
+                Walk(node.Children, path, folds, lines, childrenInsideBody);
                 continue;
             }
 
@@ -182,6 +186,20 @@ internal sealed class FoldPlan
         }
         _hidden.RemoveRange(kept + 1, _hidden.Count - kept - 1);
     }
+
+    // What a body of statements belongs to. Inside one, the only declarations are local functions —
+    // and, far more often, a statement half typed that the parser's error recovery reads as one,
+    // together with the line below it. A row reserved for that would open above the line being
+    // typed and close again once it parsed, and its count would be a question about nothing.
+    private static bool RunsCode(SymbolKind kind) => kind switch
+    {
+        SymbolKind.Method or SymbolKind.Constructor or SymbolKind.Function
+            or SymbolKind.Property or SymbolKind.Event => true,
+        SymbolKind.Namespace or SymbolKind.Class or SymbolKind.Struct or SymbolKind.Interface
+            or SymbolKind.Record or SymbolKind.Enum or SymbolKind.Type or SymbolKind.Field
+            or SymbolKind.EnumMember => false,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unhandled symbol kind."),
+    };
 
     // Namespaces, fields and enum members are left out deliberately: a lens above every field
     // is chrome nobody asked for, and a namespace's usages are not a question about this file.

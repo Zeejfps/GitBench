@@ -43,6 +43,35 @@ public sealed class DiffUsageLensTests(CodeIntelFixture fixture)
 
     // ---- where the rows go ----
 
+    // A statement half typed inside a body — `v` above the next line — is read by the parser's error
+    // recovery as a local function spanning both lines. A row reserved for it opened above the line
+    // being typed and asked the server about a symbol that does not exist.
+    [Fact]
+    public void NothingInsideABodyGetsARowNotEvenWhatAHalfTypedStatementParsesAs()
+    {
+        const string halfTyped = """
+            namespace App;
+
+            class AuthService
+            {
+                void Login(string user)
+                {
+                    v
+                    Check(user);
+                }
+            }
+            """;
+        var lines = halfTyped.ReplaceLineEndings("\n").Split('\n');
+        var outline = fixture.Outline(halfTyped);
+        Assert.Contains(outline.Roots.Single().Children.Single().Children.Single().Children, n => n.StartLine == 7);
+
+        var plan = FoldPlan.Build(outline, folds: null, usageLens: true, lines);
+
+        Assert.NotNull(plan.LensAt(3));
+        Assert.NotNull(plan.LensAt(5));
+        Assert.Null(plan.LensAt(7));
+    }
+
     [Fact]
     public void EveryDeclarationWorthCountingGetsARowDirectlyAboveIt()
     {
