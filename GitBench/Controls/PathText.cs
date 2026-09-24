@@ -42,6 +42,7 @@ public sealed record PathText : Widget
                 FontFamily = FontFamily,
                 Overflow = TextOverflow.EllipsisStart,
                 BaseDir = BidiDirection.Ltr,
+                HAlign = TextAlignment.End,
                 VAlign = TextAlignment.Center,
             }.BuildView(ctx),
             new Text
@@ -71,8 +72,8 @@ public sealed record PathText : Widget
         public override void OnMouseExit(ref MouseExitEvent e) => hovered.Value = false;
     }
 
-    // The name takes what it needs first; the folder gets what is left. Left to right even in an RTL
-    // layout: a path reads one way.
+    // The name takes what it needs first; the folder gets what is left, drawn against the name so a
+    // cut folder's slack falls at the far edge. Left to right even in an RTL layout: a path reads one way.
     private sealed class PathTextView : View
     {
         private readonly View _directory;
