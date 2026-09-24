@@ -481,8 +481,7 @@ internal sealed class DiffRowPainter
         var textLeft = TextOriginOf(p);
         if (ghost.Emphasis is { Count: > 0 } ranges)
             DrawIntraLineEmphasis(c, ghost.Text, ranges, Styles.LineAddedEmphasisBackground, textLeft, p.Bottom, p.Z);
-        DrawMonoText(c, ghost.Text, textLeft, p.Bottom, Math.Max(0f, p.Left + p.Width - textLeft),
-            Styles.LineText, TextAlignment.Start, p.Z + 2);
+        DrawSpannedText(c, ghost.Text, ghost.Spans, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
     }
 
     // Text and nothing else. A usages row has no line of its own in the file, so a number in the

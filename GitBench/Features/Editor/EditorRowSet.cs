@@ -307,7 +307,7 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         var line = LineOfRow(index);
         var own = RowOfLine(line);
         if (index > own && _ghost is { } ghost)
-            return new DiffRow.Ghost(DiffText.ExpandTabs(ghost.Lines[index - own - 1]), ghost.Emphasis?[index - own - 1]);
+            return new DiffRow.Ghost(DiffText.ExpandTabs(ghost.Lines[index - own - 1]), ghost.Emphasis?[index - own - 1], ghost.SpansAt(index - own - 1));
         if (own != index)
             return _plan.LensAt(line)
                 ?? throw new InvalidOperationException(
@@ -625,12 +625,28 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
 }
 
 /// <summary>Lines suggested to the reader, drawn after a line of the file, with the characters that
-/// differ from the lines they replace, if any. Compared by content, so setting the same suggestion
-/// again changes nothing.</summary>
-internal sealed record GhostLines(FileLine After, IReadOnlyList<string> Lines, IReadOnlyList<IReadOnlyList<CharRange>?>? Emphasis = null)
+/// differ from the lines they replace, if any, and their syntax colors, if known. Compared by
+/// content, so setting the same suggestion again changes nothing.</summary>
+internal sealed record GhostLines(
+    FileLine After,
+    IReadOnlyList<string> Lines,
+    IReadOnlyList<IReadOnlyList<CharRange>?>? Emphasis = null,
+    IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null)
 {
+    public IReadOnlyList<TokenSpan>? SpansAt(int index) => Spans is { } spans && index < spans.Count ? spans[index] : null;
+
     public bool Equals(GhostLines? other) =>
-        other is not null && After == other.After && Lines.SequenceEqual(other.Lines) && SameEmphasis(Emphasis, other.Emphasis);
+        other is not null && After == other.After && Lines.SequenceEqual(other.Lines) && SameEmphasis(Emphasis, other.Emphasis)
+        && SameSpans(Spans, other.Spans);
+
+    private static bool SameSpans(IReadOnlyList<IReadOnlyList<TokenSpan>>? a, IReadOnlyList<IReadOnlyList<TokenSpan>>? b)
+    {
+        if (a is null || b is null) return a is null && b is null;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+            if (!a[i].SequenceEqual(b[i])) return false;
+        return true;
+    }
 
     private static bool SameEmphasis(IReadOnlyList<IReadOnlyList<CharRange>?>? a, IReadOnlyList<IReadOnlyList<CharRange>?>? b)
     {

@@ -67,7 +67,7 @@ internal abstract record DiffRow
     /// <summary>
     /// A line of code suggested to the reader, drawn between the file's lines without being one of
     /// them: it has no number, and nothing selects it, types into it, or searches it. Tabs are
-    /// already expanded.
+    /// already expanded; <see cref="Spans"/> color it as the file would read with it taken.
     /// </summary>
-    public sealed record Ghost(string Text, IReadOnlyList<CharRange>? Emphasis = null) : DiffRow;
+    public sealed record Ghost(string Text, IReadOnlyList<CharRange>? Emphasis = null, IReadOnlyList<TokenSpan>? Spans = null) : DiffRow;
 }

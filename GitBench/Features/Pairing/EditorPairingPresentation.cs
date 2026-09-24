@@ -6,6 +6,8 @@ using GitBench.Features.LanguageServers;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Theming;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;
@@ -24,6 +26,8 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
     private readonly IFileTextSource _texts;
     private readonly ISymbolExtractor _extractor;
     private readonly RepoDocumentSaver _saver;
+    private readonly ISyntaxHighlighter _highlighter;
+    private readonly IUiDispatcher _dispatcher;
     private readonly State<EditorCaret?> _caret = new(null);
     private readonly IDisposable _following;
     private IDisposable? _caretSubscription;
@@ -35,7 +39,9 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         IFileBrowserStore browsers,
         IFileTextSource texts,
         ISymbolExtractor extractor,
-        RepoDocumentSaver saver)
+        RepoDocumentSaver saver,
+        ISyntaxHighlighter highlighter,
+        IUiDispatcher dispatcher)
     {
         _repo = repo;
         _repos = repos;
@@ -43,6 +49,8 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         _texts = texts;
         _extractor = extractor;
         _saver = saver;
+        _highlighter = highlighter;
+        _dispatcher = dispatcher;
         _following = browsers.Active.Subscribe(Follow);
     }
 
@@ -128,8 +136,40 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         if (PathOf(location) is not { } path || Browser() is not { } browser) return;
         ClearDraft();
         _hinted = browser;
-        browser.ShowHints(new EditorHints(path, new EditorGhost(place, CodeLines(draft.Code)), actions));
+        var lines = CodeLines(draft.Code);
+        var shown = new EditorHints(path, new EditorGhost(place, lines), actions);
+        browser.ShowHints(shown);
+        _ = ColorAsync(browser, shown, FileLines(location), draft.Place);
     }
+
+    // Shown plain at once and recolored when the colors are in, unless it has gone by then.
+    private async Task ColorAsync(FileBrowserViewModel browser, EditorHints shown, IReadOnlyList<string> file, DraftPlace place)
+    {
+        IReadOnlyList<IReadOnlyList<TokenSpan>>? spans;
+        try
+        {
+            spans = await Task.Run(() => DraftColors.Of(shown.Path, file, place, shown.Ghost.Lines, _highlighter)).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (spans is null) return;
+        _dispatcher.Post(() =>
+        {
+            if (ReferenceEquals(_hinted, browser) && ReferenceEquals(browser.Hints.Value, shown))
+                browser.ShowHints(shown with { Ghost = shown.Ghost with { Spans = spans } });
+        });
+    }
+
+    private static IReadOnlyList<string> FileLines(StopLocation location) => location switch
+    {
+        StopLocation.OnSymbol symbol => symbol.Lines,
+        StopLocation.Insertion insertion => insertion.Lines,
+        StopLocation.NewFile => [],
+        _ => throw new ArgumentOutOfRangeException(nameof(location), location, "Unknown location."),
+    };
 
     public async Task<string?> ReadTextAsync(StopLocation location)
     {

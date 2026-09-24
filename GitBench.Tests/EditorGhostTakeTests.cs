@@ -154,6 +154,23 @@ public sealed class EditorGhostTakeTests
     }
 
     [Fact]
+    public void ASuggestionRecolored_KeepsWhereItHangs_AndColorsTheLinesLeft()
+    {
+        var dispatcher = new QueuedDispatcher();
+        var (_, view, buffer) = Show(dispatcher, ["a", "b", "Y", "c"]);
+        var ghost = new EditorGhost(new GhostPlace.Insert(new FileLine(2)), ["X", "Y"]);
+        view.SetHints(new EditorHints(Path, ghost));
+        buffer.Session.Paste(SelectionRange.At(TextPosition.At(2, 1)), "\nX");
+        dispatcher.Drain();
+
+        TokenSpan[] y = [new(0, 1, TokenColorSlot.Keyword)];
+        view.SetHints(new EditorHints(Path, ghost with { Spans = [[new TokenSpan(0, 1, TokenColorSlot.String)], y] }));
+
+        Assert.Equal(new FileLine(3), buffer.Rows.Ghost!.After);
+        Assert.Equal(y, Assert.Single(buffer.Rows.Rows.OfType<DiffRow.Ghost>()).Spans);
+    }
+
+    [Fact]
     public void AReplacement_ShowsTheCharactersThatChange_OnTheLineItReplaces()
     {
         var (_, view, buffer) = Show("a", "int count = 1;", "d");

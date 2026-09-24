@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Theming;
 
 namespace GitBench.Features.Editor;
 
@@ -15,8 +16,13 @@ internal sealed record EditorHints(string Path, EditorGhost Ghost, SuggestionAct
 /// <summary>What the pills on a suggestion do: put it in, or put it in and move on.</summary>
 internal sealed record SuggestionActions(Action Accept, Action AcceptAndNext);
 
-/// <summary>Suggested code, and where in the file it goes.</summary>
-internal sealed record EditorGhost(GhostPlace Place, IReadOnlyList<string> Lines);
+/// <summary>Suggested code, and where in the file it goes, with its syntax colors line by line
+/// where they are known.</summary>
+internal sealed record EditorGhost(GhostPlace Place, IReadOnlyList<string> Lines, IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null)
+{
+    /// <summary>Whether the two are the same code in the same place, however they are colored.</summary>
+    public bool SameSuggestion(EditorGhost other) => Place == other.Place && Lines.SequenceEqual(other.Lines);
+}
 
 /// <summary>Where suggested code goes in a file.</summary>
 internal abstract record GhostPlace
@@ -35,7 +41,9 @@ internal static class GhostMatch
     /// <param name="below">The line that followed the anchor when the draft was laid, wherever edits
     /// have moved it since: only the lines between the two are the reader's.</param>
     /// <param name="line">Reads a file line, 1-based.</param>
-    public static GhostLines Remaining(IReadOnlyList<string> draft, FileLine anchor, FileLine below, int lineCount, Func<int, string> line)
+    /// <param name="spans">The draft's colors, line by line, or null.</param>
+    public static GhostLines Remaining(
+        IReadOnlyList<string> draft, IReadOnlyList<IReadOnlyList<TokenSpan>>? spans, FileLine anchor, FileLine below, int lineCount, Func<int, string> line)
     {
         // Lines already in the file are never taken for typed ones, however much they read like
         // the draft: a closing tag or a `return (` further down is the file's own.
@@ -48,22 +56,25 @@ internal static class GhostMatch
             typed[text] = typed.GetValueOrDefault(text) + 1;
         }
 
-        var remaining = new List<string>(draft.Count);
-        foreach (var suggested in draft)
+        var remaining = new List<int>(draft.Count);
+        for (var i = 0; i < draft.Count; i++)
         {
-            var key = suggested.Trim();
+            var key = draft[i].Trim();
             if (key.Length > 0 && typed.TryGetValue(key, out var count) && count > 0)
             {
                 typed[key] = count - 1;
                 continue;
             }
 
-            remaining.Add(suggested);
+            remaining.Add(i);
         }
 
-        while (remaining.Count > 0 && remaining[0].Trim().Length == 0) remaining.RemoveAt(0);
-        if (remaining.All(l => l.Trim().Length == 0)) remaining.Clear();
-        return new GhostLines(new FileLine(lastTyped), remaining);
+        while (remaining.Count > 0 && draft[remaining[0]].Trim().Length == 0) remaining.RemoveAt(0);
+        if (remaining.All(i => draft[i].Trim().Length == 0)) remaining.Clear();
+        return new GhostLines(
+            new FileLine(lastTyped),
+            remaining.Select(i => draft[i]).ToArray(),
+            Spans: spans is null ? null : remaining.Select(i => i < spans.Count ? spans[i] : []).ToArray());
     }
 
     /// <summary>Where a line anchor stands after an edit, given the edit that would undo it: moved

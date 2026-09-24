@@ -618,16 +618,20 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// file it names; another file on screen shows none.</summary>
     public void SetHints(Features.Editor.EditorHints? hints)
     {
+        // The same suggestion recolored keeps where it hangs: the reader may have typed since.
+        var recolored = _hints is { } shown && hints is not null
+            && IsHinted(shown.Path, hints.Path) && shown.Ghost.SameSuggestion(hints.Ghost);
         _hints = hints;
         _surface.SuggestionActions = hints?.Actions;
         _surface.SuggestionHead = hints is null ? null : SuggestionHeadRow;
-        (_ghostFrom, _ghostAnchor, _ghostBelow) = hints?.Ghost.Place switch
-        {
-            null => (null, null, null),
-            Features.Editor.GhostPlace.Insert insert => ((FileLine?)null, (FileLine?)insert.After, (FileLine?)new FileLine(insert.After.Value + 1)),
-            Features.Editor.GhostPlace.Replace replace => (replace.From, replace.To, null),
-            _ => throw new InvalidOperationException("Unknown ghost place."),
-        };
+        if (!recolored)
+            (_ghostFrom, _ghostAnchor, _ghostBelow) = hints?.Ghost.Place switch
+            {
+                null => (null, null, null),
+                Features.Editor.GhostPlace.Insert insert => ((FileLine?)null, (FileLine?)insert.After, (FileLine?)new FileLine(insert.After.Value + 1)),
+                Features.Editor.GhostPlace.Replace replace => (replace.From, replace.To, null),
+                _ => throw new InvalidOperationException("Unknown ghost place."),
+            };
         ApplyGhost();
         SetDirty();
     }
@@ -738,8 +742,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     // The suggestion under the lines it replaces, paired with them line by line as a diff's replace
     // block is, so each pair shows the characters that change.
-    private Features.Editor.GhostLines Replacement(Features.Editor.TextDocument document, FileLine from, FileLine to, IReadOnlyList<string> lines)
+    private Features.Editor.GhostLines Replacement(Features.Editor.TextDocument document, FileLine from, FileLine to, Features.Editor.EditorGhost ghost)
     {
+        var lines = ghost.Lines;
         var count = Math.Clamp(to.Value - from.Value + 1, 0, Math.Max(0, document.LineCount - from.Value + 1));
         var replaced = new ReplacedLine?[count];
         var added = new IReadOnlyList<CharRange>?[lines.Count];
@@ -759,7 +764,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         }
 
         _replaced = replaced;
-        return new Features.Editor.GhostLines(to, lines, added);
+        return new Features.Editor.GhostLines(to, lines, added, ghost.Spans);
     }
 
     // Draws the suggestion into the buffer on screen when it is the hinted file, and takes it out of
@@ -784,9 +789,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (target is null || _hints?.Ghost is not { } ghost || _ghostAnchor is not { } anchor) return;
         var document = target.Document;
         target.Rows.SetGhost(_ghostFrom is { } from
-            ? Replacement(document, from, anchor, ghost.Lines)
+            ? Replacement(document, from, anchor, ghost)
             : Features.Editor.GhostMatch.Remaining(
-                ghost.Lines, anchor, _ghostBelow ?? new FileLine(anchor.Value + 1), document.LineCount, n => document.Line(new FileLine(n))));
+                ghost.Lines, ghost.Spans, anchor, _ghostBelow ?? new FileLine(anchor.Value + 1), document.LineCount, n => document.Line(new FileLine(n))));
         ReconcileRows();
         if (_pendingTake is not null) _dispatcher?.Post(RunPendingTake);
     }

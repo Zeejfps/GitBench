@@ -1,6 +1,7 @@
 using GitBench.Features.AgentConnections;
 using GitBench.Features.AgentConnections.Acp;
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
@@ -183,6 +184,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         IFileTextSource texts,
         ISymbolExtractor extractor,
         RepoDocumentSaver saver,
+        ISyntaxHighlighter highlighter,
         WorkingTreeSnapshots snapshots,
         AgentEndpoints endpoints,
         IServerEnvironment environment,
@@ -195,7 +197,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         {
             var conversation = new AgentConversation(repo, harness, (sessionGoal, transcript) =>
             {
-                var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver);
+                var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver, highlighter, dispatcher);
                 var store = new PairingStore(
                     sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
                 return new PairingSession(repo, store, presentation);

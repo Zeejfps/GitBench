@@ -12,7 +12,7 @@ public sealed class GhostMatchTests
         ["public int Multiply(int a, int b)", "{", "    return a * b;", "}"];
 
     private static GhostLines Match(IReadOnlyList<string> draft, int below, params string[] file) =>
-        GhostMatch.Remaining(draft, new FileLine(2), new FileLine(below), file.Length, n => file[n - 1]);
+        GhostMatch.Remaining(draft, null, new FileLine(2), new FileLine(below), file.Length, n => file[n - 1]);
 
     [Fact]
     public void NothingTyped_TheWholeDraftHangsUnderTheAnchor()
