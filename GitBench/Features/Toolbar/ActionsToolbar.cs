@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
+using GitBench.Features.Terminal;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -21,6 +22,7 @@ internal sealed record ActionsToolbar : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<ActionsToolbarViewModel>();
+        var navigator = ctx.Require<IContentNavigator>();
         var styles = ctx.Theme().Styles;
 
         return new Box
@@ -43,7 +45,7 @@ internal sealed record ActionsToolbar : Widget
                             {
                                 Gap = WithinClusterGap,
                                 CrossAxis = CrossAxisAlignment.Center,
-                                Children = BuildActions(vm),
+                                Children = BuildActions(vm, navigator),
                             },
                         },
                     ],
@@ -52,7 +54,7 @@ internal sealed record ActionsToolbar : Widget
         }.BindVm(vm);
     }
 
-    private static IWidget[] BuildActions(ActionsToolbarViewModel vm) =>
+    private static IWidget[] BuildActions(ActionsToolbarViewModel vm, IContentNavigator navigator) =>
     [
         new ToolbarSyncButton
         {
@@ -90,6 +92,7 @@ internal sealed record ActionsToolbar : Widget
         new ToolbarButton { Command = vm.Stash, Icon = LucideIcons.Stash, Label = L.T(s => s.ToolbarStash) },
         new ToolbarButton { Command = vm.DiscardAll, Icon = LucideIcons.Trash, Label = L.T(s => s.ToolbarDiscard) },
         new Spacer(),
+        new NewTerminalButton { OnShow = shell => navigator.Show(new ContentPlace.Shell(shell)) },
         new ToolbarIconButton
         {
             Command = vm.OpenFolder,

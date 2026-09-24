@@ -14,8 +14,7 @@ namespace GitBench.App;
 
 /// <summary>
 /// The strip across the top of the content panel: where the reader has been on the leading edge,
-/// the two views every repository always has, everything they have opened after them, and the one
-/// control that opens a shell pinned on the trailing edge.
+/// the two views every repository always has, and everything they have opened after them.
 /// </summary>
 /// <remarks>
 /// Changes and History are the app's modes — what used to be a segmented switcher up in the toolbar.
@@ -86,12 +85,6 @@ internal sealed record RepoContentTabRun : Widget
                     new ContentTabButton { Browser = Browser, Shells = Shells, Mode = mode, Drag = drag },
                     axis: Axis.Horizontal) with { CrossAxis = CrossAxisAlignment.Stretch },
             ],
-            Trailing = Shells is null
-                ? null
-                : new NewTerminalButton
-                {
-                    OnShow = shell => navigator.Show(new ContentPlace.Shell(shell)),
-                },
         };
 
         return strip.Use(_ => mounted);

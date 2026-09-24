@@ -262,8 +262,8 @@ public class TerminalPaneWiringTests : IDisposable
             _store.Start();
 
             Harness = GuiTestHarness.Create(
-                // The pane under the one control that makes a terminal, which lives on the content
-                // panel's strip rather than in the pane. Wrapped so a test can hide the pane the way
+                // The pane under the one control that makes a terminal, which lives in the toolbar
+                // rather than in the pane. Wrapped so a test can hide the pane the way
                 // the panel does. The pane's own root is a swap region, which owns its IsVisible and
                 // sets it back on every swap.
                 ctx => new Column

@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Features.Toolbar;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -14,108 +15,36 @@ using ZGF.Observable;
 namespace GitBench.Features.Terminal;
 
 /// <summary>
-/// The one control that makes a terminal: pinned on the trailing edge of the content panel's tab
-/// strip, where it is reachable however many tabs are open.
+/// The one control that makes a terminal: a toolbar action, so it sits with the other things you can
+/// do to a repository rather than tucked at the end of the tab strip.
 /// </summary>
-/// <remarks>
-/// A terminal glyph over a plus rather than a bare plus, because the strip it sits on is not the
-/// terminal's own any more — a plus at the end of a run that also holds files and views would not
-/// say what it makes.
-/// </remarks>
 internal sealed record NewTerminalButton : Widget
 {
     /// <summary>The button's id, so a test can press the thing a user presses.</summary>
     public const string NewTabButtonId = "terminal-new-tab";
 
-    const int ButtonHeight = 24;
-    const int ButtonWidth = 34;
-    const float GlyphSize = 15f;
-    const float PlusSize = 9f;
-
-    // Centres the button in the strip by inset rather than by a Center, whose intrinsic width a
-    // trailing slot beside a Grow has nothing to lay out against.
-    const int ButtonInset = ((int)TabStrip.StripHeight - ButtonHeight) / 2;
-
-    /// <summary>Put the terminal that was made on screen. The strip's, not this control's: what
-    /// "showing" means belongs to the panel these tabs are for.</summary>
+    /// <summary>Put the terminal that was made on screen. The caller's, not this control's: what
+    /// "showing" means belongs to the panel the terminal opens in.</summary>
     public required Action<TerminalInstance> OnShow { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
         var terminals = ctx.Require<ITerminalSessionStore>();
 
-        return new Padding
+        return new ToolbarIconButton
         {
-            Amount = new PaddingStyle
+            Id = NewTabButtonId,
+            Icon = LucideIcons.SquareTerminal,
+            Tooltip = L.T(s => s.TerminalNewTab),
+            // Makes and starts, in that order and in one gesture: asking for a terminal is asking
+            // for a shell. The spawn waits for the new grid's first viewport report.
+            Command = new Command(() =>
             {
-                Left = Spacing.Xs,
-                Right = Spacing.Xs,
-                Top = ButtonInset,
-                Bottom = ButtonInset,
-            },
-            Children =
-            [
-                new NewTerminalGlyphButton
-                {
-                    Id = NewTabButtonId,
-                    Width = ButtonWidth,
-                    Height = ButtonHeight,
-                    GlyphSize = GlyphSize,
-                    PlusSize = PlusSize,
-                    // Makes and starts, in that order and in one gesture: asking for a terminal is
-                    // asking for a shell. The spawn waits for the new grid's first viewport report.
-                    Command = new Command(() =>
-                    {
-                        if (terminals.Tabs.Value is not { } tabs) return;
-                        OnShow(tabs.StartNew());
-                    }),
-                }
-                    .WithTooltip(L.T(s => s.TerminalNewTab))
-                    .WithController<KbmController>(),
-            ],
+                if (terminals.Tabs.Value is not { } tabs) return;
+                OnShow(tabs.StartNew());
+            }),
         };
     }
-}
-
-/// <summary>The button's two glyphs on one themed surface, so the whole control hovers and presses
-/// as one rather than only the half the pointer happens to be over.</summary>
-internal sealed record NewTerminalGlyphButton : Widget<ButtonState>
-{
-    public ICommand? Command { get; init; }
-    public required float GlyphSize { get; init; }
-    public required float PlusSize { get; init; }
-
-    protected override ButtonState CreateState(Context ctx) => new(Command);
-
-    protected override IWidget Build(Context ctx, ButtonState state) => new Box
-    {
-        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-        Background = Theme.Color(t => t.HeaderActionButton.Surface(state)),
-        Children =
-        [
-            new Row
-            {
-                Gap = Spacing.Hair,
-                MainAxis = MainAxisAlignment.Center,
-                CrossAxis = CrossAxisAlignment.Center,
-                Children =
-                [
-                    Glyph(state, LucideIcons.SquareTerminal, GlyphSize),
-                    Glyph(state, LucideIcons.Plus, PlusSize),
-                ],
-            },
-        ],
-    };
-
-    private static IWidget Glyph(ButtonState state, string icon, float size) => new Text
-    {
-        Value = icon,
-        FontFamily = LucideIcons.FontFamily,
-        FontSize = size,
-        HAlign = TextAlignment.Center,
-        VAlign = TextAlignment.Center,
-        Color = Theme.Color(t => t.HeaderActionButton.Icon(state)),
-    };
 }
 
 /// <summary>
