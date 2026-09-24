@@ -8,8 +8,8 @@ namespace GitBench.Features.Assistant;
 /// </summary>
 /// <remarks>
 /// The run ends at the first row that is not a tool call, so a group never spans an answer. Whether
-/// it is open belongs here rather than to the row that draws it: the overlay is non-modal and can be
-/// closed and reopened, and a streamed delta rebuilds nothing but the row it lands on.
+/// it is open belongs here rather than to the row that draws it: the view can be closed and
+/// reopened, and a streamed delta rebuilds nothing but the row it lands on.
 ///
 /// The calls are the session's rows and are disposed with it — this owns only its own observables.
 /// </remarks>

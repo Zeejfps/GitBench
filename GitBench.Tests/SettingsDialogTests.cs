@@ -44,7 +44,7 @@ public sealed class SettingsDialogTests : IDisposable
     public SettingsDialogTests()
     {
         _loc = new LocalizationService(_locale);
-        _chat = new AssistantViewModel(_store, _loc, _bus);
+        _chat = new AssistantViewModel(_store, _loc);
         _dialog = new SettingsDialog { OnClose = () => _closed = true };
     }
 
@@ -87,7 +87,6 @@ public sealed class SettingsDialogTests : IDisposable
         h.ClickOn(SettingsDialog.AgentTabId);
         h.Layout();
         Assert.NotNull(h.Root.FindById(AssistantSettingsCard.KeyInputId));
-        Assert.False(_chat.IsOpen.Value);
 
         h.ClickOn(SettingsDialog.ConnectionsTabId);
         h.Layout();
@@ -123,7 +122,6 @@ public sealed class SettingsDialogTests : IDisposable
         Assert.Equal(("ollama", (string?)null), Pair(saved.ModelFor(AssistantRole.Walkthrough)));
         Assert.Equal("http://localhost:11434/v1", saved.BaseUrlFor(AssistantProviders.Ollama));
         Assert.False(_closed);
-        Assert.False(_chat.IsOpen.Value);
 
         editor.SetKeyProviderDraft(AssistantProviders.Groq.Id);
         editor.KeyDraft.Value = "another-key";
@@ -159,7 +157,7 @@ public sealed class SettingsDialogTests : IDisposable
     // at a fixed address, a local one is the user's to point at — and takes a key too, because a
     // gateway in front of it may ask for one. Every role gets its own line either way.
     [Fact]
-    public void TheKeySectionOffersTheFieldsTheChosenProviderTakes_AndEveryRoleALine()
+    public void TheKeySectionOffersTheFieldsTheChosenProviderTakes_AndEachRoleInUseALine()
     {
         using var h = Mount();
         h.ClickOn(SettingsDialog.AgentTabId);
@@ -167,7 +165,7 @@ public sealed class SettingsDialogTests : IDisposable
 
         Assert.NotNull(h.Root.FindById(AssistantSettingsCard.KeyInputId));
         Assert.Null(h.Root.FindById(AssistantSettingsCard.BaseUrlInputId));
-        foreach (var role in AssistantRoles.All)
+        foreach (var role in AssistantSettingsCard.Roles)
         {
             Assert.NotNull(h.Root.FindById(AssistantSettingsCard.RoleProviderId(role)));
             Assert.NotNull(h.Root.FindById(AssistantSettingsCard.RoleModelInputId(role)));
@@ -298,7 +296,7 @@ public sealed class SettingsDialogTests : IDisposable
             SettingsDialog.AgentTabId, AssistantSettingsCard.ProviderId, AssistantSettingsCard.BaseUrlInputId,
             AssistantSettingsCard.KeyInputId, AssistantSettingsCard.SaveId,
         };
-        foreach (var role in AssistantRoles.All)
+        foreach (var role in AssistantSettingsCard.Roles)
         {
             ids.Add(AssistantSettingsCard.RoleProviderId(role));
             ids.Add(AssistantSettingsCard.RoleModelInputId(role));

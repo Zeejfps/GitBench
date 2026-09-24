@@ -25,8 +25,7 @@ namespace GitBench.Features.FileBrowser;
 /// </remarks>
 internal sealed record FileSearchBarPlacement : Widget
 {
-    // Above everything the diff body reaches, and far below the assistant overlay's 400: this floats
-    // within one pane, not over the window.
+    // Above everything the diff body reaches: this floats within one pane, not over the window.
     private const int Layer = 100;
 
     public required FileSearchViewModel Model { get; init; }

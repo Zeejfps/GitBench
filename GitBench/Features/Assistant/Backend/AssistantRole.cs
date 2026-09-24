@@ -7,15 +7,16 @@ namespace GitBench.Features.Assistant.Backend;
 /// </summary>
 internal enum AssistantRole
 {
-    /// <summary>The chat in the panel, and the diff selection's quick questions, which answer in
-    /// its transcript.</summary>
+    /// <summary>The conversation a repository's session keeps. Nothing asks it anything since the
+    /// chat moved to ACP agents; kept so saved settings still read.</summary>
     General,
 
     /// <summary>The commit bar's "Generate commit message". Its own role because it is the one job
     /// small and frequent enough to want a cheaper model than the rest.</summary>
     CommitMessage,
 
-    /// <summary>The commit bar's "Review changes".</summary>
+    /// <summary>What the commit bar's "Review changes" ran on before it went to the agent; kept so
+    /// saved settings still read.</summary>
     Review,
 
     /// <summary>The review window's narrator.</summary>

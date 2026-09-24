@@ -14,8 +14,7 @@ namespace GitBench.Features.Assistant;
 
 /// <summary>
 /// Where the assistant is pointed: the key and endpoint each provider is given, and the provider
-/// and model each role runs on. Lives on the settings window's assistant page, and takes the
-/// composer's place as onboarding while nothing is configured.
+/// and model each role runs on. The settings window's assistant page.
 /// </summary>
 internal sealed record AssistantSettingsCard : Widget
 {
@@ -25,125 +24,91 @@ internal sealed record AssistantSettingsCard : Widget
     public const string SaveId = "assistant-key-save";
     public const string CancelId = "assistant-settings-cancel";
 
+    /// <summary>The roles something in the app runs on: the commit message and the review
+    /// walkthrough. The agent chat runs on an ACP agent instead.</summary>
+    public static readonly IReadOnlyList<AssistantRole> Roles = [AssistantRole.CommitMessage, AssistantRole.Walkthrough];
+
     public static string RoleProviderId(AssistantRole role) => $"assistant-{AssistantRoles.Id(role)}-provider";
     public static string RoleModelInputId(AssistantRole role) => $"assistant-{AssistantRoles.Id(role)}-model-input";
     public static string RoleModelPresetsId(AssistantRole role) => $"assistant-{AssistantRoles.Id(role)}-model-presets";
-
-    /// <summary>Uses the surrounding settings page's heading and spacing, and resets edits in place.</summary>
-    public bool Embedded { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<AssistantViewModel>();
         var loc = ctx.Localization();
 
-        return new Box
+        return new Column
         {
-            BorderSize = new BorderSizeStyle { Top = Embedded ? 0 : 1 },
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.Palette.Border }),
+            Gap = Spacing.Sm,
+            CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                new Padding
+                new AssistantSettingsCaption { Value = L.T(s => s.AssistantSettingsKeys) },
+                new AssistantProviderPicker(),
+                new Show
                 {
-                    Amount = PaddingStyle.All(Embedded ? 0 : Spacing.Lg),
+                    When = vm.WantsBaseUrl,
+                    Then = () => new AssistantSettingsField
+                    {
+                        FieldId = BaseUrlInputId,
+                        Label = L.T(s => s.AssistantSettingsBaseUrl),
+                        Value = vm.BaseUrlDraft,
+                        Placeholder = Prop.Bind<string?>(() => vm.BaseUrlHint.Value),
+                    },
+                },
+                // Every provider takes a key: a self-hosted endpoint needs none,
+                // but a gateway put in front of one is routinely behind a token,
+                // and without this field the only box left for it is the endpoint.
+                new AssistantSettingsField
+                {
+                    FieldId = KeyInputId,
+                    Label = L.T(s => s.AssistantSettingsKey),
+                    Value = vm.KeyDraft,
+                    // The label column is a fixed width, so which of the two a
+                    // key is — asked for, or merely taken — is said in the box.
+                    Placeholder = Prop.Bind<string?>(() => vm.IsApiKeyOptional.Value
+                        ? loc.Strings.Value.AssistantSetupPlaceholderOptional
+                        : loc.Strings.Value.AssistantSetupPlaceholder),
+                    Masked = true,
+                },
+                new Text
+                {
+                    Value = Prop.Bind<string?>(() => vm.KeyHint.Value),
+                    Wrap = TextWrap.Wrap,
+                    FontSize = FontSize.Caption,
+                    Color = Theme.Color(s => s.Palette.TextMuted),
+                    // A saved key is in the field, and an empty line for it would
+                    // leave a gap where prose used to be.
+                    Visible = Prop.Bind(() => vm.KeyHint.Value.Length > 0),
+                },
+                new AssistantSettingsCaption { Value = L.T(s => s.AssistantSettingsModels) },
+                .. Roles.Select(role => (IWidget)new AssistantRoleLine { Role = role }),
+                new Row
+                {
+                    Gap = Spacing.Sm,
+                    MainAxis = MainAxisAlignment.End,
                     Children =
                     [
-                        new Column
+                        new ButtonWidget
                         {
-                            Gap = Spacing.Sm,
-                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Id = CancelId,
+                            Style = ButtonStyle.Outline(static s => s.Palette.TextMuted),
+                            Command = vm.ResetSettings,
                             Children =
                             [
-                                new Text
-                                {
-                                    Value = L.T(s => s.AssistantSetupTitle),
-                                    Weight = FontWeight.Bold,
-                                    FontSize = FontSize.Body,
-                                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                                    Visible = !Embedded,
-                                },
-                                new Text
-                                {
-                                    Value = L.T(s => s.AssistantSetupBody),
-                                    Wrap = TextWrap.Wrap,
-                                    FontSize = FontSize.Caption,
-                                    Color = Theme.Color(s => s.Palette.TextMuted),
-                                    Visible = !Embedded,
-                                },
-                                new AssistantSettingsCaption { Value = L.T(s => s.AssistantSettingsKeys) },
-                                new AssistantProviderPicker(),
-                                new Show
-                                {
-                                    When = vm.WantsBaseUrl,
-                                    Then = () => new AssistantSettingsField
-                                    {
-                                        FieldId = BaseUrlInputId,
-                                        Label = L.T(s => s.AssistantSettingsBaseUrl),
-                                        Value = vm.BaseUrlDraft,
-                                        Placeholder = Prop.Bind<string?>(() => vm.BaseUrlHint.Value),
-                                    },
-                                },
-                                // Every provider takes a key: a self-hosted endpoint needs none,
-                                // but a gateway put in front of one is routinely behind a token,
-                                // and without this field the only box left for it is the endpoint.
-                                new AssistantSettingsField
-                                {
-                                    FieldId = KeyInputId,
-                                    Label = L.T(s => s.AssistantSettingsKey),
-                                    Value = vm.KeyDraft,
-                                    // The label column is a fixed width, so which of the two a
-                                    // key is — asked for, or merely taken — is said in the box.
-                                    Placeholder = Prop.Bind<string?>(() => vm.IsApiKeyOptional.Value
-                                        ? loc.Strings.Value.AssistantSetupPlaceholderOptional
-                                        : loc.Strings.Value.AssistantSetupPlaceholder),
-                                    Masked = true,
-                                },
-                                new Text
-                                {
-                                    Value = Prop.Bind<string?>(() => vm.KeyHint.Value),
-                                    Wrap = TextWrap.Wrap,
-                                    FontSize = FontSize.Caption,
-                                    Color = Theme.Color(s => s.Palette.TextMuted),
-                                    // A saved key is in the field, and an empty line for it would
-                                    // leave a gap where prose used to be.
-                                    Visible = Prop.Bind(() => vm.KeyHint.Value.Length > 0),
-                                },
-                                new AssistantSettingsCaption { Value = L.T(s => s.AssistantSettingsModels) },
-                                new AssistantRoleLine { Role = AssistantRole.General },
-                                new AssistantRoleLine { Role = AssistantRole.CommitMessage },
-                                new AssistantRoleLine { Role = AssistantRole.Review },
-                                new AssistantRoleLine { Role = AssistantRole.Walkthrough },
-                                new Row
-                                {
-                                    Gap = Spacing.Sm,
-                                    MainAxis = MainAxisAlignment.End,
-                                    Children =
-                                    [
-                                        new ButtonWidget
-                                        {
-                                            Id = CancelId,
-                                            Style = ButtonStyle.Outline(static s => s.Palette.TextMuted),
-                                            Command = vm.ResetSettings,
-                                            Visible = Embedded,
-                                            Children =
-                                            [
-                                                new ButtonLabel { Value = L.T(s => s.SettingsAgentReset) },
-                                            ],
-                                        }.WithController<KbmController>(),
-                                        new ButtonWidget
-                                        {
-                                            Id = SaveId,
-                                            Style = ButtonStyle.Filled(static s => s.Palette.Accent),
-                                            Command = vm.SaveSettings,
-                                            Children =
-                                            [
-                                                new ButtonLabel { Value = L.T(s => Embedded ? s.SettingsAgentSave : s.AssistantSetupSave) },
-                                            ],
-                                        }.WithController<KbmController>(),
-                                    ],
-                                },
+                                new ButtonLabel { Value = L.T(s => s.SettingsAgentReset) },
                             ],
-                        },
+                        }.WithController<KbmController>(),
+                        new ButtonWidget
+                        {
+                            Id = SaveId,
+                            Style = ButtonStyle.Filled(static s => s.Palette.Accent),
+                            Command = vm.SaveSettings,
+                            Children =
+                            [
+                                new ButtonLabel { Value = L.T(s => s.SettingsAgentSave) },
+                            ],
+                        }.WithController<KbmController>(),
                     ],
                 },
             ],

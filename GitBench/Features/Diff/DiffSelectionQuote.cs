@@ -43,8 +43,8 @@ internal sealed record DiffSelectionQuote(
         DiffAnnotations? annotations = null)
     {
         // No fold re-inflation here, and none needed: the quote path is reachable only where
-        // DiffContentView.AssistantActions is set, which the file browser's preview — the one
-        // surface that folds — deliberately leaves false. The day folding reaches the diff pane,
+        // DiffContentView.AskAgent is set, which the file browser's preview — the one surface that
+        // folds — deliberately leaves unset. The day folding reaches the diff pane,
         // this call and the line-range loop below it both have to learn about hidden rows, or the
         // model gets re-inflated text with a range that does not describe it.
         var text = DiffSelectionModel.BuildCopyText(rows, start, end);

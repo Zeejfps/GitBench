@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.AgentConnections;
 using GitBench.Features.AgentConnections.Acp;
+using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Localization;
 using ZGF.Observable;
@@ -22,6 +23,18 @@ internal abstract record AgentChatPress
 
     /// <summary>No repository is on screen.</summary>
     public sealed record NoRepository : AgentChatPress;
+}
+
+/// <summary>How asking the agent something came out.</summary>
+internal abstract record AgentChatAsk
+{
+    public sealed record Asked(AgentConversation Conversation) : AgentChatAsk;
+
+    /// <summary>No agent is talking and none has been picked: the caller asks which.</summary>
+    public sealed record NeedsAgent : AgentChatAsk;
+
+    /// <summary>No repository is on screen.</summary>
+    public sealed record NoRepository : AgentChatAsk;
 }
 
 /// <summary>
@@ -95,9 +108,24 @@ internal sealed class AgentChat : IDisposable
         return conversation;
     }
 
+    /// <summary>Says something to the repository's agent, with code the user sent along: the one
+    /// talking now, else the one picked last.</summary>
+    public AgentChatAsk Ask(string text, CodeQuote? quote)
+    {
+        if (_repos.Active.Value is not { } repo) return new AgentChatAsk.NoRepository();
+        PairingHarness? harness = _sessions.LiveConversation(repo.Id)?.Harness
+                                  ?? (Remembered is { } remembered ? new PairingHarness.Acp(remembered) : null);
+        if (harness is null) return new AgentChatAsk.NeedsAgent();
+        var announce = _sessions.LiveConversation(repo.Id) is null && _endpoints.WillEnable;
+        var conversation = _sessions.Ask(repo, text, quote, harness);
+        if (announce) conversation.Transcript.AddNotice(_loc.Strings.Value.AgentChatConnectionsOn, NoticeTone.Info);
+        return new AgentChatAsk.Asked(conversation);
+    }
+
     /// <summary>The agents to pick from, the one talking now or picked last marked. Another agent
-    /// can't take over while a pairing session runs.</summary>
-    public IReadOnlyList<RepoBarContextMenu.Item> AgentMenu()
+    /// can't take over while a pairing session runs. <paramref name="then"/> follows a pick, with the
+    /// conversation it shows.</summary>
+    public IReadOnlyList<RepoBarContextMenu.Item> AgentMenu(Action<AgentConversation>? then = null)
     {
         var current = _repos.Active.Value is { } repo ? _sessions.ConversationOf(repo.Id) : null;
         var marked = current is { IsGone: false, Harness: PairingHarness.Acp acp } ? acp.Harness.Id : Remembered?.Id;
@@ -106,7 +134,10 @@ internal sealed class AgentChat : IDisposable
         foreach (var harness in AcpHarness.BuiltIn)
             items.Add(new RepoBarContextMenu.Item(
                 harness.Label,
-                () => Open(harness),
+                () =>
+                {
+                    if (Open(harness) is { } conversation) then?.Invoke(conversation);
+                },
                 LucideIcons.Sparkles,
                 Enabled: !locked || harness.Id == marked,
                 Checked: harness.Id == marked));

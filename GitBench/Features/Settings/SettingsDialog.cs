@@ -36,7 +36,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public SettingsPage InitialPage { get; init; } = SettingsPage.General;
 
     protected override SettingsDialogState CreateState(Context ctx) => new(
-        OnClose, InitialPage, ctx.Require<IAssistantSessionStore>(), ctx.Localization(), ctx.Require<IMessageBus>(),
+        OnClose, InitialPage, ctx.Require<IAssistantSessionStore>(), ctx.Localization(),
         ctx.Require<InputSystem>());
 
     protected override IWidget Build(Context ctx, SettingsDialogState state) => new Box
@@ -185,7 +185,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
                     Children =
                     [
                         new SettingsSectionHeader { Value = L.T(s => s.AssistantSettingsTitle) },
-                        new AssistantSettingsCard { Embedded = true },
+                        new AssistantSettingsCard(),
                     ],
                 },
             }),
@@ -220,12 +220,12 @@ internal sealed class SettingsDialogState : IDialog, IDisposable
     public AssistantViewModel Agent { get; }
 
     public SettingsDialogState(Action close, SettingsPage page, IAssistantSessionStore store, ILocalizationService loc,
-        IMessageBus bus, InputSystem input)
+        InputSystem input)
     {
         _close = close;
         _input = input;
         Page = new State<SettingsPage>(page);
-        Agent = new AssistantViewModel(store, loc, bus);
+        Agent = new AssistantViewModel(store, loc);
         Agent.ResetSettings.Execute();
     }
 

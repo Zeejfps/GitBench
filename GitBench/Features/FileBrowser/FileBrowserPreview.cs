@@ -34,9 +34,9 @@ namespace GitBench.Features.FileBrowser;
 /// <c>DiffViewModel</c> this pane does not have.
 /// </para>
 /// <para>
-/// <see cref="DiffContentView.AssistantActions"/> stays false. It defaults false and gates the only
-/// route into the assistant, so this is belt and braces: selecting and copying still work, and a
-/// human pasting into the composer is a decision, not a bypass.
+/// <see cref="DiffContentView.AskAgent"/> stays unset: its quote is built from the rows, which here
+/// may be folded. A selection goes to the agent through <c>SendToAgent</c> instead, read from the
+/// document.
 /// </para>
 /// </remarks>
 internal sealed record FileBrowserPreview : Widget

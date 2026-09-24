@@ -50,11 +50,6 @@ internal interface IAssistantSessionStore
     /// store is read and written off the UI thread, and a role whose key was not already known reads
     /// as unconfigured until it has landed.</summary>
     void Save(AssistantSettings settings, AssistantKeyEdit key);
-
-    /// <summary>Runs a named one-shot agent over an already-composed prompt in the active repo's
-    /// transcript. Does nothing when no repo is active, a turn is already running, or the assistant
-    /// is not configured.</summary>
-    void RunPreset(string agentName, string prompt);
 }
 
 /// <summary>
@@ -200,7 +195,8 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     // provider it is sent to. Called with what is already known plus this save's edit, which is the
     // answer the resolve will come back with minus whatever only the secret store can add: a role
     // whose key is not known yet reads as unconfigured for the duration, which is what closes the
-    // composer and the presets rather than letting them reach the provider being left behind.
+    // commit message and the walkthrough rather than letting them reach the provider being left
+    // behind.
     private void Publish(AssistantSettings settings, AssistantKeyring keys)
     {
         var connections = AssistantConnections.Build(settings, keys);
@@ -287,25 +283,6 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_disposed || resolve != _resolves) return;
         Publish(settings, keys);
         _keys.Value = keys;
-    }
-
-    // Built per run rather than kept: a preset is a one-shot, and its loop carries the state of the
-    // exchange it drove. Nothing is written by these agents, so they get the reads only.
-    public void RunPreset(string agentName, string prompt)
-    {
-        if (_disposed) return;
-
-        var agent = _catalog.Get(agentName);
-
-        // A preset carries a diff and the checkout's path to whichever provider its role is on, and
-        // it has no composer to grey out, so it asks for the same gate the composer is given.
-        if (!_isConfigured[agent.Role].Value) return;
-
-        if (_registry.Active.Value is not { } repo) return;
-        if (_active.Value is not { } session) return;
-
-        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, agent);
-        session.RunPreset(prompt, Loop(agent, toolset));
     }
 
     private AssistantAgentLoop Loop(AgentDefinition agent, AssistantToolset toolset) =>

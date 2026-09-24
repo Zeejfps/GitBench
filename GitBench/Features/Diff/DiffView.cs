@@ -25,9 +25,9 @@ internal enum DiffBodyKind { Diff, Conflict, Image, Markdown }
 /// </summary>
 internal sealed record DiffView : Widget
 {
-    /// <summary>Whether a selection here offers the assistant's quick actions. Set by the main
-    /// window's diff pane only — see <see cref="DiffContentView.AssistantActions"/>.</summary>
-    public bool AssistantActions { get; init; }
+    /// <summary>Where a selection's ready questions go. Set by the main window's diff pane only — see
+    /// <see cref="DiffContentView.AskAgent"/>.</summary>
+    public Action<Features.Editor.CodeQuote, string>? AskAgent { get; init; }
 
     /// <summary>Where a selection goes when the user sends it to the agent; see
     /// <see cref="DiffContentView.SendToAgent"/>.</summary>
@@ -39,7 +39,7 @@ internal sealed record DiffView : Widget
 
         var content = new DiffContentView(ctx)
         {
-            AssistantActions = AssistantActions,
+            AskAgent = AskAgent,
             SendToAgent = SendToAgent,
             OnStageHunk = vm.StageHunk,
             OnUnstageHunk = vm.UnstageHunk,

@@ -23,7 +23,6 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
     private readonly RepoBarCollapseState _repoBarCollapse;
     private readonly ILocalizationService _loc;
     private readonly IMessageBus _bus;
-    private readonly AssistantViewModel _assistant;
     private readonly AgentChat _chat;
     private readonly State<MainViewMode> _mode;
     private readonly IFileBrowserStore _browsers;
@@ -39,7 +38,6 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
         RepoBarCollapseState repoBarCollapse,
         ILocalizationService loc,
         IMessageBus bus,
-        AssistantViewModel assistant,
         AgentChat chat,
         State<MainViewMode> mode,
         IFileBrowserStore browsers,
@@ -55,7 +53,6 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
         _repoBarCollapse = repoBarCollapse;
         _loc = loc;
         _bus = bus;
-        _assistant = assistant;
         _chat = chat;
         _mode = mode;
         _browsers = browsers;
@@ -136,15 +133,6 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
         if (_keys.Matches(KeyCommand.SearchEverywhere, e.Key, e.Modifiers))
         {
             _search.Open();
-            e.Consume();
-            return;
-        }
-
-        // Esc closes the overlay only on the way back out: anything nearer the pointer — a dialog, a
-        // rename field, a search bar — gets its own Esc first and consumes it.
-        if (e.Key == KeyboardKey.Escape && e.Phase == EventPhase.Bubbling && _assistant.IsOpen.Value)
-        {
-            _assistant.Close.Execute();
             e.Consume();
             return;
         }

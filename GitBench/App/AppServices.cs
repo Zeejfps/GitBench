@@ -312,7 +312,6 @@ internal static class AppServices
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IDocumentStore>(),
             (_, connection) => new HttpAssistantBackend(AssistantHttp, connection)));
-        context.AddSingleton<AssistantPanelPlacement>();
         context.AddSingleton<AppIconImage>();
         context.AddSingleton<AssistantMarkImage>();
         context.AddSingleton<AssistantViewModel>();

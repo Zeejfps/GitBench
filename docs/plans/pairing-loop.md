@@ -281,6 +281,11 @@ this says so and why.
   this way starts blank: what the agent is told of DiffDino goes with the user's first message, or
   with the first session they start. Right-click the button to switch agents, which replaces the
   conversation, except during a session.
+- **The in-app assistant chat is gone; its questions go to the agent.** The diff selection's
+  Explain / What could break / Suggest a fix send the quoted rows to the repository's agent (the
+  one talking, else the one picked last; with neither, Send to agent opens with the question
+  filled in), and the commit bar's Review changes asks the agent too. The HTTP assistant is left
+  with the commit message and the review walkthrough's narrator.
 - **The controls stay for the whole session.** Between stops, while the agent works out the next
   one, the bar keeps its place with every button unavailable, and a breathing placeholder in the
   card's shape holds the top; the card fades in over it. There is no status line of its own: the

@@ -199,18 +199,6 @@ internal sealed class AssistantSession : IDisposable
     public void Send(string message) => Start(message, _loop, _conversation, observer: null);
 
     /// <summary>
-    /// Runs a one-shot agent — a diff selection's "Explain this" and its siblings — in this
-    /// transcript without joining the thread.
-    /// </summary>
-    /// <remarks>
-    /// The exchange goes into a list of its own, so the answer appears where the reader is looking
-    /// but neither the question nor the reply steers the next thing they type. Detached is the whole
-    /// point: "explain this" is asked about one selection, and carrying it forward would have every
-    /// later answer reasoning from a fragment nobody is still looking at.
-    /// </remarks>
-    public void RunPreset(string prompt, AssistantAgentLoop loop) => Start(prompt, loop, [], observer: null);
-
-    /// <summary>
     /// Runs a turn of a detached thread in this transcript: the thread's own agent over the thread's
     /// own messages, which it keeps, so the next turn on it carries on from this one. The thread's
     /// observer hears every event the transcript does, and a turn that dies of an exception as a

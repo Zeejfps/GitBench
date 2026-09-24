@@ -26,31 +26,45 @@ internal sealed record SendToAgentDialog : Widget
 
     public required CodeQuote Quote { get; init; }
 
+    /// <summary>What the field starts with.</summary>
+    public string Question { get; init; } = string.Empty;
+
     public required Action OnClose { get; init; }
 
-    public static void Show(IMessageBus bus, CodeQuote quote) =>
-        bus.Broadcast(new ShowDialogMessage(onClose => new SendToAgentDialog { Quote = quote, OnClose = onClose }));
+    public static void Show(IMessageBus bus, CodeQuote quote, string question = "") =>
+        bus.Broadcast(new ShowDialogMessage(onClose => new SendToAgentDialog { Quote = quote, Question = question, OnClose = onClose }));
+
+    /// <summary>Asks the repository's agent about the code straight away, or, with no agent to ask
+    /// yet, puts the question in this dialog to pick one.</summary>
+    public static void Ask(IMessageBus bus, AgentChat chat, CodeQuote quote, string question)
+    {
+        if (chat.Ask(question, quote) is AgentChatAsk.NeedsAgent) Show(bus, quote, question);
+    }
 
     protected override IWidget Build(Context ctx)
     {
         var quote = Quote;
         var onClose = OnClose;
         var sessions = ctx.Require<PairingSessions>();
+        var chat = ctx.Require<AgentChat>();
+        var preferences = ctx.Require<PreferencesService>();
         var repos = ctx.Require<IRepoRegistry>();
         var endpoints = ctx.Require<AgentEndpoints>();
         var s = ctx.Require<ILocalizationService>().Strings.Value;
 
         var repo = repos.Active.Value;
         var ongoing = repo is null ? null : sessions.LiveConversation(repo.Id);
-        var question = new State<string>(string.Empty);
-        var agent = new State<PairingAgentChoice>(PairingAgentChoice.ClaudeCode);
+        var question = new State<string>(Question);
+        var agent = new State<PairingAgentChoice>(ChoiceOf(chat.Remembered));
         var error = new State<string?>(repo is null ? s.PairingNoRepo : null);
         var canSend = new Derived<bool>(() => question.Value.Trim().Length > 0 && repos.Active.Value is not null);
 
         void Send()
         {
             if (repos.Active.Value is not { } target || question.Value.Trim().Length == 0) return;
-            sessions.Ask(target, question.Value, quote, ongoing?.Harness ?? new PairingHarness.Acp(NewPairingSessionDialog.HarnessOf(agent.Value)));
+            var harness = NewPairingSessionDialog.HarnessOf(agent.Value);
+            if (ongoing is null) preferences.Update(p => p with { ChatAgent = harness.Id.Value });
+            sessions.Ask(target, question.Value, quote, ongoing?.Harness ?? new PairingHarness.Acp(harness));
             onClose();
         }
 
@@ -92,6 +106,11 @@ internal sealed record SendToAgentDialog : Widget
             Body = [.. body],
         };
     }
+
+    private static PairingAgentChoice ChoiceOf(AcpHarness? harness) =>
+        harness?.Id == AcpHarness.Codex.Id ? PairingAgentChoice.Codex
+        : harness?.Id == AcpHarness.Gemini.Id ? PairingAgentChoice.Gemini
+        : PairingAgentChoice.ClaudeCode;
 }
 
 /// <summary>Code sent to the agent, as the user sees it went: where it is, then the first lines of it.</summary>

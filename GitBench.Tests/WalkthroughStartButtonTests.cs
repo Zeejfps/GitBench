@@ -86,7 +86,7 @@ public sealed class WalkthroughStartButtonTests : IDisposable
         var harness = Mount(window, withAssistant: true);
 
         Assert.NotNull(harness.Root.FindById(WalkthroughStartButton.ButtonId));
-        Assert.True(AssistantViewFixture.HasText(harness.Render(), "Walk me through this"));
+        Assert.Contains(harness.Render().Texts, drawn => drawn.Inputs.Text.Contains("Walk me through this", StringComparison.Ordinal));
 
         harness.ClickOn(WalkthroughStartButton.ButtonId);
 

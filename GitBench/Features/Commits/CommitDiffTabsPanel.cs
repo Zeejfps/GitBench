@@ -180,10 +180,11 @@ internal sealed class CommitDiffTabsPanelView : ContainerView
         var diffView = new Provide<DiffViewModel>
         {
             Value = tab.Diff,
-            // The main window's diff, and the only one with the assistant overlay above it.
+            // The main window's diff, and the only one beside the agent's panel.
             Child = new DiffView
             {
-                AssistantActions = true,
+                AskAgent = (quote, question) => Features.Pairing.SendToAgentDialog.Ask(
+                    _ctx.Require<Messages.IMessageBus>(), _ctx.Require<Features.Pairing.AgentChat>(), quote, question),
                 SendToAgent = quote => Features.Pairing.SendToAgentDialog.Show(_ctx.Require<Messages.IMessageBus>(), quote),
             },
         }.BuildView(_ctx);

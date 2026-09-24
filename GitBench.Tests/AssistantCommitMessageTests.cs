@@ -318,17 +318,14 @@ public sealed class AssistantCommitMessageTests : IDisposable
     }
 
     [Fact]
-    public void CommitMenu_OffersGenerateAndReview()
+    public void CommitMenu_OffersToGenerateTheMessage()
     {
         var vm = Start(Answering("Add a second line"));
 
-        var items = vm.BuildCommitMenu();
+        var item = Assert.Single(vm.BuildCommitMenu());
 
-        Assert.Equal(2, items.Count);
-        Assert.Equal("Generate commit message", items[0].Label);
-        Assert.True(items[0].Enabled);
-        Assert.Equal("Review changes", items[1].Label);
-        Assert.True(items[1].Enabled);
+        Assert.Equal("Generate commit message", item.Label);
+        Assert.True(item.Enabled);
     }
 
     [Fact]
@@ -398,7 +395,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
             (_, _) => backend);
         _store.Start();
 
-        _vm = new AssistantViewModel(_store, localization, _bus);
+        _vm = new AssistantViewModel(_store, localization);
         // The key resolves on a worker; settle it before anything asks whether the action is offered.
         Pump.WaitFor(_dispatcher, () => _store.IsConfigured(AssistantRole.CommitMessage).Value, "the API key to resolve");
         return _vm;

@@ -10,38 +10,6 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Assistant;
 
-/// <summary>
-/// One transcript entry, rendered for whichever kind it is. Every entry fades in as it lands, so
-/// streamed output arrives rather than pops.
-/// </summary>
-internal sealed record TranscriptRow : Widget
-{
-    protected override IWidget Build(Context ctx)
-    {
-        var row = ctx.Require<AssistantRow>();
-
-        IWidget content = row.Kind switch
-        {
-            AssistantRowKind.User => new TranscriptMessageRow
-            {
-                Text = row.Text,
-                Label = L.T(s => s.AssistantYou),
-                LabelColor = static s => s.Palette.TextSecondary,
-            },
-            AssistantRowKind.Reply => new TranscriptReplyRow { Text = row.Text },
-            AssistantRowKind.Tool => row.Group is { } group
-                ? new ToolGroupRow { Group = group }
-                : new ToolCallRow { Row = row },
-            AssistantRowKind.Approval => new ToolApprovalCard { Row = row },
-            AssistantRowKind.Refusal => new TranscriptNoticeRow { Text = row.Text, Tone = TranscriptNoticeTone.Refusal },
-            AssistantRowKind.Notice => new TranscriptNoticeRow { Text = row.Text, Tone = TranscriptNoticeTone.Advisory },
-            _ => new TranscriptNoticeRow { Text = row.Text },
-        };
-
-        return new FadeIn { Child = content };
-    }
-}
-
 /// <summary>A spoken turn: who said it, then the text, wrapped and selectable.</summary>
 internal sealed record TranscriptMessageRow : Widget
 {

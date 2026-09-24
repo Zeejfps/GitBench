@@ -14,7 +14,8 @@ namespace GitBench.Features.Assistant;
 
 /// <summary>
 /// The assistant's entry point in the commit bar: the dino mark, opening a menu of the things worth
-/// offering there — writing the commit message, and the chat with an agent.
+/// offering there — writing the commit message, and asking the agent to review the changes or to
+/// chat.
 /// </summary>
 /// <remarks>
 /// The menu opens upward: the commit bar sits at the bottom of the workspace, so a downward menu
@@ -24,6 +25,13 @@ namespace GitBench.Features.Assistant;
 internal sealed record CommitAssistantButton : Widget<CommitAssistantButton.Spinner>
 {
     private const int MarkSize = 16;
+
+    // Addressed to the agent rather than read by anyone, so written here in English. What there is to
+    // review is the agent's to work out: the uncommitted work and the branch's own commits are both
+    // in scope, and either can be empty.
+    private const string ReviewAsk =
+        "Review my changes — what is uncommitted in the working tree, and what the checked-out "
+        + "branch adds on top of its base.";
 
     protected override Spinner CreateState(Context ctx) =>
         new(ctx.Require<IFrameTicker>(), ctx.Require<AssistantViewModel>().IsGeneratingMessage);
@@ -35,15 +43,26 @@ internal sealed record CommitAssistantButton : Widget<CommitAssistantButton.Spin
         var loc = ctx.Localization();
         var busy = vm.IsGeneratingMessage;
 
+        void AskAgents(RectF rect, Action<AgentConversation>? then = null) =>
+            RepoBarContextMenu.Show(ctx, rect.TopLeft, chat.AgentMenu(then), MenuPlacement.Above);
+
         IReadOnlyList<RepoBarContextMenu.Item> Menu(RectF rect) =>
         [
             .. vm.BuildCommitMenu(),
             new RepoBarContextMenu.Item(
+                loc.Strings.Value.AssistantReviewBranch,
+                () =>
+                {
+                    if (chat.Ask(ReviewAsk, null) is AgentChatAsk.NeedsAgent)
+                        AskAgents(rect, conversation => conversation.Say(ReviewAsk));
+                },
+                LucideIcons.Search,
+                Enabled: chat.IsAvailable.Value),
+            new RepoBarContextMenu.Item(
                 loc.Strings.Value.AssistantChat,
                 () =>
                 {
-                    if (chat.Reveal() is AgentChatPress.NeedsAgent)
-                        RepoBarContextMenu.Show(ctx, rect.TopLeft, chat.AgentMenu(), MenuPlacement.Above);
+                    if (chat.Reveal() is AgentChatPress.NeedsAgent) AskAgents(rect);
                 },
                 LucideIcons.Sparkles,
                 Enabled: chat.IsAvailable.Value),

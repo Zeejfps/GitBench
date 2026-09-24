@@ -68,12 +68,6 @@ public static class PreferencesStore
         public List<AssistantModelShape>? AssistantModels { get; set; }
         public List<AssistantEndpointShape>? AssistantEndpoints { get; set; }
 
-        public float? AssistantPanelWidth { get; set; } = 380f;
-        public float? AssistantPanelHeight { get; set; } = 460f;
-
-        // Null (the default) means "never moved" — the panel rests in the top trailing corner.
-        public float? AssistantPanelX { get; set; }
-        public float? AssistantPanelY { get; set; }
 
         public List<KeyBindingShape>? KeyBindings { get; set; }
 
@@ -158,10 +152,6 @@ public static class PreferencesStore
                 EnableUntrackedCache = file.EnableUntrackedCache ?? defaults.EnableUntrackedCache,
                 AssistantModels = ReadAssistantModels(file),
                 AssistantEndpoints = ReadAssistantEndpoints(file),
-                AssistantPanelWidth = file.AssistantPanelWidth is > 0 ? file.AssistantPanelWidth.Value : defaults.AssistantPanelWidth,
-                AssistantPanelHeight = file.AssistantPanelHeight is > 0 ? file.AssistantPanelHeight.Value : defaults.AssistantPanelHeight,
-                AssistantPanelX = file.AssistantPanelX,
-                AssistantPanelY = file.AssistantPanelY,
                 KeyBindings = ReadKeyBindings(file),
                 AgentConnectionsEnabled = file.AgentConnectionsEnabled ?? defaults.AgentConnectionsEnabled,
                 AgentConnectionsPort = file.AgentConnectionsPort is >= 1 and <= 65535
@@ -213,10 +203,6 @@ public static class PreferencesStore
             AssistantEndpoints = preferences.AssistantEndpoints
                 .Select(e => new AssistantEndpointShape { Id = e.ProviderId, BaseUrl = e.BaseUrl })
                 .ToList(),
-            AssistantPanelWidth = preferences.AssistantPanelWidth,
-            AssistantPanelHeight = preferences.AssistantPanelHeight,
-            AssistantPanelX = preferences.AssistantPanelX,
-            AssistantPanelY = preferences.AssistantPanelY,
             KeyBindings = preferences.KeyBindings
                 .Select(b => new KeyBindingShape
                 {

@@ -23,7 +23,6 @@ internal sealed record AppWidget : Widget
             Children =
             [
                 new AppContentWidget(),
-                new AssistantOverlay(),
                 new DragOverlay(),
                 new TabDropIndicator(),
                 new SearchEverywhereOverlay(),

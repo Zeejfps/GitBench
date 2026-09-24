@@ -19,30 +19,12 @@ public sealed class AssistantSettingsViewModelTests : IDisposable
 
     public AssistantSettingsViewModelTests()
     {
-        _vm = new AssistantViewModel(_store, _loc, _bus);
+        _vm = new AssistantViewModel(_store, _loc);
     }
 
     private AssistantRoleDraft Chat => _vm.RoleDraft(AssistantRole.General);
     private AssistantRoleDraft Review => _vm.RoleDraft(AssistantRole.Review);
     private AssistantRoleDraft Walkthrough => _vm.RoleDraft(AssistantRole.Walkthrough);
-
-    // Nothing configured is the onboarding case: the card takes the composer's place until the chat
-    // can send. Afterwards the same card lives in the settings window, which the gear opens on its page.
-    [Fact]
-    public void TheCardIsUpUntilTheChatsConnectionResolvesAndTheGearOpensTheSettingsWindowAfter()
-    {
-        Assert.True(_vm.ShowSettings.Value);
-        Assert.True(_vm.NeedsSetup.Value);
-
-        _store.SetConfigured(true);
-        Assert.False(_vm.ShowSettings.Value);
-
-        var opened = new List<OpenSettingsWindowMessage>();
-        _bus.Subscribe<OpenSettingsWindowMessage>(opened.Add);
-        _vm.OpenSettings.Execute();
-        Assert.Equal(SettingsPage.Agent, Assert.Single(opened).Page);
-        Assert.False(_vm.ShowSettings.Value);
-    }
 
     [Fact]
     public void PickingAProviderForItsKeyStartsFromItsOwnDefaultsRatherThanTheLastOnes()
@@ -112,10 +94,7 @@ public sealed class AssistantSettingsViewModelTests : IDisposable
 
         foreach (var role in AssistantRoles.All)
             Assert.True(_store.IsConfigured(role).Value);
-        Assert.False(_vm.NeedsSetup.Value);
         Assert.True(_store.KeyStateFor(AssistantProviders.Ollama).IsUsable);
-        Assert.Contains(
-            "Ollama", _vm.BuildProviderSwitcher().Where(i => !i.IsSeparator).Select(i => i.Label));
         // And the provider list still says nothing is outstanding for it.
         Assert.Null(_vm.BuildProviderMenu().Single(i => i.Label == "Ollama").Shortcut);
     }
@@ -134,7 +113,6 @@ public sealed class AssistantSettingsViewModelTests : IDisposable
         foreach (var role in AssistantRoles.All)
             Assert.Equal(AssistantProviders.OpenAi.Id, _store.Saved!.ModelFor(role).Provider.Id);
         Assert.Equal("sk-openai", Assert.IsType<AssistantKeyEdit.Store>(_store.SavedKey).Key);
-        Assert.False(_vm.NeedsSetup.Value);
     }
 
     // A role already on a provider that answers is nobody's to move.

@@ -137,6 +137,55 @@ public sealed class AgentChatTests : IAsyncDisposable
     }
 
     [Fact]
+    public void AskingWithNoAgentPicked_AsksForOne_AndOpensNothing()
+    {
+        Assert.IsType<AgentChatAsk.NeedsAgent>(_chat.Ask("Explain this selection.", null));
+        Assert.Empty(_opened);
+    }
+
+    [Fact]
+    public void AskingWithAnAgentRemembered_OpensAConversationOnTheQuestion()
+    {
+        _preferences.Update(p => p with { ChatAgent = AcpHarness.Codex.Id.Value });
+
+        var asked = Assert.IsType<AgentChatAsk.Asked>(_chat.Ask("What could break here?", null));
+
+        var (harness, opening, conversation) = Assert.Single(_opened);
+        Assert.Same(conversation, asked.Conversation);
+        Assert.Equal(new PairingHarness.Acp(AcpHarness.Codex), harness);
+        Assert.Equal("What could break here?", Assert.IsType<AgentOpening.Chat>(opening).Text);
+        Assert.Same(conversation, _sessions.Shown.Value);
+    }
+
+    [Fact]
+    public void AskingWhileAConversationIsHidden_SaysItThere_AndShowsIt()
+    {
+        var conversation = _chat.Open(AcpHarness.ClaudeCode)!;
+        conversation.MarkRunning();
+        _sessions.HidePanel(RepoId);
+
+        var asked = Assert.IsType<AgentChatAsk.Asked>(_chat.Ask("Suggest a fix for this.", null));
+
+        Assert.Same(conversation, asked.Conversation);
+        Assert.Single(_opened);
+        var said = Assert.IsType<PairingMessage.FromUser>(conversation.Transcript.Messages[^1]);
+        Assert.Equal("Suggest a fix for this.", said.Text);
+        Assert.Same(conversation, _sessions.Shown.Value);
+    }
+
+    [Fact]
+    public void PickingFromTheMenu_CarriesOnWithWhatWasAsked()
+    {
+        AgentConversation? carried = null;
+
+        var codex = Assert.Single(_chat.AgentMenu(conversation => carried = conversation), i => i.Label == AcpHarness.Codex.Label);
+        codex.OnSelected();
+
+        Assert.NotNull(carried);
+        Assert.Same(carried, _sessions.Shown.Value);
+    }
+
+    [Fact]
     public void PickingTheSameAgent_KeepsTheConversation()
     {
         var first = _chat.Open(AcpHarness.ClaudeCode)!;

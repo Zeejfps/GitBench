@@ -55,12 +55,6 @@ internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDispo
         }
     }
 
-    /// <summary>The preset runs this store was asked for, so a test can tell "the view model
-    /// asked" from "a turn actually started".</summary>
-    public List<(string Agent, string Prompt)> Presets { get; } = new();
-
-    public void RunPreset(string agentName, string prompt) => Presets.Add((agentName, prompt));
-
     /// <summary>Forces every role's answer, until the next key change recomputes it.</summary>
     public void SetConfigured(bool configured)
     {

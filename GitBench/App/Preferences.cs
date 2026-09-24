@@ -63,18 +63,6 @@ public sealed record Preferences
     /// <summary>The endpoint each provider was given, for the ones that were.</summary>
     public IReadOnlyList<AssistantEndpointPreference> AssistantEndpoints { get; init; } = [];
 
-    /// <summary>The assistant panel's size, remembered the way a window's is — one placement for the
-    /// app, not one per session or per repository.</summary>
-    public float AssistantPanelWidth { get => _assistantPanelWidth; init => _assistantPanelWidth = value > 0f ? value : _assistantPanelWidth; }
-    public float AssistantPanelHeight { get => _assistantPanelHeight; init => _assistantPanelHeight = value > 0f ? value : _assistantPanelHeight; }
-    private float _assistantPanelWidth = 380f;
-    private float _assistantPanelHeight = 460f;
-
-    /// <summary>Where the panel was left, measured from the host's top leading corner. Null until it
-    /// has been moved once, which reads as the resting spot in the top trailing corner.</summary>
-    public float? AssistantPanelX { get; init; }
-    public float? AssistantPanelY { get; init; }
-
     /// <summary>The shortcuts the user has changed from the built-in table; every other command
     /// runs on its default.</summary>
     public IReadOnlyList<KeyBinding> KeyBindings { get; init; } = [];

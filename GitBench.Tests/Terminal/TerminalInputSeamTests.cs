@@ -572,7 +572,6 @@ public class TerminalKeybindCollisionTests : IDisposable
         private readonly PreferencesService _preferences;
         private readonly RepoRegistry _registry;
         private readonly MessageBus _bus = new();
-        private readonly AssistantViewModel _assistant;
         private readonly AppReachSpy _spy = new();
 
         public CollidingApp()
@@ -590,7 +589,6 @@ public class TerminalKeybindCollisionTests : IDisposable
             _bus.Subscribe<WorkingTreeChangedMessage>(_ => WorkingTreeChanged++);
 
             var localization = new LocalizationService(new State<Locale>(Locale.En));
-            _assistant = new AssistantViewModel(new StubAssistantStore(), localization, _bus);
 
             AppKeybindController keybind = null!;
             Search = SearchFixtures.Idle(_registry, new NoFileBrowsers());
@@ -600,7 +598,7 @@ public class TerminalKeybindCollisionTests : IDisposable
                 {
                     var input = ctx.Require<InputSystem>();
                     keybind = new AppKeybindController(
-                        new KeyMap(), _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
+                        new KeyMap(), _registry, new RepoHoverState(), CollapseState, localization, _bus,
                         AgentChatFixtures.Create(_registry, _preferences, localization),
                         new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers(),
                         new State<SidebarPane>(SidebarPane.Branches),
@@ -698,7 +696,6 @@ public class TerminalKeybindCollisionTests : IDisposable
         public void Dispose()
         {
             Harness.Dispose();
-            _assistant.Dispose();
             Search.Dispose();
             _preferences.Dispose();
             _dir.Dispose();
@@ -1904,30 +1901,3 @@ internal static class GridText
     }
 }
 
-/// <summary>The assistant store reduced to what the assistant view model reads at construction, so
-/// the application's keybind controller can be built without a live conversation behind it.</summary>
-internal sealed class StubAssistantStore : IAssistantSessionStore
-{
-    public IReadable<AssistantSession?> Active { get; } = new State<AssistantSession?>(null);
-
-    public IReadable<CommitMessageQuickAction?> CommitMessage { get; } =
-        new State<CommitMessageQuickAction?>(null);
-
-    public IReadable<AssistantSettings> Settings { get; } =
-        new State<AssistantSettings>(AssistantSettings.Default);
-
-    public IReadable<bool> IsConfigured(AssistantRole role) => _configured;
-
-    private readonly State<bool> _configured = new(true);
-
-    public IReadable<AssistantKeyring> Keys { get; } =
-        new State<AssistantKeyring>(AssistantKeyring.Empty);
-
-    public void Save(AssistantSettings settings, AssistantKeyEdit key)
-    {
-    }
-
-    public void RunPreset(string agentName, string prompt)
-    {
-    }
-}

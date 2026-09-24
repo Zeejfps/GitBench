@@ -26,8 +26,8 @@ internal enum ToolApprovalOutcome
 /// One write waiting on the user: which tool, the arguments it would run with, and the answer.
 /// </summary>
 /// <remarks>
-/// It lives in the session's transcript rather than in the view, so closing the overlay mid-turn and
-/// opening it again finds the same question still waiting. Every path out of Pending is a one-way
+/// It lives in the session's transcript rather than in the view, so hiding the view mid-turn and
+/// showing it again finds the same question still waiting. Every path out of Pending is a one-way
 /// door: the first answer wins, and a turn that ends first withdraws the question instead of leaving
 /// a card with live buttons behind it.
 /// </remarks>

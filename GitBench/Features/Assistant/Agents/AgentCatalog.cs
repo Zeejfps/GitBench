@@ -17,19 +17,9 @@ internal sealed class AgentCatalog
 
     public const string CommitMessageAgent = "commit-message";
 
-    /// The one-shot agent behind the commit bar's "Review changes".
-    public const string ReviewBranchAgent = "review-branch";
-
     /// The narrator behind the review window's "Walk me through this"; its exchange keeps its
     /// memory across the reviewer's Next and questions.
     public const string WalkthroughReviewAgent = "walkthrough-review";
-
-    /// The one-shot agents behind the diff selection's quick actions.
-    public const string ExplainSelectionAgent = "explain-selection";
-
-    public const string BreakageSelectionAgent = "breakage-selection";
-
-    public const string FixSelectionAgent = "fix-selection";
 
     private const string Fence = "---";
 

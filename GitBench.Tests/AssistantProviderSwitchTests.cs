@@ -26,7 +26,7 @@ public sealed class AssistantProviderSwitchTests : IDisposable
 
     public AssistantProviderSwitchTests()
     {
-        _vm = new AssistantViewModel(_store, _loc, _bus);
+        _vm = new AssistantViewModel(_store, _loc);
     }
 
     // The live bug: the card was pre-filled with the key of whichever provider had last resolved,
@@ -108,64 +108,6 @@ public sealed class AssistantProviderSwitchTests : IDisposable
         _vm.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
         Assert.Equal("http://localhost:9999/v1", _vm.BaseUrlDraft.Value);
         Assert.Equal("http://localhost:9999/v1", _store.Settings.Value.BaseUrlFor(AssistantProviders.Ollama));
-    }
-
-    [Fact]
-    public void TheHeaderSwitcherOffersOnlyProvidersThatCanAnswerAndMarksTheActiveOne()
-    {
-        _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant");
-        _store.SetEnvironmentKey(AssistantProviders.OpenAi, "sk-from-env");
-
-        var items = _vm.BuildProviderSwitcher();
-        var providers = items.Where(i => !i.IsSeparator).Select(i => i.Label).ToArray();
-
-        // A saved key, an inherited one, and the local endpoints that need none.
-        Assert.Contains("Anthropic", providers);
-        Assert.Contains("OpenAI", providers);
-        Assert.Contains("Ollama", providers);
-        Assert.DoesNotContain("Groq", providers);
-
-        var marked = Assert.Single(items.Where(i => i.Checked));
-        Assert.Equal("Anthropic", marked.Label);
-        Assert.Equal("Set up another provider…", items[^1].Label);
-    }
-
-    // The header is the chat's: the switch moves the chat and leaves the review and the walkthrough
-    // where they were.
-    [Fact]
-    public void SwitchingFromTheHeaderRepointsTheChatWithoutTouchingAnyKeyOrOtherRole()
-    {
-        _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant");
-        _store.SetSavedKey(AssistantProviders.OpenAi, "sk-proj-openai");
-        _store.Writes.Clear();
-
-        _vm.BuildProviderSwitcher().First(i => i.Label == "OpenAI").OnSelected();
-
-        Assert.Empty(_store.Writes);
-        Assert.IsType<AssistantKeyEdit.Keep>(_store.SavedKey);
-        Assert.Equal(AssistantProviders.OpenAi.Id, _store.Saved!.ModelFor(AssistantRole.General).Provider.Id);
-        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Saved.ModelFor(AssistantRole.Review).Provider.Id);
-        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Saved.ModelFor(AssistantRole.Walkthrough).Provider.Id);
-        Assert.Equal("OpenAI", _vm.ActiveProviderName.Value);
-        Assert.Equal("sk-ant", _store.KeyStateFor(AssistantProviders.Anthropic).SavedKey);
-        Assert.Equal("sk-proj-openai", _store.KeyStateFor(AssistantProviders.OpenAi).SavedKey);
-    }
-
-    // Nothing offers it, but nothing may quietly accept it either: a provider with no key becomes a
-    // trip through the settings rather than a connection that cannot sign a request.
-    [Fact]
-    public void PickingAProviderWithNoKeyOpensSettingsInsteadOfPointingAtIt()
-    {
-        _store.SetSavedKey(AssistantProviders.Anthropic, "sk-ant");
-        _store.Writes.Clear();
-        var opened = new List<OpenSettingsWindowMessage>();
-        _bus.Subscribe<OpenSettingsWindowMessage>(opened.Add);
-
-        _vm.SwitchProvider(AssistantProviders.Groq.Id);
-
-        Assert.Empty(_store.Writes);
-        Assert.Equal(AssistantProviders.Anthropic.Id, _store.Settings.Value.ModelFor(AssistantRole.General).Provider.Id);
-        Assert.Equal(SettingsPage.Agent, Assert.Single(opened).Page);
     }
 
     // A model name means nothing to another provider, so moving the chat from the header puts it on
@@ -297,14 +239,14 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
             _loc,
             _dispatcher,
             _bus,
-            new AssistantViewFixture.FakeCommitEditor(),
+            new FakeCommitEditor(),
             new ReviewProgressStore(),
             new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
             (_, _) => new FakeAssistantBackend());
         _store.Start();
-        _vm = new AssistantViewModel(_store, _loc, _bus);
+        _vm = new AssistantViewModel(_store, _loc);
 
         // The keys resolve on a worker and land as one keyring, so every seeded key showing up is
         // the whole pass having landed.
@@ -503,14 +445,12 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
     }
 
     // A provider the app has no key for yet is not a connection, so the role on it closes for the
-    // duration rather than letting anything through to the provider being left behind. The preset
-    // asks for that gate itself: it has no composer to grey out, and it carries a diff. The roles
+    // duration rather than letting anything through to the provider being left behind. The roles
     // that did not move stay open.
     [Fact]
     public void SwitchingToAProviderWhoseKeyIsNotKnownYetClosesThatRoleUntilItLands()
     {
         var store = Start(AssistantSettings.For(AssistantProviders.Ollama.Id), withRepo: true);
-        var session = store.Active.Value!;
         Assert.True(store.IsConfigured(AssistantRole.General).Value);
 
         // Put there behind the app's back, so the switch below is to a provider whose key only the
@@ -522,8 +462,6 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
         Assert.True(store.IsConfigured(AssistantRole.Review).Value);
         Assert.True(store.IsConfigured(AssistantRole.Walkthrough).Value);
 
-        store.RunPreset(AgentCatalog.ExplainSelectionAgent, "explain this diff");
-        Assert.Empty(session.Rows);
         Assert.Empty(_backend.Requests);
 
         Pump.WaitFor(_dispatcher, () => store.IsConfigured(AssistantRole.General).Value, "the key to resolve");
@@ -574,7 +512,7 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
             _loc,
             _dispatcher,
             _bus,
-            new AssistantViewFixture.FakeCommitEditor(),
+            new FakeCommitEditor(),
             new ReviewProgressStore(),
             new NoReviewWindows(),
             new IdleRemoteOperations(),
@@ -762,7 +700,7 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
             _loc,
             _dispatcher,
             new MessageBus(),
-            new AssistantViewFixture.FakeCommitEditor(),
+            new FakeCommitEditor(),
             new ReviewProgressStore(),
             new NoReviewWindows(),
             new IdleRemoteOperations(),

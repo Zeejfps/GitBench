@@ -195,10 +195,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private RectF? _signatureAnchor;
     private bool _signatureRefreshPosted;
 
-    /// <summary>Whether a selection here offers the assistant's quick actions. Only the main
-    /// window's diff sets it: the assistant overlay is a child of that window, so an answer asked
-    /// for from a pop-out would arrive somewhere the reader is not looking.</summary>
-    public bool AssistantActions { get; set; }
+    /// <summary>Where a selection's ready questions go, quoted from the diff's rows; null where this
+    /// view asks none. Only the main window's diff sets it: the agent's panel is in that window, so
+    /// an answer asked for from a pop-out would arrive somewhere the reader is not looking.</summary>
+    public Action<Features.Editor.CodeQuote, string>? AskAgent { get; set; }
 
     /// <summary>Where a selection goes when the user sends it to the agent; null where this view
     /// offers no such thing.</summary>
@@ -1629,21 +1629,21 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         return items;
     }
 
-    // What a selection offers beyond the clipboard: the assistant's questions where this is the
+    // What a selection offers beyond the clipboard: the agent's ready questions where this is the
     // main window's diff, and sending it to the agent where that is wired.
     private IReadOnlyList<RepoBarContextMenu.Item> SelectionActions()
     {
-        if (!AssistantActions)
+        if (AskAgent is not { } ask)
             return SendToAgent is { } sendFile && SelectedQuote() is { } selected ? [SendItem(() => sendFile(selected))] : [];
         if (DescribeState(_renderState).Path is not { } path) return [];
         if (DiffSelectionQuote.Build(
-                RowSource.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
+                RowSource.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } rows)
             return [];
 
-        var assistant = _ctx.Require<AssistantViewModel>();
-        var items = DiffAssistantMenu.Items(_loc.Strings.Value, quote, assistant.AskAboutSelection);
-        return SendToAgent is { } sendDiff
-            ? [.. items, RepoBarContextMenu.Separator, SendItem(() => sendDiff(new Features.Editor.CodeQuote.InDiff(quote)))]
+        var quote = new Features.Editor.CodeQuote.InDiff(rows);
+        var items = DiffAgentMenu.Items(_loc.Strings.Value, quote, ask);
+        return SendToAgent is { } send
+            ? [.. items, RepoBarContextMenu.Separator, SendItem(() => send(quote))]
             : items;
     }
 
