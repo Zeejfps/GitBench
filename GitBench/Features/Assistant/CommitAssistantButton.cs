@@ -1,7 +1,10 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Localization;
+using GitBench.Widgets;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Widgets;
@@ -10,8 +13,8 @@ using ZGF.Observable;
 namespace GitBench.Features.Assistant;
 
 /// <summary>
-/// The assistant's entry point in the commit bar: the dino mark, opening a menu of the two things
-/// worth offering there — writing the commit message, and the chat.
+/// The assistant's entry point in the commit bar: the dino mark, opening a menu of the things worth
+/// offering there — writing the commit message, and the chat with an agent.
 /// </summary>
 /// <remarks>
 /// The menu opens upward: the commit bar sits at the bottom of the workspace, so a downward menu
@@ -28,7 +31,23 @@ internal sealed record CommitAssistantButton : Widget<CommitAssistantButton.Spin
     protected override IWidget Build(Context ctx, Spinner spinner)
     {
         var vm = ctx.Require<AssistantViewModel>();
+        var chat = ctx.Require<AgentChat>();
+        var loc = ctx.Localization();
         var busy = vm.IsGeneratingMessage;
+
+        IReadOnlyList<RepoBarContextMenu.Item> Menu(RectF rect) =>
+        [
+            .. vm.BuildCommitMenu(),
+            new RepoBarContextMenu.Item(
+                loc.Strings.Value.AssistantChat,
+                () =>
+                {
+                    if (chat.Reveal() is AgentChatPress.NeedsAgent)
+                        RepoBarContextMenu.Show(ctx, rect.TopLeft, chat.AgentMenu(), MenuPlacement.Above);
+                },
+                LucideIcons.Sparkles,
+                Enabled: chat.IsAvailable.Value),
+        ];
 
         var button = new ButtonWidget
         {
@@ -53,7 +72,7 @@ internal sealed record CommitAssistantButton : Widget<CommitAssistantButton.Spin
         return button
             .WithTooltip(L.T(s => s.AssistantCommitMenuTooltip))
             .WithMenuController(rect =>
-                RepoBarContextMenu.Show(ctx, rect.TopLeft, vm.BuildCommitMenu(), MenuPlacement.Above));
+                RepoBarContextMenu.Show(ctx, rect.TopLeft, Menu(rect), MenuPlacement.Above));
     }
 
     /// Keeps the loader turning for exactly as long as a commit message is being written.

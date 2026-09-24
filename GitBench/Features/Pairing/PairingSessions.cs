@@ -84,14 +84,16 @@ internal abstract record AgentPairingStart
 /// <summary>
 /// Every repository's agent conversation, one at most per repository, and the one for the
 /// repository on screen. A conversation stays until the user closes it, across the pairing
-/// sessions run in it. UI thread only.
+/// sessions run in it; hiding its panel leaves it running. UI thread only.
 /// </summary>
 internal sealed class PairingSessions : IPairingSessions, IDisposable
 {
     private readonly IRepoRegistry _repos;
     private readonly Func<Repo, PairingHarness, AgentOpening, AgentConversation> _create;
     private readonly Dictionary<Guid, AgentConversation> _conversations = new();
+    private readonly HashSet<Guid> _hidden = new();
     private readonly State<AgentConversation?> _active = new(null);
+    private readonly State<AgentConversation?> _shown = new(null);
     private readonly IDisposable _following;
 
     public PairingSessions(IRepoRegistry repos, Func<Repo, PairingHarness, AgentOpening, AgentConversation> create)
@@ -103,6 +105,12 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
 
     /// <summary>The conversation of the repository on screen, if it has one.</summary>
     public IReadable<AgentConversation?> Active => _active;
+
+    /// <summary>The conversation of the repository on screen while its panel is shown.</summary>
+    public IReadable<AgentConversation?> Shown => _shown;
+
+    /// <summary>The repository's conversation, its agent there or gone.</summary>
+    public AgentConversation? ConversationOf(Guid repoId) => _conversations.GetValueOrDefault(repoId);
 
     /// <summary>The repository's conversation while its agent is still there.</summary>
     public AgentConversation? LiveConversation(Guid repoId) =>
@@ -117,6 +125,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
     {
         if (LiveConversation(repo.Id) is { } existing)
         {
+            ShowPanel(repo.Id);
             if (existing.IsPairing) return new PairingStart.AlreadyRunning(existing);
             existing.BeginSession(goal.Trim());
             return new PairingStart.Started(existing);
@@ -131,6 +140,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
     {
         if (LiveConversation(repo.Id) is { } existing)
         {
+            ShowPanel(repo.Id);
             existing.Say(text, quote);
             return existing;
         }
@@ -138,11 +148,17 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         return Open(repo, harness, new AgentOpening.Chat(text.Trim(), quote));
     }
 
+    /// <summary>A new conversation with <paramref name="harness"/> that waits for the user to say
+    /// something, in place of the repository's conversation if it has one.</summary>
+    public AgentConversation OpenChat(Repo repo, AcpHarness harness) =>
+        Open(repo, new PairingHarness.Acp(harness), new AgentOpening.Blank());
+
     private AgentConversation Open(Repo repo, PairingHarness harness, AgentOpening opening)
     {
         if (_conversations.Remove(repo.Id, out var gone)) _ = gone.DisposeAsync().AsTask();
         var conversation = _create(repo, harness, opening);
         _conversations[repo.Id] = conversation;
+        _hidden.Remove(repo.Id);
         Refresh();
         return conversation;
     }
@@ -151,14 +167,30 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
     {
         if (LiveConversation(repoId) is not { } conversation) return new AgentPairingStart.NoConversation();
         if (conversation.Session.Value is { Store.IsLive: true } running) return new AgentPairingStart.AlreadyRunning(running.Store);
+        ShowPanel(repoId);
         return new AgentPairingStart.Started(conversation.StartSession(goal.Trim()).Store);
     }
+
+    /// <summary>Puts the repository's conversation back on screen.</summary>
+    public void ShowPanel(Guid repoId)
+    {
+        if (_hidden.Remove(repoId)) Refresh();
+    }
+
+    /// <summary>Takes the repository's conversation off screen; its agent keeps running.</summary>
+    public void HidePanel(Guid repoId)
+    {
+        if (_conversations.ContainsKey(repoId) && _hidden.Add(repoId)) Refresh();
+    }
+
+    public bool IsPanelShown(Guid repoId) => _conversations.ContainsKey(repoId) && !_hidden.Contains(repoId);
 
     /// <summary>Ends a repository's conversation — its session, if one runs, and its agent — and
     /// takes it off screen.</summary>
     public void Close(Guid repoId)
     {
         if (!_conversations.Remove(repoId, out var conversation)) return;
+        _hidden.Remove(repoId);
         _ = conversation.DisposeAsync().AsTask();
         Refresh();
     }
@@ -167,6 +199,8 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
     {
         var active = _repos.Active.Value is { } repo && _conversations.TryGetValue(repo.Id, out var conversation) ? conversation : null;
         if (!ReferenceEquals(_active.Value, active)) _active.Value = active;
+        var shown = active is not null && !_hidden.Contains(active.Repo.Id) ? active : null;
+        if (!ReferenceEquals(_shown.Value, shown)) _shown.Value = shown;
     }
 
     public void Dispose()
@@ -203,7 +237,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
                     sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
                 return new PairingSession(repo, store, presentation);
             }, dispatcher);
-            AgentPrompt first;
+            AgentPrompt? first;
             switch (opening)
             {
                 case AgentOpening.Pairing pairing:
@@ -214,6 +248,10 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
                     conversation.Transcript.AddFromUser(chat.Text, chat.Quote);
                     first = new AgentPrompt(PairingInstructions.ChatOpening(repo.Path) + "\n\n" + chat.Text, chat.Quote);
                     break;
+                case AgentOpening.Blank:
+                    conversation.OpenOnFirstWords();
+                    first = null;
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(opening), opening, "Unknown opening.");
             }
@@ -222,7 +260,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
             {
                 PairingHarness.Acp acp => AcpPairingDriver.Start(conversation, first, acp.Harness, endpoints, environment, dispatcher),
                 PairingHarness.Terminal terminal => TerminalPairingDriver.Start(
-                    conversation, first, terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
+                    conversation, first ?? throw new InvalidOperationException("A terminal agent opens on a goal or a message."), terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
                 _ => throw new ArgumentOutOfRangeException(nameof(harness), harness, "Unknown harness."),
             };
             conversation.Attach(driver);

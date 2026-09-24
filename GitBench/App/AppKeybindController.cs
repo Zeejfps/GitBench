@@ -1,6 +1,7 @@
 using GitBench.Features.Assistant;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Notifications;
+using GitBench.Features.AgentConnections.Acp;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Search;
@@ -23,6 +24,7 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
     private readonly ILocalizationService _loc;
     private readonly IMessageBus _bus;
     private readonly AssistantViewModel _assistant;
+    private readonly AgentChat _chat;
     private readonly State<MainViewMode> _mode;
     private readonly IFileBrowserStore _browsers;
     private readonly State<SidebarPane> _sidebar;
@@ -38,6 +40,7 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
         ILocalizationService loc,
         IMessageBus bus,
         AssistantViewModel assistant,
+        AgentChat chat,
         State<MainViewMode> mode,
         IFileBrowserStore browsers,
         State<SidebarPane> sidebar,
@@ -53,6 +56,7 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
         _loc = loc;
         _bus = bus;
         _assistant = assistant;
+        _chat = chat;
         _mode = mode;
         _browsers = browsers;
         _search = search;
@@ -90,7 +94,8 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
 
         if (_keys.Matches(KeyCommand.ToggleAssistant, e.Key, e.Modifiers))
         {
-            _assistant.Toggle.Execute();
+            // No menu to ask from here: the first agent on offer until one is picked.
+            if (_chat.Press() is AgentChatPress.NeedsAgent) _chat.Open(AcpHarness.ClaudeCode);
             e.Consume();
             return;
         }

@@ -77,6 +77,7 @@ public sealed class SearchEverywherePopupTests : IDisposable
                     new KeyMap(), _registry, new GitBench.Features.Repos.RepoHoverState(),
                     new GitBench.Features.Repos.RepoBarCollapseState(preferences), localization, new MessageBus(),
                     new GitBench.Features.Assistant.AssistantViewModel(new StubAssistantStore(), localization, new MessageBus()),
+                    AgentChatFixtures.Create(_registry, preferences, localization),
                     new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers(),
                     new State<SidebarPane>(SidebarPane.Branches), _search, input, TimeProvider.System);
 

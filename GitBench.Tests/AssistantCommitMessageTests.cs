@@ -318,25 +318,17 @@ public sealed class AssistantCommitMessageTests : IDisposable
     }
 
     [Fact]
-    public void CommitMenu_OffersGenerateReviewAndChat()
+    public void CommitMenu_OffersGenerateAndReview()
     {
         var vm = Start(Answering("Add a second line"));
 
         var items = vm.BuildCommitMenu();
 
-        Assert.Equal(3, items.Count);
+        Assert.Equal(2, items.Count);
         Assert.Equal("Generate commit message", items[0].Label);
         Assert.True(items[0].Enabled);
         Assert.Equal("Review changes", items[1].Label);
         Assert.True(items[1].Enabled);
-        Assert.Equal("Chat…", items[2].Label);
-
-        // "Chat…" opens the same overlay Ctrl/Cmd+K toggles, rather than toggling it shut.
-        Assert.False(vm.IsOpen.Value);
-        items[2].OnSelected();
-        Assert.True(vm.IsOpen.Value);
-        items[2].OnSelected();
-        Assert.True(vm.IsOpen.Value);
     }
 
     [Fact]

@@ -42,6 +42,9 @@ internal abstract record AgentOpening
 
     /// <summary>Something the user asked, with code they sent along.</summary>
     public sealed record Chat(string Text, CodeQuote? Quote) : AgentOpening;
+
+    /// <summary>Nothing yet: the agent starts and waits for the user's first words.</summary>
+    public sealed record Blank : AgentOpening;
 }
 
 /// <summary>Runs a conversation's agent.</summary>
@@ -67,6 +70,7 @@ internal sealed class AgentConversation : IAsyncDisposable
     private readonly Derived<bool> _takesChat;
     private IAgentDriver? _driver;
     private IDisposable? _sessionWatch;
+    private bool _toldOpening = true;
     private bool _disposed;
 
     public AgentConversation(Repo repo, PairingHarness harness, Func<string, AgentTranscript, PairingSession> newSession, IUiDispatcher dispatcher)
@@ -106,6 +110,10 @@ internal sealed class AgentConversation : IAsyncDisposable
 
     public void Attach(IAgentDriver driver) => _driver = driver;
 
+    /// <summary>For a conversation opened blank: what the agent is told of DiffDino goes with the
+    /// user's first words, or with the first session they start.</summary>
+    public void OpenOnFirstWords() => _toldOpening = false;
+
     /// <summary>Opens a pairing session in the conversation. Only while none is live.</summary>
     public PairingSession StartSession(string goal)
     {
@@ -127,7 +135,10 @@ internal sealed class AgentConversation : IAsyncDisposable
     public PairingSession BeginSession(string goal)
     {
         var session = StartSession(goal);
-        _driver?.Tell(new AgentPrompt(PairingInstructions.Resumed(goal, Repo.Path)));
+        _driver?.Tell(new AgentPrompt(_toldOpening
+            ? PairingInstructions.Resumed(goal, Repo.Path)
+            : PairingInstructions.Opening(goal, Repo.Path)));
+        _toldOpening = true;
         return session;
     }
 
@@ -155,7 +166,8 @@ internal sealed class AgentConversation : IAsyncDisposable
 
         var said = text.Trim();
         Transcript.AddFromUser(said, quote);
-        _driver?.Tell(new AgentPrompt(said, quote));
+        _driver?.Tell(new AgentPrompt(_toldOpening ? said : PairingInstructions.ChatOpening(Repo.Path) + "\n\n" + said, quote));
+        _toldOpening = true;
     }
 
     // ── the driver's side ────────────────────────────────────────────────────────────────────

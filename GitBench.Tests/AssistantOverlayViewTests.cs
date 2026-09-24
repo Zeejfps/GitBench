@@ -20,25 +20,11 @@ namespace GitBench.Tests;
 public sealed class AssistantOverlayViewTests
 {
     [Fact]
-    public void KeybindOpensAndClosesTheOverlay()
-    {
-        using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
-
-        Assert.Null(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
-
-        fixture.PressPrimary(KeyboardKey.K);
-        Assert.NotNull(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
-
-        fixture.PressPrimary(KeyboardKey.K);
-        Assert.Null(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
-    }
-
-    [Fact]
     public void EscapeClosesTheOpenOverlay()
     {
         using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         Assert.NotNull(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
 
         fixture.Press(KeyboardKey.Escape);
@@ -54,7 +40,7 @@ public sealed class AssistantOverlayViewTests
         var opened = new List<OpenSettingsWindowMessage>();
         fixture.Bus.Subscribe<OpenSettingsWindowMessage>(opened.Add);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         Assert.NotNull(fixture.Harness.Root.FindById(AssistantComposer.InputId));
 
         fixture.Harness.ClickOn(AssistantPanel.SettingsId);
@@ -76,7 +62,7 @@ public sealed class AssistantOverlayViewTests
         });
         using var fixture = new AssistantViewFixture(backend);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Ask("where am I");
 
         var canvas = fixture.Harness.Render();
@@ -101,7 +87,7 @@ public sealed class AssistantOverlayViewTests
             });
         using var fixture = new AssistantViewFixture(backend);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Ask("status?");
 
         var canvas = fixture.Harness.Render();
@@ -124,7 +110,7 @@ public sealed class AssistantOverlayViewTests
         var dialogs = 0;
         fixture.Bus.Subscribe<ShowOperationErrorMessage>(_ => dialogs++);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Ask("anything");
 
         var canvas = fixture.Harness.Render();
@@ -138,7 +124,7 @@ public sealed class AssistantOverlayViewTests
     public void TranscriptFollowsNewContentWhileRestingAtTheBottom()
     {
         using var fixture = new AssistantViewFixture(Chatty(6));
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
 
         for (var i = 0; i < 6; i++) fixture.Ask($"question {i}");
 
@@ -151,7 +137,7 @@ public sealed class AssistantOverlayViewTests
     public void TranscriptStaysPutAfterTheReaderScrollsUp()
     {
         using var fixture = new AssistantViewFixture(Chatty(8));
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
 
         for (var i = 0; i < 5; i++) fixture.Ask($"question {i}");
         Assert.True(fixture.Pane().ScrollNormalized > 0.99f);
@@ -173,7 +159,7 @@ public sealed class AssistantOverlayViewTests
     public void TranscriptResumesFollowingAfterScrollingBackToTheBottom()
     {
         using var fixture = new AssistantViewFixture(Chatty(8));
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
 
         for (var i = 0; i < 5; i++) fixture.Ask($"question {i}");
         fixture.ScrollTranscriptUp();
@@ -196,7 +182,7 @@ public sealed class AssistantOverlayViewTests
         });
         using var fixture = new AssistantViewFixture(backend, locale: Locale.Ja);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Ask("what changed");
 
         var context = Assert.Single(Assert.Single(backend.Requests).Messages.OfType<AssistantMessage.RepoContext>());
@@ -216,7 +202,7 @@ public sealed class AssistantOverlayViewTests
                 new BackendEvent.TurnComplete(StopReason.EndTurn),
             });
             using var fixture = new AssistantViewFixture(backend, locale: locale);
-            fixture.PressPrimary(KeyboardKey.K);
+            fixture.ToggleOverlay();
             fixture.Ask("hello");
             return Assert.Single(backend.Requests).SystemPrompt;
         }
@@ -237,7 +223,7 @@ public sealed class AssistantOverlayViewTests
         });
         using var fixture = new AssistantViewFixture(backend, locale: Locale.Pseudo);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Ask("hello");
 
         var context = Assert.Single(Assert.Single(backend.Requests).Messages.OfType<AssistantMessage.RepoContext>());
@@ -279,7 +265,7 @@ public sealed class AssistantOverlayViewTests
 
     private static void AssertCenteredInButton(AssistantViewFixture fixture, RectF mark)
     {
-        var button = fixture.Harness.Root.FindById(AssistantToolbarButton.ButtonId)!.Position;
+        var button = fixture.Harness.Root.FindById(AssistantViewFixture.ToggleId)!.Position;
         Assert.True(mark.Width <= button.Width && mark.Height <= button.Height,
             $"the mark ({mark.Width}x{mark.Height}) spilled out of its button ({button.Width}x{button.Height})");
         Assert.Equal(button.Center.X, mark.Center.X, 1);
@@ -310,7 +296,7 @@ public sealed class AssistantOverlayViewTests
     {
         var backend = new FakeAssistantBackend();
         using var fixture = new AssistantViewFixture(backend);
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.FocusComposer();
 
         fixture.Harness.Type("first");
@@ -330,7 +316,7 @@ public sealed class AssistantOverlayViewTests
             new BackendEvent.TurnComplete(StopReason.EndTurn),
         });
         using var fixture = new AssistantViewFixture(backend);
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.FocusComposer();
 
         fixture.Harness.Type("what changed");
@@ -348,7 +334,7 @@ public sealed class AssistantOverlayViewTests
     public void ComposerGrowsWithLinesAndStopsAtItsCap()
     {
         using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.FocusComposer();
 
         var oneLine = fixture.Field().Position.Height;
@@ -399,7 +385,7 @@ public sealed class AssistantOverlayViewTests
         using var empty = new AssistantViewFixture(new FakeAssistantBackend(), openRepo: false);
         Assert.False(empty.Vm.IsAvailable.Value);
         Assert.False(empty.Vm.Toggle.CanExecute.Value);
-        Assert.NotNull(empty.Harness.Root.FindById(AssistantToolbarButton.ButtonId));
+        Assert.NotNull(empty.Harness.Root.FindById(AssistantViewFixture.ToggleId));
 
         empty.ClickToolbarButton();
         Assert.Null(empty.Harness.Root.FindById(AssistantOverlay.PanelId));
@@ -410,7 +396,7 @@ public sealed class AssistantOverlayViewTests
     {
         using var fixture = new AssistantViewFixture(new FakeAssistantBackend(), openRepo: false);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
 
         Assert.False(fixture.Vm.IsOpen.Value);
         Assert.Null(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
@@ -438,7 +424,7 @@ public sealed class AssistantOverlayViewTests
         using var fixture = new AssistantViewFixture(backend);
         File.WriteAllText(Path.Combine(fixture.RepoPath, "a.txt"), "one\n");
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.AskWithoutWaiting("stage a.txt");
         fixture.WaitForApproval();
 
@@ -465,7 +451,7 @@ public sealed class AssistantOverlayViewTests
         var backend = Staging("a.txt");
         using var fixture = new AssistantViewFixture(backend);
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.AskWithoutWaiting("stage a.txt");
         fixture.WaitForApproval();
 
@@ -488,14 +474,14 @@ public sealed class AssistantOverlayViewTests
         using var fixture = new AssistantViewFixture(Staging("a.txt"));
         File.WriteAllText(Path.Combine(fixture.RepoPath, "a.txt"), "one\n");
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.AskWithoutWaiting("stage a.txt");
         fixture.WaitForApproval();
 
         fixture.Press(KeyboardKey.Escape);
         Assert.Null(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         Assert.True(AssistantViewFixture.HasText(fixture.Harness.Render(), "Run stage_files?"));
 
         fixture.Harness.ClickOn(ToolApprovalActions.ApproveId);
@@ -507,7 +493,7 @@ public sealed class AssistantOverlayViewTests
     {
         using var fixture = new AssistantViewFixture(Staging("a.txt"));
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.AskWithoutWaiting("stage a.txt");
         fixture.WaitForApproval();
 
@@ -526,7 +512,7 @@ public sealed class AssistantOverlayViewTests
     public void PointerInputInsideTheOverlayDoesNotReachTheSurfaceBeneath()
     {
         using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
 
         var panel = fixture.Harness.Root.FindById(AssistantOverlay.PanelId)!.Position;
         // The header band, clear of the close button: panel surface with no interactive child of its
@@ -551,7 +537,7 @@ public sealed class AssistantOverlayViewTests
     public void PointerInputOutsideTheOverlayStillReachesTheSurfaceBeneath()
     {
         using var fixture = new AssistantViewFixture(new FakeAssistantBackend());
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
 
         var panel = fixture.Harness.Root.FindById(AssistantOverlay.PanelId)!.Position;
         // Bottom-leading, well clear of the top-trailing panel and of the toolbar row.

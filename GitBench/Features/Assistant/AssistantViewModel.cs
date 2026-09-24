@@ -260,11 +260,6 @@ internal sealed class AssistantViewModel : IDisposable
                 ReviewBranch.Execute,
                 LucideIcons.Search,
                 Enabled: ReviewBranch.CanExecute.Value),
-            new RepoBarContextMenu.Item(
-                s.AssistantChat,
-                Open.Execute,
-                LucideIcons.SquareTerminal,
-                Enabled: Open.CanExecute.Value),
         ];
     }
 

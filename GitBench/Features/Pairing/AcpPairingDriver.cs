@@ -24,7 +24,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private const string ServerName = "diffdino";
 
     private readonly AgentConversation _conversation;
-    private readonly AgentPrompt _opening;
+    private readonly AgentPrompt? _opening;
     private readonly AcpHarness _harness;
     private readonly AgentEndpoints _endpoints;
     private readonly IServerEnvironment _environment;
@@ -37,7 +37,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private int _refusedThisTurn;
 
     private AcpPairingDriver(
-        AgentConversation conversation, AgentPrompt opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
+        AgentConversation conversation, AgentPrompt? opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
         IUiDispatcher dispatcher)
     {
         _conversation = conversation;
@@ -49,9 +49,9 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     }
 
     /// <summary>Starts the agent for a conversation, with <paramref name="opening"/> as its first
-    /// turn. UI thread.</summary>
+    /// turn, or with none to wait for the user's. UI thread.</summary>
     public static AcpPairingDriver Start(
-        AgentConversation conversation, AgentPrompt opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
+        AgentConversation conversation, AgentPrompt? opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
         IUiDispatcher dispatcher)
     {
         var driver = new AcpPairingDriver(conversation, opening, harness, endpoints, environment, dispatcher);
@@ -131,7 +131,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 
     private async Task Converse(AcpAgentConnection connection)
     {
-        var prompt = _opening;
+        var prompt = _opening ?? await _inbox.Reader.ReadAsync(_stop.Token).ConfigureAwait(false);
         var idle = 0;
         while (!_stop.IsCancellationRequested)
         {

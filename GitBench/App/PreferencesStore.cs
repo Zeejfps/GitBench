@@ -45,6 +45,7 @@ public static class PreferencesStore
         public float? BranchesWidth { get; set; } = 220f;
         public float? PairingPanelWidth { get; set; }
         public string? PairingTerminalCommand { get; set; }
+        public string? ChatAgent { get; set; }
         public float? CommitDetailsWidth { get; set; } = 380f;
         public float? FileBrowserWidth { get; set; } = 260f;
         public float? CommitDetailsSplitFraction { get; set; } = 2f / 3f;
@@ -147,6 +148,7 @@ public static class PreferencesStore
                                          || file.PairingTerminalCommand == Features.Pairing.TerminalAgentCommand.LegacyClaudeCode
                     ? defaults.PairingTerminalCommand
                     : file.PairingTerminalCommand,
+                ChatAgent = string.IsNullOrWhiteSpace(file.ChatAgent) ? null : file.ChatAgent,
                 CommitDetailsWidth = file.CommitDetailsWidth is > 0 ? file.CommitDetailsWidth.Value : defaults.CommitDetailsWidth,
                 FileBrowserWidth = file.FileBrowserWidth is > 0 ? file.FileBrowserWidth.Value : defaults.FileBrowserWidth,
                 CommitDetailsSplitFraction = file.CommitDetailsSplitFraction is > 0 ? file.CommitDetailsSplitFraction.Value : defaults.CommitDetailsSplitFraction,
@@ -197,6 +199,7 @@ public static class PreferencesStore
             BranchesWidth = preferences.BranchesWidth,
             PairingPanelWidth = preferences.PairingPanelWidth,
             PairingTerminalCommand = preferences.PairingTerminalCommand,
+            ChatAgent = preferences.ChatAgent,
             CommitDetailsWidth = preferences.CommitDetailsWidth,
             FileBrowserWidth = preferences.FileBrowserWidth,
             CommitDetailsSplitFraction = preferences.CommitDetailsSplitFraction,

@@ -601,6 +601,7 @@ public class TerminalKeybindCollisionTests : IDisposable
                     var input = ctx.Require<InputSystem>();
                     keybind = new AppKeybindController(
                         new KeyMap(), _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
+                        AgentChatFixtures.Create(_registry, _preferences, localization),
                         new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers(),
                         new State<SidebarPane>(SidebarPane.Branches),
                         Search, input, TimeProvider.System);

@@ -363,6 +363,12 @@ internal static class AppServices
                 ctx.Require<IContentNavigator>(),
                 ctx.Require<IUiDispatcher>(),
                 TimeProvider.System)));
+        context.AddSingleton(ctx => new AgentChat(
+            ctx.Require<PairingSessions>(),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<PreferencesService>(),
+            ctx.Require<AgentEndpoints>(),
+            ctx.Require<ILocalizationService>()));
         context.AddSingleton(ctx => new AgentToolMcpSource(
             new AgentToolExport(
                 ctx.Require<IGitService>(),

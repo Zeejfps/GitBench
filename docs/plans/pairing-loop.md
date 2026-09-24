@@ -275,6 +275,12 @@ this says so and why.
 - **The stop card is part of the Pairing panel**, docked beside the content panel: the stop's text,
   test and draft note scroll with the roadmap and the conversation, and Accept, Done and Skip stay
   pinned above the message field.
+- **The toolbar's sparkles button is the way into the agent chat** (Ctrl/Cmd+K too). The first
+  press asks which ACP agent; the pick is remembered, and later presses show and hide the panel.
+  Hiding leaves the agent running; the panel's Close ends the conversation. A conversation opened
+  this way starts blank: what the agent is told of DiffDino goes with the user's first message, or
+  with the first session they start. Right-click the button to switch agents, which replaces the
+  conversation, except during a session.
 - **The controls stay for the whole session.** Between stops, while the agent works out the next
   one, the bar keeps its place with every button unavailable, and a breathing placeholder in the
   card's shape holds the top; the card fades in over it. There is no status line of its own: the

@@ -193,6 +193,34 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
+    public void ABlankConversation_TellsTheAgentAboutDiffDino_WithTheUsersFirstWordsOnly()
+    {
+        var conversation = Create();
+        conversation.OpenOnFirstWords();
+        conversation.MarkRunning();
+
+        conversation.Say("what does this repo do?");
+        conversation.Say("and the tests?");
+
+        Assert.Equal(2, _driver.Told.Count);
+        Assert.StartsWith(PairingInstructions.ChatOpening(_repo.Path), _driver.Told[0].Text);
+        Assert.EndsWith("what does this repo do?", _driver.Told[0].Text);
+        Assert.Equal(new AgentPrompt("and the tests?"), _driver.Told[1]);
+    }
+
+    [Fact]
+    public void ASessionStartedInABlankConversation_GetsTheWholeOpening()
+    {
+        var conversation = Create();
+        conversation.OpenOnFirstWords();
+        conversation.MarkRunning();
+
+        conversation.BeginSession("Add a retry");
+
+        Assert.Equal([new AgentPrompt(PairingInstructions.Opening("Add a retry", _repo.Path))], _driver.Told);
+    }
+
+    [Fact]
     public void StartingASessionWhileOneRuns_IsRefused()
     {
         var conversation = Create();

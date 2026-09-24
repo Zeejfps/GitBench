@@ -24,7 +24,7 @@ public sealed class AssistantPanelTests
     {
         var fixture = new AssistantViewFixture(
             backend ?? new FakeAssistantBackend(), preferences: preferences ?? Placed());
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Frames();
         return fixture;
     }
@@ -391,7 +391,7 @@ public sealed class AssistantPanelTests
         fixture.Press(KeyboardKey.Escape);
         Assert.Null(fixture.Harness.Root.FindById(AssistantOverlay.PanelId));
 
-        fixture.PressPrimary(KeyboardKey.K);
+        fixture.ToggleOverlay();
         fixture.Frames();
 
         Assert.Equal(3, CountText(fixture.Harness.Render(), "Used get_status"));

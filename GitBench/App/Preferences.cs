@@ -41,6 +41,10 @@ public sealed record Preferences
 
     /// <summary>The command a terminal pairing session starts its agent with.</summary>
     public string PairingTerminalCommand { get; init; } = Features.Pairing.TerminalAgentCommand.ClaudeCode;
+
+    /// <summary>The id of the ACP harness the chat button opens a conversation with; null until one
+    /// is picked.</summary>
+    public string? ChatAgent { get; init; }
     public float CommitDetailsWidth { get; init; } = 380f;
     public float CommitDetailsSplitFraction { get; init; } = 2f / 3f;
 

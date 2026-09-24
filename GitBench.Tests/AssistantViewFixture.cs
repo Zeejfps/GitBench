@@ -7,6 +7,7 @@ using GitBench.Features.FileBrowser;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Features.Toolbar;
 using GitBench.Git;
 using GitBench.Input;
 using GitBench.Localization;
@@ -70,6 +71,9 @@ internal sealed class AssistantViewFixture : IDisposable
 
     /// <summary>The mark's image id; null until a test hands it one, which is the glyph fallback.</summary>
     public AssistantMarkImage Mark { get; } = new();
+
+    /// <summary>What opens the overlay in these tests, where the toolbar's button opens the agent chat.</summary>
+    public const string ToggleId = "assistant-toggle";
 
     public PreferencesService Preferences { get; }
 
@@ -153,7 +157,15 @@ internal sealed class AssistantViewFixture : IDisposable
                                                     {
                                                         Gap = 2f,
                                                         CrossAxis = CrossAxisAlignment.Center,
-                                                        Children = [new AssistantToolbarButton()],
+                                                        Children =
+                                                        [
+                                                            new ToolbarIconButton
+                                                            {
+                                                                Id = ToggleId,
+                                                                Command = Vm.Toggle,
+                                                                Content = new AssistantMark { Size = 16 },
+                                                            },
+                                                        ],
                                                     },
                                                 },
                                             ],
@@ -192,6 +204,7 @@ internal sealed class AssistantViewFixture : IDisposable
                     ctx.Require<ILocalizationService>(),
                     Bus,
                     Vm,
+                    AgentChatFixtures.Create(_registry, Preferences, localization),
                     new State<MainViewMode>(MainViewMode.LocalChanges),
                     new NoFileBrowsers(),
                     new State<SidebarPane>(SidebarPane.Branches),
@@ -274,9 +287,15 @@ internal sealed class AssistantViewFixture : IDisposable
 
     public void ScrollTranscriptToBottom(int notches = 40) => Wheel(-1f, notches);
 
+    public void ToggleOverlay()
+    {
+        Vm.Toggle.Execute();
+        Frames();
+    }
+
     public void ClickToolbarButton()
     {
-        Harness.ClickOn(AssistantToolbarButton.ButtonId);
+        Harness.ClickOn(ToggleId);
         Harness.Layout();
     }
 
