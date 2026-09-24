@@ -63,6 +63,8 @@ internal sealed class DiffRowPainter
     // inset lifts the rule off the row's bottom edge into the descender space.
     private const float LinkUnderlineInset = 2f;
     private const float LinkUnderlineThickness = 1f;
+    private const float MissingNameThickness = 1.5f;
+    private const float MissingNameDash = 2f;
 
     // Gap-expander icons on the separator bars: fixed-width clickable cells at the far left of
     // the bar, over the gutter columns. Draw and hit-test share this geometry.
@@ -481,7 +483,35 @@ internal sealed class DiffRowPainter
         var textLeft = TextOriginOf(p);
         if (ghost.Emphasis is { Count: > 0 } ranges)
             DrawIntraLineEmphasis(c, ghost.Text, ranges, Styles.LineAddedEmphasisBackground, textLeft, p.Bottom, p.Z);
+        if (p.Link is { } link)
+            DrawLinkTint(c, ghost.Text, link, textLeft, p.Bottom, p.Z + 1);
         DrawSpannedText(c, ghost.Text, ghost.Spans, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
+        if (p.Link is { } underlined)
+            DrawLinkUnderline(c, ghost.Text, underlined, textLeft, p.Bottom, p.Z + 3);
+        if (ghost.Names is { } names)
+            foreach (var name in names)
+                if (name.Name.Kind is Features.Editor.DraftNameKind.Missing)
+                    DrawMissingNameUnderline(c, ghost.Text, name.Columns, textLeft, p.Bottom, p.Z + 3);
+    }
+
+    // A name the suggestion uses that nothing declares yet: dashed, so it reads apart from both a
+    // link's rule and a diagnostic's squiggle — it is work still to do, not a mistake.
+    private void DrawMissingNameUnderline(
+        ICanvas c, string text, in CharRange name, float textLeft, float bottom, int z)
+    {
+        var (from, to) = LinkExtent(text, name, textLeft);
+        var y = bottom + LinkUnderlineInset;
+        c.DrawLine(new DrawLineInputs
+        {
+            Start = new PointF(from, y),
+            End = new PointF(to, y),
+            Thickness = MissingNameThickness,
+            Color = Styles.DiagnosticWarning,
+            ZIndex = z,
+            Cap = LineCap.Butt,
+            DashLength = MissingNameDash,
+            GapLength = MissingNameDash,
+        });
     }
 
     // Text and nothing else. A usages row has no line of its own in the file, so a number in the

@@ -67,7 +67,15 @@ internal abstract record DiffRow
     /// <summary>
     /// A line of code suggested to the reader, drawn between the file's lines without being one of
     /// them: it has no number, and nothing selects it, types into it, or searches it. Tabs are
-    /// already expanded; <see cref="Spans"/> color it as the file would read with it taken.
+    /// already expanded; <see cref="Spans"/> color it as the file would read with it taken, and
+    /// <see cref="Names"/> say which of its names are declared already and which nowhere yet.
     /// </summary>
-    public sealed record Ghost(string Text, IReadOnlyList<CharRange>? Emphasis = null, IReadOnlyList<TokenSpan>? Spans = null) : DiffRow;
+    public sealed record Ghost(
+        string Text,
+        IReadOnlyList<CharRange>? Emphasis = null,
+        IReadOnlyList<TokenSpan>? Spans = null,
+        IReadOnlyList<GhostName>? Names = null) : DiffRow;
 }
+
+/// <summary>A name on a suggested line, at its tab-expanded columns.</summary>
+internal sealed record GhostName(CharRange Columns, Features.Editor.DraftName Name);

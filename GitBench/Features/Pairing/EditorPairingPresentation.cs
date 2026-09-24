@@ -29,6 +29,8 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
     private readonly ISyntaxHighlighter _highlighter;
     private readonly IUiDispatcher _dispatcher;
     private readonly State<EditorCaret?> _caret = new(null);
+    private readonly State<IReadOnlyList<string>> _draftNeeds = new([]);
+    private readonly DraftNameChecker _names;
     private readonly IDisposable _following;
     private IDisposable? _caretSubscription;
     private FileBrowserViewModel? _hinted;
@@ -41,6 +43,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         ISymbolExtractor extractor,
         RepoDocumentSaver saver,
         ISyntaxHighlighter highlighter,
+        IDraftDefinitionSource servers,
         IUiDispatcher dispatcher)
     {
         _repo = repo;
@@ -51,10 +54,13 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         _saver = saver;
         _highlighter = highlighter;
         _dispatcher = dispatcher;
+        _names = new DraftNameChecker(servers, repos.Active, repo, dispatcher);
         _following = browsers.Active.Subscribe(Follow);
     }
 
     public IReadable<EditorCaret?> Caret => _caret;
+
+    public IReadable<IReadOnlyList<string>> DraftNeeds => _draftNeeds;
 
     public async Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct)
     {
@@ -158,9 +164,21 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         if (spans is null) return;
         _dispatcher.Post(() =>
         {
-            if (ReferenceEquals(_hinted, browser) && ReferenceEquals(browser.Hints.Value, shown))
-                browser.ShowHints(shown with { Ghost = shown.Ghost with { Spans = spans } });
+            if (!ReferenceEquals(_hinted, browser) || !ReferenceEquals(browser.Hints.Value, shown)) return;
+            browser.ShowHints(shown with { Ghost = shown.Ghost with { Spans = spans } });
+            _names.Check(shown.Path, file, place, shown.Ghost.Lines, spans, names => ShowNames(browser, shown, names));
         });
+    }
+
+    // Laid over whatever the suggestion looks like by now: its colors are in, and an earlier
+    // answer's names may be.
+    private void ShowNames(FileBrowserViewModel browser, EditorHints shown, IReadOnlyList<DraftName> names)
+    {
+        if (!ReferenceEquals(_hinted, browser) || browser.Hints.Value is not { } current) return;
+        if (current.Path != shown.Path || !current.Ghost.SameSuggestion(shown.Ghost)) return;
+        browser.ShowHints(current with { Ghost = current.Ghost with { Names = names } });
+        var needs = DraftNames.Missing(names);
+        if (!needs.SequenceEqual(_draftNeeds.Value)) _draftNeeds.Value = needs;
     }
 
     private static IReadOnlyList<string> FileLines(StopLocation location) => location switch
@@ -181,6 +199,8 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
 
     public void ClearDraft()
     {
+        _names.Clear();
+        if (_draftNeeds.Value.Count > 0) _draftNeeds.Value = [];
         _hinted?.ShowHints(null);
         _hinted = null;
     }
@@ -250,6 +270,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
     public void Dispose()
     {
         ClearDraft();
+        _names.Dispose();
         _following.Dispose();
         _caretSubscription?.Dispose();
     }

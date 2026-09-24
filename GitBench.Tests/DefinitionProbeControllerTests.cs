@@ -102,6 +102,57 @@ public sealed class DefinitionProbeControllerTests
         Assert.Equal(4, Assert.Single(fx.Source.Asked).Column.Value);
     }
 
+    // A name in suggested code was resolved when the suggestion was checked, so the jump is
+    // already known and nothing is asked.
+    [Fact]
+    public void CommandClickingAnExistingNameInASuggestionGoesToItsDeclaration()
+    {
+        var fx = new Fixture();
+        fx.DraftNames[(30, 10)] = Existing("Helper", "/repo/src/lib.rs", 12);
+
+        Assert.True(fx.Click(30, 10, Command));
+
+        Assert.Empty(fx.Source.Asked);
+        var went = Assert.Single(fx.Navigator.Went);
+        Assert.Equal("/repo/src/lib.rs", went.Path);
+        Assert.Equal(12, went.Line);
+    }
+
+    [Fact]
+    public void HoldingTheModifierOverAnExistingNameInASuggestionMarksItAsALink()
+    {
+        var fx = new Fixture();
+        var name = Existing("Helper", "/repo/src/lib.rs", 12);
+        fx.DraftNames[(30, 10)] = name;
+        fx.Move(30, 10);
+
+        fx.Hold(Command);
+
+        Assert.Equal(name, fx.Surface.DraftLinks[^1]);
+        Assert.Empty(fx.Source.Asked);
+
+        fx.Hold(InputModifiers.None);
+        Assert.Null(fx.Surface.DraftLinks[^1]);
+    }
+
+    // Nothing declares it, so there is nowhere to go: the click belongs to whatever is beneath.
+    [Fact]
+    public async Task AMissingNameInASuggestionIsNotALink()
+    {
+        var fx = new Fixture();
+        fx.DraftNames[(30, 10)] = new DraftName(0, new RawColumn(4), new RawColumn(10), "Parse", DraftNameKind.Missing.Instance);
+        fx.Move(30, 10);
+        fx.Hold(Command);
+
+        Assert.Null(fx.Surface.DraftLinks[^1]);
+        Assert.False(fx.Click(30, 10, Command));
+        await fx.Settle();
+        Assert.Empty(fx.Navigator.Went);
+    }
+
+    private static DraftName Existing(string text, string path, int line) =>
+        new(0, new RawColumn(4), new RawColumn(4 + text.Length), text, new DraftNameKind.Existing(path, new FileLine(line)));
+
     [Fact]
     public async Task APlainClickAsksNothing()
     {
@@ -543,6 +594,8 @@ public sealed class DefinitionProbeControllerTests
 
         public Dictionary<(float X, float Y), FileSpan> Identifiers { get; } = new();
 
+        public Dictionary<(float X, float Y), DraftName> DraftNames { get; } = new();
+
         public FakeSurface Surface { get; }
 
         public InputModifiers Held { get; set; } = InputModifiers.None;
@@ -619,6 +672,13 @@ public sealed class DefinitionProbeControllerTests
             fixture.Identifiers.TryGetValue((point.X, point.Y), out var span) ? span : null;
 
         public void ShowDefinitionLink(FileSpan? link) => Shown.Add(link);
+
+        public List<DraftName?> DraftLinks { get; } = [];
+
+        public DraftName? HitTestDraftName(PointF point) =>
+            fixture.DraftNames.TryGetValue((point.X, point.Y), out var name) ? name : null;
+
+        public void ShowDraftLink(DraftName? link) => DraftLinks.Add(link);
     }
 
     private sealed class FakeSource : IDefinitionSource

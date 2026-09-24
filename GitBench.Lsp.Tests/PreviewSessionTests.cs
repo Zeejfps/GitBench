@@ -547,4 +547,128 @@ public sealed class PreviewSessionTests : IDisposable
         Assert.Empty((await definition).Targets);
         Assert.IsType<ReferenceReply.Unavailable>(await references);
     }
+
+    private static LspPosition At(int line, int character) => new(new LspLine(line), new LspCharacter(character));
+
+    // The server is asked about the file as it would read with the suggestion in it — where each
+    // name is declared, and what a hover shows for the declared ones — then told the text it held
+    // before: the reader never had the draft, so the server must not keep it.
+    [Fact]
+    public async Task ADraftIsAskedAboutAndTheFileIsPutBackAfter()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+
+        var asked = _session.DefineInDraftAsync("fn main() { helper(); missing(); }", [At(0, 12), At(0, 22)], CancellationToken.None);
+        var draft = Assert.Single(_client.Changed);
+        Assert.Equal("fn main() { helper(); missing(); }", draft.Text);
+        _client.Definitions[0].Answer(Declared(_b));
+        _client.Definitions[1].Answer(new Definition.None());
+        for (var i = 0; i < 500 && _client.Hovers.Count == 0; i++) await Task.Delay(1);
+        Assert.Single(_client.Hovers).Answer(Plain("fn helper()"));
+
+        var answers = Assert.IsType<DraftDefinitions.Answered>(await asked).Names;
+        Assert.Equal("fn helper()", Assert.IsType<DraftDefinition.Declared>(answers[0]).Hover?.Markdown);
+        Assert.IsType<DraftDefinition.Undeclared>(answers[1]);
+        var back = _client.Changed[1];
+        Assert.Equal("fn main() {}", back.Text);
+        Assert.True(back.Version.Value > draft.Version.Value);
+        Assert.Equal(back.Version, Open().Version);
+    }
+
+    // "Declared nowhere" says the code is missing something; a refusal says nothing about the code.
+    [Fact]
+    public async Task ARefusalAboutADraftNameIsUnansweredRatherThanUndeclared()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+
+        var asked = _session.DefineInDraftAsync("fn main() { helper(); }", [At(0, 12)], CancellationToken.None);
+        _client.Definitions.Single().Refuse();
+
+        Assert.IsType<DraftDefinition.Unanswered>(Assert.Single(Assert.IsType<DraftDefinitions.Answered>(await asked).Names));
+    }
+
+    // The text the pane has never changed, so nothing watching it is told it did.
+    [Fact]
+    public async Task ADraftComingAndGoingPublishesNothing()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        var published = 0;
+        _session.StateChanged += _ => published++;
+
+        var asked = _session.DefineInDraftAsync("fn main() { helper(); }", [At(0, 12)], CancellationToken.None);
+        _client.Definitions.Single().Answer(new Definition.None());
+        await asked;
+
+        Assert.Equal(0, published);
+    }
+
+    // The squiggles on screen are the reader's text's. A wave about the draft — while it is in, or
+    // tagged with its version and arriving after — would draw its problems over lines it never had.
+    [Fact]
+    public async Task DiagnosticsAboutADraftAreNeverShown()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+        _client.Publish(_a, Problem("before"));
+
+        var asked = _session.DefineInDraftAsync("fn main() { helper(); }", [At(0, 12)], CancellationToken.None);
+        var draftVersion = Assert.Single(_client.Changed).Version;
+        _client.Publish(_a, Problem("about the draft"));
+        _client.Definitions.Single().Answer(new Definition.None());
+        await asked;
+        _client.Publish(_a, ResultVersion.At(draftVersion), Problem("late, about the draft"));
+
+        Assert.Equal(new[] { "before" }, Messages(Open().Diagnostics));
+    }
+
+    // Anything else asked while the draft is in would be answered about text the reader does not
+    // have: a hover over the wrong line, a usage count for a draft.
+    [Fact]
+    public async Task NothingElseIsAskedWhileADraftIsIn()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+
+        var asked = _session.DefineInDraftAsync("fn main() { helper(); }", [At(0, 12)], CancellationToken.None);
+        var hover = await _session.HoverAsync(Somewhere);
+        var again = await _session.DefineInDraftAsync("fn main() { other(); }", [At(0, 12)], CancellationToken.None);
+
+        Assert.Null(hover);
+        Assert.Empty(_client.Hovers);
+        Assert.IsType<DraftDefinitions.Unavailable>(again);
+        _client.Definitions.Single().Answer(new Definition.None());
+        await asked;
+    }
+
+    // Without edits, the draft would have to be opened in place of the file and the file reopened
+    // after, and each reopen resets the diagnostics on screen to waiting.
+    [Fact]
+    public async Task AServerThatDoesNotFollowEditsIsNotShownADraft()
+    {
+        _session.Preview(File(_a, "fn main() {}"));
+
+        var asked = await _session.DefineInDraftAsync("fn main() { helper(); }", [At(0, 12)], CancellationToken.None);
+
+        Assert.IsType<DraftDefinitions.Unavailable>(asked);
+        Assert.Empty(_client.Changed);
+        Assert.Single(_client.Opened);
+    }
+
+    [Fact]
+    public async Task ADocumentClosedWhileADraftIsInIsNotPutBack()
+    {
+        _client.Capabilities = Syncing();
+        _session.Preview(File(_a, "fn main() {}"));
+
+        var asked = _session.DefineInDraftAsync("fn main() { helper(); }", [At(0, 12)], CancellationToken.None);
+        _session.Clear();
+        _client.Definitions.Single().Answer(new Definition.None());
+
+        Assert.IsType<DraftDefinitions.Unavailable>(await asked);
+        Assert.Single(_client.Changed);
+        Assert.IsType<DocumentState.Nothing>(_session.State);
+    }
 }

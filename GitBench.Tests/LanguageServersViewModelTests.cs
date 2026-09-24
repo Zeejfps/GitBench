@@ -211,6 +211,10 @@ public sealed class LanguageServersViewModelTests : IDisposable
             string absolutePath, FileLine line, RawColumn column, CancellationToken ct) =>
             Task.FromResult(DefinitionReply.Nothing);
 
+        public Task<DraftDefinitions> DefineInDraftAsync(
+            string absolutePath, string draft, IReadOnlyList<GitBench.Features.Editor.TextPosition> names, CancellationToken ct) =>
+            Task.FromResult<DraftDefinitions>(DraftDefinitions.Unavailable.Instance);
+
         public bool CanReference(string absolutePath) => false;
 
         public Task<ReferenceReply> ReferencesAsync(

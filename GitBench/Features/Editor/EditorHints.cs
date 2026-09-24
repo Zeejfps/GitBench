@@ -17,11 +17,41 @@ internal sealed record EditorHints(string Path, EditorGhost Ghost, SuggestionAct
 internal sealed record SuggestionActions(Action Accept, Action AcceptAndNext);
 
 /// <summary>Suggested code, and where in the file it goes, with its syntax colors line by line
-/// where they are known.</summary>
-internal sealed record EditorGhost(GhostPlace Place, IReadOnlyList<string> Lines, IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null)
+/// and what a language server made of its names, where those are known.</summary>
+internal sealed record EditorGhost(
+    GhostPlace Place,
+    IReadOnlyList<string> Lines,
+    IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null,
+    IReadOnlyList<DraftName>? Names = null)
 {
-    /// <summary>Whether the two are the same code in the same place, however they are colored.</summary>
+    /// <summary>Whether the two are the same code in the same place, however they are colored or
+    /// their names resolved.</summary>
     public bool SameSuggestion(EditorGhost other) => Place == other.Place && Lines.SequenceEqual(other.Lines);
+}
+
+/// <summary>A name in suggested code: the line of the suggestion it is on, 0-based, where it is
+/// in that line, what it is, and what a hover over it shows, as markdown, where the server said.</summary>
+internal sealed record DraftName(int Line, RawColumn Start, RawColumn End, string Text, DraftNameKind Kind, string? Docs = null);
+
+/// <summary>What a language server made of a name in suggested code.</summary>
+internal abstract record DraftNameKind
+{
+    private DraftNameKind() { }
+
+    /// <summary>Declared already, at a place the reader can go to.</summary>
+    public sealed record Existing(string AbsolutePath, FileLine Line) : DraftNameKind;
+
+    /// <summary>Declared by the suggestion itself.</summary>
+    public sealed record Introduced : DraftNameKind
+    {
+        public static readonly Introduced Instance = new();
+    }
+
+    /// <summary>Declared nowhere: still to be written.</summary>
+    public sealed record Missing : DraftNameKind
+    {
+        public static readonly Missing Instance = new();
+    }
 }
 
 /// <summary>Where suggested code goes in a file.</summary>
@@ -42,8 +72,15 @@ internal static class GhostMatch
     /// have moved it since: only the lines between the two are the reader's.</param>
     /// <param name="line">Reads a file line, 1-based.</param>
     /// <param name="spans">The draft's colors, line by line, or null.</param>
+    /// <param name="names">What the draft's names are, or null.</param>
     public static GhostLines Remaining(
-        IReadOnlyList<string> draft, IReadOnlyList<IReadOnlyList<TokenSpan>>? spans, FileLine anchor, FileLine below, int lineCount, Func<int, string> line)
+        IReadOnlyList<string> draft,
+        IReadOnlyList<IReadOnlyList<TokenSpan>>? spans,
+        IReadOnlyList<DraftName>? names,
+        FileLine anchor,
+        FileLine below,
+        int lineCount,
+        Func<int, string> line)
     {
         // Lines already in the file are never taken for typed ones, however much they read like
         // the draft: a closing tag or a `return (` further down is the file's own.
@@ -74,7 +111,8 @@ internal static class GhostMatch
         return new GhostLines(
             new FileLine(lastTyped),
             remaining.Select(i => draft[i]).ToArray(),
-            Spans: spans is null ? null : remaining.Select(i => i < spans.Count ? spans[i] : []).ToArray());
+            Spans: spans is null ? null : remaining.Select(i => i < spans.Count ? spans[i] : []).ToArray(),
+            Names: names is null ? null : GhostLines.NamesByLine(names, remaining));
     }
 
     /// <summary>Where a line anchor stands after an edit, given the edit that would undo it: moved

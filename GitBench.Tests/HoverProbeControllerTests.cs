@@ -40,6 +40,35 @@ public sealed class HoverProbeControllerTests
     // treating each one as new abandons the question already in flight — forever, so it is asked
     // over and over and never answered. Asserting the number of questions does not catch it: the
     // abandoned ones are replaced. Asserting the answer survives does.
+    // Suggested code is not in the file, so nothing can be asked about it there: what a hover over
+    // the name shows was asked for when the suggestion was checked.
+    [Fact]
+    public async Task RestingOnANameInASuggestionShowsWhatWasAlreadyKnownAboutIt()
+    {
+        var fx = new Fixture();
+        fx.DraftNames[(30, 10)] = new DraftName(
+            0, new RawColumn(2), new RawColumn(7), "count", DraftNameKind.Introduced.Instance, "function count(values: number[]): number");
+
+        fx.Move(30, 10);
+        await fx.SettleShown();
+
+        Assert.Equal("function count(values: number[]): number", fx.Presenter.Showing?.Markdown);
+        Assert.Empty(fx.Source.Asked);
+    }
+
+    [Fact]
+    public async Task ANameInASuggestionWithNothingToShowShowsNothing()
+    {
+        var fx = new Fixture();
+        fx.DraftNames[(30, 10)] = new DraftName(0, new RawColumn(2), new RawColumn(8), "median", DraftNameKind.Missing.Instance);
+
+        fx.Move(30, 10);
+        await fx.Settle();
+
+        Assert.Null(fx.Presenter.Showing);
+        Assert.Empty(fx.Source.Asked);
+    }
+
     [Fact]
     public async Task AnIdenticalMoveDoesNotAbandonTheQuestionAlreadyAsked()
     {
@@ -214,6 +243,8 @@ public sealed class HoverProbeControllerTests
 
         public Dictionary<int, IReadOnlyList<Diagnostic>> Problems { get; } = new();
 
+        public Dictionary<(float X, float Y), DraftName> DraftNames { get; } = new();
+
         public FakeSource Source { get; } = new();
 
         public FakePresenter Presenter { get; } = new();
@@ -267,6 +298,9 @@ public sealed class HoverProbeControllerTests
 
         public IReadOnlyList<Diagnostic> DiagnosticsOn(FileLine line) =>
             fixture.Problems.TryGetValue(line.Value, out var items) ? items : [];
+
+        public DraftName? HitTestDraftName(PointF point) =>
+            fixture.DraftNames.TryGetValue((point.X, point.Y), out var name) ? name : null;
     }
 
     private sealed class FakeSource : IHoverSource

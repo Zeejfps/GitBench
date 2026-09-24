@@ -1,6 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Lsp;
+using GitBench.Lsp.Documents;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -21,6 +22,7 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
 
     private TextPosition? _asking;
     private TextPosition? _showing;
+    private DraftName? _draftShowing;
     private PointF _anchor;
 
     public HoverProbeController(
@@ -44,7 +46,13 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
 
     internal void PointerMovedTo(PointF point)
     {
-        if (_showing is not null && OverTheCard(point)) return;
+        if ((_showing is not null || _draftShowing is not null) && OverTheCard(point)) return;
+
+        if (_surface.HitTestDraftName(point) is { Docs: { } docs } name)
+        {
+            ShowDraftDocs(name, docs, point);
+            return;
+        }
 
         var at = _surface.HitTestFilePosition(point);
         if (at is null)
@@ -58,6 +66,7 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
 
         Cancel();
         _showing = null;
+        _draftShowing = null;
         _popups.Hide(this);
 
         if (_document() is not { } document) return;
@@ -94,6 +103,22 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
             });
     }
 
+    // Known since the suggestion was checked: only the dwell is waited for.
+    private void ShowDraftDocs(DraftName name, string docs, PointF anchor)
+    {
+        if (_draftShowing == name) return;
+        Cancel();
+        _showing = null;
+        _draftShowing = null;
+        _popups.Hide(this);
+        _probe.Wait(TimeSpan.FromMilliseconds(DwellMs), () =>
+        {
+            _draftShowing = name;
+            _anchor = anchor;
+            _popups.Show(this, new HoverText(docs), new RectF(anchor.X, anchor.Y, 1, 1));
+        });
+    }
+
     private bool OverTheCard(PointF point) =>
         point.X >= _anchor.X - HoverPopupService.Gap &&
         point.X <= _anchor.X + HoverPopupService.CardWidth + HoverPopupService.Gap &&
@@ -104,6 +129,7 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
     {
         Cancel();
         _showing = null;
+        _draftShowing = null;
         _asking = null;
         _popups.Hide(this);
     }

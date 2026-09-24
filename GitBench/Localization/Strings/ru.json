@@ -1190,6 +1190,7 @@
   "pairing.accepting": "Вставляем код агента…",
   "pairing.draft_replaces": "Код агента для строк {from}–{to} показан в редакторе. Примите его или напишите сами.",
   "pairing.draft_inserts": "Код агента после строки {line} показан в редакторе. Примите его или напишите сами.",
+  "pairing.draft_needs": "Пока нигде не объявлено: {names}",
   "pairing.skip": "Пропустить",
   "pairing.show_change": "К изменению",
   "pairing.checking": "Проверяем ваше изменение…",

@@ -3,6 +3,7 @@ using GitBench.Features.Editor;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;
 using ZGF.Geometry;
+using ZGF.Observable;
 
 namespace GitBench.Features.LanguageServers;
 
@@ -17,6 +18,10 @@ internal interface IHoverSurface : IFilePositionSurface
     /// surface rather than asked of the servers again, so the message on the card is the one whose
     /// squiggle the reader is pointing at.</summary>
     IReadOnlyList<Diagnostic> DiagnosticsOn(FileLine line);
+
+    /// <summary>The name in suggested code under a pixel, with what a hover over it shows if the
+    /// server said. Suggested code is not in the file, so it cannot be asked about there.</summary>
+    DraftName? HitTestDraftName(PointF point);
 }
 
 internal interface IHoverSource
@@ -44,6 +49,12 @@ internal interface IDefinitionSurface : IFilePositionSurface
     FileSpan? HitTestIdentifier(PointF point);
 
     void ShowDefinitionLink(FileSpan? link);
+
+    /// <summary>The name in suggested code under a pixel.</summary>
+    DraftName? HitTestDraftName(PointF point);
+
+    /// <summary>Marks a name in suggested code as a link, or clears the mark.</summary>
+    void ShowDraftLink(DraftName? link);
 }
 
 internal interface IDefinitionSource
@@ -52,6 +63,19 @@ internal interface IDefinitionSource
 
     Task<DefinitionReply> DefineAsync(
         string absolutePath, FileLine line, RawColumn column, CancellationToken ct);
+}
+
+/// <summary>Where the names in suggested code are declared, asked before it is in the file.</summary>
+internal interface IDraftDefinitionSource
+{
+    /// <summary>What the servers are doing, for whether a name declared nowhere was answered by a
+    /// server that had finished loading.</summary>
+    IReadable<LanguageServerSnapshot> Active { get; }
+
+    /// <param name="draft">The whole file as it would read with the suggestion in it.</param>
+    /// <param name="names">Where each name starts in <paramref name="draft"/>.</param>
+    Task<DraftDefinitions> DefineInDraftAsync(
+        string absolutePath, string draft, IReadOnlyList<TextPosition> names, CancellationToken ct);
 }
 
 internal interface IReferenceSource

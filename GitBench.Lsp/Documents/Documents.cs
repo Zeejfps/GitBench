@@ -88,6 +88,48 @@ public sealed record DefinitionReply(IReadOnlyList<DefinitionTarget> Targets, Op
 }
 
 /// <summary>
+/// Where the names in a draft are declared, asked of the file as it would read with the draft in
+/// it. Nobody to ask is kept apart from every answer, and within an answer a name declared nowhere
+/// is kept apart from a name the server would not answer about: only the first says the code is
+/// missing something.
+/// </summary>
+public abstract record DraftDefinitions
+{
+    private DraftDefinitions() { }
+
+    /// <summary>No server for the file, one that does not answer definitions or follow edits, a
+    /// file it could not be shown, or a draft already being asked about.</summary>
+    public sealed record Unavailable : DraftDefinitions
+    {
+        public static readonly Unavailable Instance = new();
+    }
+
+    /// <summary>One answer per name, in the order the names were asked.</summary>
+    public sealed record Answered(IReadOnlyList<DraftDefinition> Names) : DraftDefinitions;
+}
+
+/// <summary>What a server said about one name in a draft. Positions in <see cref="Declared"/> are
+/// in the file as it read with the draft in it; <c>Hover</c> is what it shows about the name there,
+/// or null where it said nothing.</summary>
+public abstract record DraftDefinition
+{
+    private DraftDefinition() { }
+
+    public sealed record Declared(IReadOnlyList<DefinitionTarget> Targets, HoverText? Hover = null) : DraftDefinition;
+
+    public sealed record Undeclared : DraftDefinition
+    {
+        public static readonly Undeclared Instance = new();
+    }
+
+    /// <summary>Refused, timed out, or cancelled.</summary>
+    public sealed record Unanswered : DraftDefinition
+    {
+        public static readonly Unanswered Instance = new();
+    }
+}
+
+/// <summary>
 /// Where a symbol is used, the declaration itself excluded — so the number of sites is the number
 /// a reader is shown.
 /// </summary>
@@ -185,6 +227,9 @@ public sealed class PreviewSession : IDisposable
     private SentText? _sent;
     private DocumentVersion _nextVersion = new(1);
     private CancellationTokenSource? _requests;
+    // While a draft is in, the server holds text the reader does not have: nothing else is asked
+    // and nothing it publishes is shown.
+    private volatile bool _drafting;
 
     public PreviewSession(
         ILanguageServerQuestions server,
@@ -375,6 +420,74 @@ public sealed class PreviewSession : IDisposable
             : SignatureReply.Unavailable.Instance;
     }
 
+    /// <summary>
+    /// Where each name in a draft is declared, and what a hover over each declared one shows: the
+    /// open document is changed to <paramref name="draft"/>, asked about at every position, and
+    /// changed back to the text it held. The pane never sees the
+    /// draft — nothing is published, and the document comes back at a version past the draft's, so
+    /// a wave of diagnostics tagged with the draft's version is dropped with the rest.
+    /// </summary>
+    /// <remarks>Only where the server follows edits: reopening the document twice would reset the
+    /// diagnostics on screen to waiting.</remarks>
+    public async Task<DraftDefinitions> DefineInDraftAsync(
+        string draft, IReadOnlyList<LspPosition> names, CancellationToken cancel)
+    {
+        if (_drafting) return DraftDefinitions.Unavailable.Instance;
+        if (_server.Capabilities is not { FollowsEdits: true }) return DraftDefinitions.Unavailable.Instance;
+        if (Asking() is not (var uri, _, var requests) || _sent is not { } sent)
+            return DraftDefinitions.Unavailable.Instance;
+
+        _drafting = true;
+        using var asking = CancellationTokenSource.CreateLinkedTokenSource(requests, cancel);
+        try
+        {
+            var version = _nextVersion;
+            _nextVersion = _nextVersion.Next();
+            _ = _server.ChangeAsync(uri, version, draft, _closing.Token);
+
+            var answers = await Task.WhenAll(names.Select(at => AskAsync(LspRequests.Definition(uri, at), asking.Token)))
+                .ConfigureAwait(false);
+            var definitions = answers.Select(ReadDraftDefinition).ToArray();
+            var hovers = await Task.WhenAll(names.Select((at, i) => definitions[i] is DraftDefinition.Declared
+                    ? AskAsync(LspRequests.Hover(uri, at), asking.Token)
+                    : Task.FromResult<LspResponse<Hover>>(new LspResponse<Hover>.Cancelled())))
+                .ConfigureAwait(false);
+            if (_state is not DocumentState.Open still || still.Uri != uri) return DraftDefinitions.Unavailable.Instance;
+
+            for (var i = 0; i < definitions.Length; i++)
+                if (definitions[i] is DraftDefinition.Declared declared && hovers[i] is LspResponse<Hover>.Ok(var hover))
+                    definitions[i] = declared with { Hover = HoverText.Of(hover) };
+            return new DraftDefinitions.Answered(definitions);
+        }
+        finally
+        {
+            PutBack(uri, sent.Text);
+            _drafting = false;
+        }
+    }
+
+    private DraftDefinition ReadDraftDefinition(LspResponse<Definition> response) => response switch
+    {
+        LspResponse<Definition>.Ok(Definition.Targets targets) => new DraftDefinition.Declared(
+            targets.Items.Select(item => _boundary.Classify(item.Uri, item.Range.Start)).ToArray()),
+        LspResponse<Definition>.Ok => DraftDefinition.Undeclared.Instance,
+        _ => DraftDefinition.Unanswered.Instance,
+    };
+
+    // A document closed while the draft was in has nothing to be put back into. The new version is
+    // recorded without being published: the text is what the pane already had, and a published
+    // change would send everything watching it off to ask its questions again.
+    private void PutBack(DocumentUri uri, string text)
+    {
+        if (_state is not DocumentState.Open open || open.Uri != uri) return;
+
+        var version = _nextVersion;
+        _nextVersion = _nextVersion.Next();
+        _sent = new SentText(version, text);
+        _ = _server.ChangeAsync(uri, version, text, _closing.Token);
+        _state = open with { Version = version };
+    }
+
     public void Dispose()
     {
         if (_closing.IsCancellationRequested) return;
@@ -414,6 +527,7 @@ public sealed class PreviewSession : IDisposable
 
     private void OnDiagnosticsPublished(PublishedDiagnostics published)
     {
+        if (_drafting) return;
         if (_state is not DocumentState.Open open) return;
         if (published.Uri != open.Uri) return;
         if (published.Version is ResultVersion.Tagged tagged && tagged.Version.Value < open.Version.Value) return;
@@ -443,7 +557,7 @@ public sealed class PreviewSession : IDisposable
     private (DocumentUri Uri, DocumentVersion Version, CancellationToken Cancel)? Asking()
     {
         var requests = _requests;
-        if (requests is null || _state is not DocumentState.Open open) return null;
+        if (_drafting || requests is null || _state is not DocumentState.Open open) return null;
 
         try
         {

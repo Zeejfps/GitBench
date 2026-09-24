@@ -25,6 +25,10 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
 
     public IReadable<EditorCaret?> Caret => CaretState;
 
+    public State<IReadOnlyList<string>> DraftNeedsState { get; } = new([]);
+
+    public IReadable<IReadOnlyList<string>> DraftNeeds => DraftNeedsState;
+
     public Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct)
     {
         Calls.Add($"show {target.Path}#{target.Symbol}");

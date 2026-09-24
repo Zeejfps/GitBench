@@ -1068,6 +1068,7 @@
   "pairing.accepting": "エージェントのコードを挿入中…",
   "pairing.draft_replaces": "{from}–{to} 行目に対するエージェントのコードがエディターにあります。受け入れるか、自分で入力してください。",
   "pairing.draft_inserts": "{line} 行目の後に入るエージェントのコードがエディターにあります。受け入れるか、自分で入力してください。",
+  "pairing.draft_needs": "まだどこにも宣言されていません: {names}",
   "pairing.skip": "スキップ",
   "pairing.show_change": "変更を表示",
   "pairing.checking": "変更を確認中…",

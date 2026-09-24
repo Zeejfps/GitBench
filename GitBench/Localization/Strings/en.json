@@ -1071,6 +1071,7 @@
   "pairing.accepting": "Putting the agent's code in…",
   "pairing.draft_replaces": "The agent's code for lines {from}–{to} is in the editor. Accept it, or type it yourself.",
   "pairing.draft_inserts": "The agent's code after line {line} is in the editor. Accept it, or type it yourself.",
+  "pairing.draft_needs": "Not declared anywhere yet: {names}",
   "pairing.skip": "Skip",
   "pairing.show_change": "Show change",
   "pairing.checking": "Checking your change…",

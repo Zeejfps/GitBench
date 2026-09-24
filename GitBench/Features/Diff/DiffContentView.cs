@@ -151,6 +151,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private bool _searchApplies;
     private bool _usageLensRows;
     private FileSpan? _definitionLink;
+    private Features.Editor.DraftName? _draftLink;
     private readonly DiffRowPainter _painter;
     private readonly HunkButtonBar _buttonBar;
     private readonly DiffRowSurface _surface;
@@ -805,7 +806,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         }
 
         _replaced = replaced;
-        return new Features.Editor.GhostLines(to, lines, added, ghost.Spans);
+        return new Features.Editor.GhostLines(
+            to, lines, added, ghost.Spans,
+            ghost.Names is { } names ? Features.Editor.GhostLines.NamesByLine(names, Enumerable.Range(0, lines.Count).ToArray()) : null);
     }
 
     // Draws the suggestion into the buffer on screen when it is the hinted file, and takes it out of
@@ -832,7 +835,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         target.Rows.SetGhost(_ghostFrom is { } from
             ? Replacement(document, from, anchor, ghost)
             : Features.Editor.GhostMatch.Remaining(
-                ghost.Lines, ghost.Spans, anchor, _ghostBelow ?? new FileLine(anchor.Value + 1), document.LineCount, n => document.Line(new FileLine(n))));
+                ghost.Lines, ghost.Spans, ghost.Names, anchor, _ghostBelow ?? new FileLine(anchor.Value + 1), document.LineCount, n => document.Line(new FileLine(n))));
         ReconcileRows();
         if (_pendingTake is not null) _dispatcher?.Post(RunPendingTake);
     }
@@ -1147,6 +1150,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// make, so a link over a tabbed line lands on its glyphs rather than beside them.</summary>
     private CharRange? LinkOnRow(int rowIndex)
     {
+        if (RowSource.Rows[rowIndex] is DiffRow.Ghost ghost)
+            return _draftLink is { } named && ghost.Names?.FirstOrDefault(name => name.Name == named) is { } linked
+                ? linked.Columns
+                : null;
         if (_definitionLink is not { } link) return null;
         if (RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
         if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine || fileLine != link.Line)
@@ -1702,6 +1709,22 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
+    public Features.Editor.DraftName? HitTestDraftName(PointF point)
+    {
+        var rowIndex = _surface.RowAt(point);
+        if (rowIndex < 0 || RowSource.Rows[rowIndex] is not DiffRow.Ghost { Names: { } names } ghost) return null;
+        var at = DiffText.CharIndexOnCell(ghost.Text, _surface.CellAt(point.X));
+        if (at < 0) return null;
+        return names.FirstOrDefault(name => name.Columns.Start <= at && at < name.Columns.Start + name.Columns.Length)?.Name;
+    }
+
+    public void ShowDraftLink(Features.Editor.DraftName? link)
+    {
+        if (_draftLink == link) return;
+        _draftLink = link;
+        SetDirty();
+    }
+
     private (DiffLineText Text, Features.Editor.TextPosition At)? FilePositionUnder(PointF point)
     {
         var rowIndex = _surface.RowAt(point);
@@ -1730,6 +1753,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // a scroll slides the line out from under a cursor that never moved. The cursor shape asks
     // where the pointer is now rather than trusting the mark.
     private bool LinkCovers(PointF point) =>
+        (_draftLink is { } named && HitTestDraftName(point) == named) ||
         _definitionLink is { } link &&
         HitTestFilePosition(point) is { } at &&
         at.Line == link.Line &&

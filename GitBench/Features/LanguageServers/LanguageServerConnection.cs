@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.Search;
 using GitBench.Git;
 using GitBench.Lsp;
@@ -30,6 +31,7 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
     private int _disposed;
     private int _stale;
     private int _resyncs;
+    private int _drafting;
 
     public LanguageServerConnection(
         ILanguageServerSession server,
@@ -101,6 +103,47 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
     }
 
     public bool AnswersDefinitions => _server.Capabilities is not { SupportsDefinition: false };
+
+    /// <summary>
+    /// Where each name in <paramref name="draft"/> — the whole file as it would read with suggested
+    /// code in it — is declared. The preview is held for the whole exchange, so every other
+    /// question waits for the file to be back rather than being answered about the draft.
+    /// </summary>
+    public async Task<DraftDefinitions> DefineInDraftAsync(
+        string absolutePath, string draft, IReadOnlyList<TextPosition> names, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return DraftDefinitions.Unavailable.Instance;
+        if (!AnswersDefinitions) return DraftDefinitions.Unavailable.Instance;
+
+        await _previewing.WaitAsync(cancel).ConfigureAwait(false);
+        Volatile.Write(ref _drafting, 1);
+        // The one open document is the pane's: a draft for another file borrows it, and gives it
+        // back, or the pane would show that file's diagnostics over its own.
+        DocumentUri? shown = _session.State is DocumentState.Open open ? open.Uri : null;
+        try
+        {
+            if (!await PreviewHeldAsync(absolutePath, cancel).ConfigureAwait(false))
+                return DraftDefinitions.Unavailable.Instance;
+            return await _session.DefineInDraftAsync(draft, names.Select(name => At(name.Line, name.Column)).ToArray(), cancel)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                if (shown is { } was && was != DocumentUri.OfFile(absolutePath))
+                    await PreviewHeldAsync(was.LocalPath, _closing.Token).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
+            {
+            }
+            finally
+            {
+                Volatile.Write(ref _drafting, 0);
+                _previewing.Release();
+            }
+        }
+    }
 
     public async Task<ReferenceReply> ReferencesAsync(
         string absolutePath, FileLine line, RawColumn column, CancellationToken cancel)
@@ -274,30 +317,37 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess
     private async Task<bool> EnsurePreviewedAsync(string absolutePath, CancellationToken cancel)
     {
         var uri = DocumentUri.OfFile(absolutePath);
-        if (Showing(uri) && Volatile.Read(ref _stale) == 0) return true;
+        if (Showing(uri) && Volatile.Read(ref _stale) == 0 && Volatile.Read(ref _drafting) == 0) return true;
 
         await _previewing.WaitAsync(cancel).ConfigureAwait(false);
         try
         {
-            Volatile.Write(ref _stale, 0);
-            var showing = Showing(uri);
-            switch (await _files.ReadAsync(absolutePath, cancel).ConfigureAwait(false))
-            {
-                case CurrentText.Complete complete:
-                    _session.Preview(new PreviewFile(uri, PreviewContent.Whole(complete.Text)));
-                    return _session.State is DocumentState.Open;
-                case CurrentText.CutShort:
-                    _session.Preview(new PreviewFile(uri, PreviewContent.Truncated));
-                    return false;
-                case CurrentText.Unavailable:
-                    return showing;
-                case var other:
-                    throw new NotSupportedException($"unhandled file text {other.GetType().Name}");
-            }
+            return await PreviewHeldAsync(absolutePath, cancel).ConfigureAwait(false);
         }
         finally
         {
             _previewing.Release();
+        }
+    }
+
+    // With the preview lock held.
+    private async Task<bool> PreviewHeldAsync(string absolutePath, CancellationToken cancel)
+    {
+        var uri = DocumentUri.OfFile(absolutePath);
+        Volatile.Write(ref _stale, 0);
+        var showing = Showing(uri);
+        switch (await _files.ReadAsync(absolutePath, cancel).ConfigureAwait(false))
+        {
+            case CurrentText.Complete complete:
+                _session.Preview(new PreviewFile(uri, PreviewContent.Whole(complete.Text)));
+                return _session.State is DocumentState.Open;
+            case CurrentText.CutShort:
+                _session.Preview(new PreviewFile(uri, PreviewContent.Truncated));
+                return false;
+            case CurrentText.Unavailable:
+                return showing;
+            case var other:
+                throw new NotSupportedException($"unhandled file text {other.GetType().Name}");
         }
     }
 

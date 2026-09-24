@@ -42,6 +42,10 @@ internal interface IPairingPresentation
     /// <summary>Where the user's caret is, and what they have selected.</summary>
     IReadable<EditorCaret?> Caret { get; }
 
+    /// <summary>The names the agent's code for the open stop uses that nothing declares yet, each
+    /// once; empty until a language server has said, and where none has.</summary>
+    IReadable<IReadOnlyList<string>> DraftNeeds { get; }
+
     /// <summary>Writes every unsaved file of the repository; answers the ones that failed.</summary>
     IReadOnlyList<string> SaveUnsaved();
 
@@ -170,6 +174,8 @@ internal sealed class PairingStore : IDisposable
 
     /// <summary>Where the user is in the editor.</summary>
     public IReadable<EditorCaret?> Caret => _presentation.Caret;
+
+    public IReadable<IReadOnlyList<string>> DraftNeeds => _presentation.DraftNeeds;
 
     /// <summary>The repository-relative form of an absolute path, or null outside it. Any thread.</summary>
     public string? Relative(string absolutePath) => _presentation.Relative(absolutePath);

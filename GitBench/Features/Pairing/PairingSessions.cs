@@ -185,6 +185,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         ISymbolExtractor extractor,
         RepoDocumentSaver saver,
         ISyntaxHighlighter highlighter,
+        IDraftDefinitionSource servers,
         WorkingTreeSnapshots snapshots,
         AgentEndpoints endpoints,
         IServerEnvironment environment,
@@ -197,7 +198,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         {
             var conversation = new AgentConversation(repo, harness, (sessionGoal, transcript) =>
             {
-                var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver, highlighter, dispatcher);
+                var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver, highlighter, servers, dispatcher);
                 var store = new PairingStore(
                     sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
                 return new PairingSession(repo, store, presentation);

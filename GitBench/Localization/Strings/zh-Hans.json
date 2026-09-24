@@ -1068,6 +1068,7 @@
   "pairing.accepting": "正在放入智能体的代码…",
   "pairing.draft_replaces": "智能体针对第 {from}–{to} 行的代码已显示在编辑器中。接受它，或自己输入。",
   "pairing.draft_inserts": "智能体在第 {line} 行之后的代码已显示在编辑器中。接受它，或自己输入。",
+  "pairing.draft_needs": "尚未在任何地方声明：{names}",
   "pairing.skip": "跳过",
   "pairing.show_change": "查看更改",
   "pairing.checking": "正在检查你的改动…",

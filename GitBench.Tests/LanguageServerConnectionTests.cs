@@ -238,6 +238,24 @@ public sealed class LanguageServerConnectionTests : IDisposable
         Assert.Equal(DocumentUri.OfFile(_file), Assert.Single(_server.Closed));
     }
 
+    // The one open document is the pane's. A stop's code checked in a file the reader has moved
+    // away from borrows it, and hands it back, or the pane would draw that file's diagnostics.
+    [Fact]
+    public async Task ADraftForAnotherFileGivesTheFileOnScreenBack()
+    {
+        var other = Path.Combine(_dir.Path, "lib.rs");
+        File.WriteAllText(other, "pub fn lib() {}");
+        _server.Capabilities = _server.Capabilities! with { TextSync = TextSync.Full };
+        using var connection = Connect();
+        await Hover(connection);
+
+        var reply = await connection.DefineInDraftAsync(
+            other, "pub fn lib() { helper(); }", [Features.Editor.TextPosition.At(1, 15)], CancellationToken.None);
+
+        Assert.IsType<DraftDefinition.Undeclared>(Assert.Single(Assert.IsType<DraftDefinitions.Answered>(reply).Names));
+        Assert.Equal(DocumentUri.OfFile(_file), Assert.IsType<DocumentState.Open>(connection.Document).Uri);
+    }
+
     [Fact]
     public async Task DiagnosticsForTheOpenFileBecomeItsState()
     {

@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
 using GitBench.Features.Search;
@@ -23,7 +24,7 @@ internal enum StarterConfigOutcome
 }
 
 internal interface ILanguageServerStore
-    : IHoverSource, IDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource, ISignatureHelpSource,
+    : IHoverSource, IDefinitionSource, IDraftDefinitionSource, IReferenceSource, ISemanticTokenSource, ICompletionSource, ISignatureHelpSource,
         IWorkspaceSymbolSource
 {
     IReadable<LanguageServerSnapshot> Active { get; }
@@ -164,6 +165,14 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
             return DefinitionReply.Nothing;
         return await connection.DefinitionAsync(absolutePath, line, column, cancel).ConfigureAwait(false);
+    }
+
+    public async Task<DraftDefinitions> DefineInDraftAsync(
+        string absolutePath, string draft, IReadOnlyList<TextPosition> names, CancellationToken cancel)
+    {
+        if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
+            return DraftDefinitions.Unavailable.Instance;
+        return await connection.DefineInDraftAsync(absolutePath, draft, names, cancel).ConfigureAwait(false);
     }
 
     public bool CanReference(string absolutePath)

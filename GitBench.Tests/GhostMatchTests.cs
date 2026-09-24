@@ -12,7 +12,7 @@ public sealed class GhostMatchTests
         ["public int Multiply(int a, int b)", "{", "    return a * b;", "}"];
 
     private static GhostLines Match(IReadOnlyList<string> draft, int below, params string[] file) =>
-        GhostMatch.Remaining(draft, null, new FileLine(2), new FileLine(below), file.Length, n => file[n - 1]);
+        GhostMatch.Remaining(draft, null, null, new FileLine(2), new FileLine(below), file.Length, n => file[n - 1]);
 
     [Fact]
     public void NothingTyped_TheWholeDraftHangsUnderTheAnchor()
@@ -69,5 +69,24 @@ public sealed class GhostMatchTests
 
         Assert.Equal(new FileLine(7), GhostMatch.Shift(new FileLine(5), inserted));
         Assert.Equal(new FileLine(1), GhostMatch.Shift(new FileLine(1), inserted));
+    }
+
+    // What the server made of a name rides with its line: typed lines take their names with them,
+    // and the rest are placed on the tab-expanded text the row draws.
+    [Fact]
+    public void Names_FollowTheLinesStillShown()
+    {
+        var multiply = new DraftName(0, new RawColumn(11), new RawColumn(19), "Multiply", DraftNameKind.Introduced.Instance);
+        var helper = new DraftName(2, new RawColumn(8), new RawColumn(14), "Helper", DraftNameKind.Missing.Instance);
+        var draft = new[] { "public int Multiply(int a, int b)", "{", "\treturn Helper(a, b);", "}" };
+        string[] file = ["class Calc", "{", "  public int Multiply(int a, int b)", "}"];
+
+        var left = GhostMatch.Remaining(draft, null, [multiply, helper], new FileLine(2), new FileLine(4), file.Length, n => file[n - 1]);
+
+        Assert.Equal(["{", "\treturn Helper(a, b);", "}"], left.Lines);
+        Assert.Null(left.NamesAt(0));
+        var shown = Assert.Single(left.NamesAt(1)!);
+        Assert.Equal(helper, shown.Name);
+        Assert.Equal(new CharRange(11, 6), shown.Columns);
     }
 }

@@ -307,7 +307,11 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         var line = LineOfRow(index);
         var own = RowOfLine(line);
         if (index > own && _ghost is { } ghost)
-            return new DiffRow.Ghost(DiffText.ExpandTabs(ghost.Lines[index - own - 1]), ghost.Emphasis?[index - own - 1], ghost.SpansAt(index - own - 1));
+            return new DiffRow.Ghost(
+                DiffText.ExpandTabs(ghost.Lines[index - own - 1]),
+                ghost.Emphasis?[index - own - 1],
+                ghost.SpansAt(index - own - 1),
+                ghost.NamesAt(index - own - 1));
         if (own != index)
             return _plan.LensAt(line)
                 ?? throw new InvalidOperationException(
@@ -631,13 +635,46 @@ internal sealed record GhostLines(
     FileLine After,
     IReadOnlyList<string> Lines,
     IReadOnlyList<IReadOnlyList<CharRange>?>? Emphasis = null,
-    IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null)
+    IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null,
+    IReadOnlyList<IReadOnlyList<DraftName>>? Names = null)
 {
     public IReadOnlyList<TokenSpan>? SpansAt(int index) => Spans is { } spans && index < spans.Count ? spans[index] : null;
 
+    /// <summary>The names on the shown line at <paramref name="index"/>, placed in its tab-expanded
+    /// columns; null where none are known.</summary>
+    public IReadOnlyList<GhostName>? NamesAt(int index)
+    {
+        if (Names is not { } names || index >= names.Count || names[index].Count == 0) return null;
+        var text = DiffLineText.Of(Lines[index]);
+        return names[index]
+            .Select(name =>
+            {
+                var from = text.ToExpanded(name.Start).Value;
+                return new GhostName(new CharRange(from, text.ToExpanded(name.End).Value - from), name);
+            })
+            .ToArray();
+    }
+
+    /// <summary>The draft's names grouped under the lines still shown, which are the draft's lines
+    /// <paramref name="shown"/>, in order.</summary>
+    public static IReadOnlyList<IReadOnlyList<DraftName>> NamesByLine(IReadOnlyList<DraftName> names, IReadOnlyList<int> shown)
+    {
+        var byLine = names.ToLookup(name => name.Line);
+        return shown.Select(line => (IReadOnlyList<DraftName>)byLine[line].ToArray()).ToArray();
+    }
+
     public bool Equals(GhostLines? other) =>
         other is not null && After == other.After && Lines.SequenceEqual(other.Lines) && SameEmphasis(Emphasis, other.Emphasis)
-        && SameSpans(Spans, other.Spans);
+        && SameSpans(Spans, other.Spans) && SameNames(Names, other.Names);
+
+    private static bool SameNames(IReadOnlyList<IReadOnlyList<DraftName>>? a, IReadOnlyList<IReadOnlyList<DraftName>>? b)
+    {
+        if (a is null || b is null) return a is null && b is null;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+            if (!a[i].SequenceEqual(b[i])) return false;
+        return true;
+    }
 
     private static bool SameSpans(IReadOnlyList<IReadOnlyList<TokenSpan>>? a, IReadOnlyList<IReadOnlyList<TokenSpan>>? b)
     {

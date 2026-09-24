@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Input;
 using GitBench.Lsp;
@@ -121,6 +122,16 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     /// </remarks>
     internal void RefreshLink()
     {
+        // A name in suggested code was resolved when the suggestion was checked: nothing to ask.
+        var named = DraftNameUnderPointer();
+        _surface.ShowDraftLink(named);
+        if (named is not null)
+        {
+            StopProbing();
+            _surface.ShowDefinitionLink(null);
+            return;
+        }
+
         if (WordUnderPointer() is not { } word)
         {
             StopProbing();
@@ -179,6 +190,19 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
             word.Line, new RawColumn(start.Character.Value), new RawColumn(end.Character.Value));
     }
 
+    private DraftName? DraftNameUnderPointer() =>
+        _pointerInside && IsCommand(_modifiers()) ? ReachableDraftName(_pointer) : null;
+
+    private DraftName? ReachableDraftName(PointF point) =>
+        _surface.HitTestDraftName(point) is { Kind: DraftNameKind.Existing } name ? name : null;
+
+    private bool GoToDraftName(PointF point)
+    {
+        if (ReachableDraftName(point)?.Kind is not DraftNameKind.Existing existing) return false;
+        _navigator.NavigateTo(existing.AbsolutePath, existing.Line.Value);
+        return true;
+    }
+
     private (string Path, FileSpan Word)? WordUnderPointer()
     {
         if (!_pointerInside) return null;
@@ -199,6 +223,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     {
         MovedTo(point);
         if (!IsCommand(modifiers)) return false;
+        if (GoToDraftName(point)) return true;
         if (_document() is not { } document) return false;
 
         return ProbedAt(point, document.Path) switch
@@ -288,6 +313,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
 
     private bool Ask(PointF point)
     {
+        if (GoToDraftName(point)) return true;
         if (_document() is not { } document) return false;
         if (!_servers.CanDefine(document.Path)) return false;
         if (PositionToAsk(point) is not { } at) return false;
@@ -331,5 +357,6 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         _jump.Cancel();
         StopProbing();
         _surface.ShowDefinitionLink(null);
+        _surface.ShowDraftLink(null);
     }
 }

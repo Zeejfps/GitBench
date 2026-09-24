@@ -10,10 +10,13 @@ namespace GitBench.Features.Pairing;
 
 /// <summary>
 /// Where the agent's code for the open stop is, on the stop card: in the editor, as suggested lines
-/// at the place it goes — or, once accepted, in the file for the user to change before Next.
+/// at the place it goes, with the names it uses that nothing declares yet — or, once accepted, in
+/// the file for the user to change before Next.
 /// </summary>
 internal sealed record PairingDraftNote : Widget
 {
+    public const string NeedsId = "pairing-draft-needs";
+
     public required PairingStore Store { get; init; }
     public required StopDraft Draft { get; init; }
 
@@ -24,7 +27,32 @@ internal sealed record PairingDraftNote : Widget
         return new Switch<bool>
         {
             Value = new Derived<bool>(() => store.Stop.Value?.DraftState is DraftState.Taken),
-            Case = accepted => accepted ? Caption(L.T(s => s.PairingDraftAccepted)) : Offered(ctx, draft),
+            Case = accepted => accepted
+                ? Caption(L.T(s => s.PairingDraftAccepted))
+                : new Column
+                {
+                    Gap = Spacing.Xs,
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Children = [Offered(ctx, draft), Needs(ctx, store)],
+                },
+        };
+    }
+
+    // What the code calls that nothing declares yet, as a language server answered it.
+    private static IWidget Needs(Context ctx, PairingStore store)
+    {
+        var loc = ctx.Localization();
+        return new Text
+        {
+            Id = NeedsId,
+            Value = Prop.Bind<string?>(() => store.DraftNeeds.Value.Count == 0
+                ? null
+                : loc.Strings.Value.PairingDraftNeeds(string.Join(", ", store.DraftNeeds.Value))),
+            Visible = Prop.Bind(() => store.DraftNeeds.Value.Count > 0),
+            FontSize = FontSize.Caption,
+            FontFamily = MonoFonts.Regular,
+            Wrap = TextWrap.Wrap,
+            Color = Theme.Color(s => s.Status.Warning),
         };
     }
 
