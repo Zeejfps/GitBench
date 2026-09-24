@@ -205,6 +205,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private FileLine? _pendingScrollLine;
     private (string Path, Features.Editor.TextPosition At)? _pendingCaret;
+    // A suggestion yet to be brought to the middle of the viewport, held until its rows are on screen.
+    private bool _pendingSuggestionFrame;
 
     // A guide's suggestion over the file, with the line it hangs from and, when it replaces lines,
     // the first of them, as edits have moved them. The buffer is the one it was drawn into.
@@ -609,9 +611,45 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         editor.Write(_selection, Features.Editor.SelectionRange.At(at), null);
         ReconcileRows();
         if (RowSource.RowNearestNewLine(at.Line) is { } row)
-            _scroll.SetTarget(ContentOffsetOf(row.Value) - _list.Position.Height / 3f);
+        {
+            if (SuggestionRows() is { } block && row.Value >= block.First && row.Value <= block.Last)
+                _pendingSuggestionFrame = true;
+            else
+                _scroll.SetTarget(ContentOffsetOf(row.Value) - _list.Position.Height / 3f);
+        }
         _selectionController.TakeFocusUnlessTyping();
         NoteCaretMoved();
+        ApplyPendingSuggestionFrame();
+    }
+
+    // Centers a suggestion, or for one taller than the viewport, starts it just below the top.
+    private void ApplyPendingSuggestionFrame()
+    {
+        if (!_pendingSuggestionFrame || _surface.LineHeight <= 0) return;
+        if (SuggestionRows() is not { } block) return;
+        var (first, last) = block;
+        _pendingSuggestionFrame = false;
+
+        var top = ContentOffsetOf(first);
+        var height = ContentOffsetOf(last) + RowHeightAt(last) - top;
+        var viewport = _list.Position.Height;
+        _scroll.SetTarget(height < viewport
+            ? top - (viewport - height) / 2f
+            : top - ScrollLeadIn * _surface.LineHeight);
+    }
+
+    /// <summary>The rows a suggestion covers on screen: the lines it replaces or hangs from, through
+    /// its last suggested line. Null while its file is not the one on screen.</summary>
+    private (int First, int Last)? SuggestionRows()
+    {
+        if (_hints is not { } hints || Document is not { } editor || !IsHinted(editor.Path, hints.Path)) return null;
+        if (_ghostAnchor is not { } anchor) return null;
+        var rows = editor.Rows;
+        if (rows.RowForNewLine(_ghostFrom ?? anchor) is not { } first) return null;
+        var last = rows.Ghost is { } ghost && rows.RowForNewLine(ghost.After) is { } after
+            ? after.Value + ghost.Lines.Count
+            : rows.RowForNewLine(anchor)?.Value ?? first.Value;
+        return (first.Value, Math.Min(last, rows.Rows.Count - 1));
     }
 
     /// <summary>Lays a guide's suggestion over the file, or takes it away: lines drawn after a line
@@ -623,6 +661,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var recolored = _hints is { } shown && hints is not null
             && IsHinted(shown.Path, hints.Path) && shown.Ghost.SameSuggestion(hints.Ghost);
         _hints = hints;
+        _pendingSuggestionFrame = hints is not null && (!recolored || _pendingSuggestionFrame);
         _surface.SuggestionActions = hints?.Actions;
         _surface.SuggestionHead = hints is null ? null : SuggestionHeadRow;
         if (!recolored)
@@ -634,6 +673,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 _ => throw new InvalidOperationException("Unknown ghost place."),
             };
         ApplyGhost();
+        ApplyPendingSuggestionFrame();
         SetDirty();
     }
 
@@ -934,6 +974,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _scroll.ClampX();
         ApplyPendingScrollLine();
         ApplyPendingCaret();
+        ApplyPendingSuggestionFrame();
         ApplyPendingSearchReveal();
         _scroll.ReassertTarget();
         NotifyTopVisibleLine();
