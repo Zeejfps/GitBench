@@ -1203,7 +1203,7 @@
   "pairing.roadmap_added": "جديد",
   "pairing.roadmap_dropped": "أُسقط",
   "pairing.stop_number": "المحطة {number}",
-  "pairing.stop_new_file": "أنشئ {path}",
+  "pairing.stop_new_file": "ملف جديد",
   "pairing.stop_after": "جديد، بعد {symbol}",
   "pairing.go_to_stop": "انتقل إلى المحطة",
   "pairing.accept_and_next": "قبول والتالي",

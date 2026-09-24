@@ -466,19 +466,16 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         return ToRelative(path) ?? path.Replace('\\', '/');
     }
 
-    public string TitleFor(FilePreview preview)
+    public static string? PathOf(FilePreview preview) => preview switch
     {
-        var path = preview switch
-        {
-            FilePreview.Loading loading => loading.Path,
-            FilePreview.Text text => text.Path,
-            FilePreview.Image image => image.Path,
-            FilePreview.Unavailable unavailable => unavailable.Path,
-            _ => null,
-        };
+        FilePreview.Loading loading => loading.Path,
+        FilePreview.Text text => text.Path,
+        FilePreview.Image image => image.Path,
+        FilePreview.Unavailable unavailable => unavailable.Path,
+        _ => null,
+    };
 
-        return path is null ? string.Empty : PathLabel(path);
-    }
+    public string TitleFor(FilePreview preview) => PathOf(preview) is { } path ? PathLabel(path) : string.Empty;
 
     /// <summary>Where the reader is, for the content panel's trail to come back to. Null when
     /// nothing is open, which is not a place: there is nothing to return to.</summary>

@@ -60,9 +60,14 @@ internal sealed record FileBrowserPreviewHeader : Widget
     {
         var browser = Model;
 
-        var title = new TextView(ctx.Canvas) { TextOverflow = TextOverflow.Ellipsis };
-        title.BindThemedTextColor(ctx.Theme(), s => s.FileChangesSection.HeaderText);
-        title.Bind(browser.Preview, preview => title.Text = browser.TitleFor(preview));
+        var title = new PathText
+        {
+            Directory = Prop.Bind<string?>(() => PathText.Split(browser.TitleFor(browser.Preview.Value)).Directory),
+            Name = Prop.Bind<string?>(() => PathText.Split(browser.TitleFor(browser.Preview.Value)).Name),
+            DirectoryColor = Theme.Color(s => s.Palette.TextMuted),
+            NameColor = Theme.Color(s => s.FileChangesSection.HeaderText),
+            Tooltip = Prop.Bind(() => FileBrowserViewModel.PathOf(browser.Preview.Value)),
+        }.BuildView(ctx);
 
         // Second, dimmer, and after the path rather than replacing it: the path says which file,
         // and the breadcrumb only ever says where in it.

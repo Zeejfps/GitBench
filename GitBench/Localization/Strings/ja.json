@@ -1052,7 +1052,7 @@
   "pairing.roadmap_added": "新規",
   "pairing.roadmap_dropped": "削除",
   "pairing.stop_number": "ストップ {number}",
-  "pairing.stop_new_file": "{path} を作成",
+  "pairing.stop_new_file": "新規ファイル",
   "pairing.stop_after": "新規（{symbol} の後）",
   "pairing.go_to_stop": "ストップへ移動",
   "pairing.accept_and_next": "受け入れて次へ",

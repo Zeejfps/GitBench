@@ -1055,7 +1055,7 @@
   "pairing.roadmap_added": "new",
   "pairing.roadmap_dropped": "dropped",
   "pairing.stop_number": "Stop {number}",
-  "pairing.stop_new_file": "Create {path}",
+  "pairing.stop_new_file": "New file",
   "pairing.stop_after": "New, after {symbol}",
   "pairing.go_to_stop": "Go to the stop",
   "pairing.accept_and_next": "Accept & next",

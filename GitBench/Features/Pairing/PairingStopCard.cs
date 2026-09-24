@@ -98,17 +98,18 @@ internal sealed record PairingStopCard : Widget
                                     ContentInset = PaddingStyle.All(Spacing.None),
                                     Children =
                                     [
-                                        new Text
+                                        new PathText
                                         {
-                                            Value = Prop.Bind<string?>(() => Where(loc.Strings.Value, open)),
+                                            Directory = PathText.Split(stop.Target.Path).Directory,
+                                            Name = Prop.Bind<string?>(() => Where(loc.Strings.Value, open)),
                                             FontSize = FontSize.Caption,
                                             FontFamily = MonoFonts.Regular,
-                                            Overflow = TextOverflow.Ellipsis,
-                                            Color = Theme.Color(s => s.Palette.Accent),
+                                            DirectoryColor = Theme.Color(s => s.Palette.TextMuted),
+                                            NameColor = Theme.Color(s => s.Palette.Accent),
                                         },
                                     ],
                                 }
-                                .WithTooltip(L.T(s => s.PairingGoToStop))
+                                .WithTooltip(Prop.Bind<string?>(() => $"{loc.Strings.Value.PairingGoToStop}\n{stop.Target.Path}"))
                                 .WithController<KbmController>(),
                                 new MarkdownText { Text = new State<string>(stop.Reason) },
                                 new PairingDraftNote { Store = store, Draft = open.Draft },
@@ -120,14 +121,18 @@ internal sealed record PairingStopCard : Widget
         };
     }
 
-    private static string Where(Strings s, OpenStop open) => open.Location switch
+    // The file's name and what follows it; the folder goes before it, apart, to be cut first.
+    private static string Where(Strings s, OpenStop open)
     {
-        StopLocation.OnSymbol => $"{open.Stop.Target.Path}:{DraftLine(open.Draft)} · {open.Stop.Target.Symbol}",
-        StopLocation.Insertion insertion =>
-            $"{open.Stop.Target.Path}:{DraftLine(open.Draft)} · {s.PairingStopAfter(insertion.After)}",
-        StopLocation.NewFile => s.PairingStopNewFile(open.Stop.Target.Path),
-        _ => throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location."),
-    };
+        var name = PathText.Split(open.Stop.Target.Path).Name;
+        return open.Location switch
+        {
+            StopLocation.OnSymbol => $"{name}:{DraftLine(open.Draft)} · {open.Stop.Target.Symbol}",
+            StopLocation.Insertion insertion => $"{name}:{DraftLine(open.Draft)} · {s.PairingStopAfter(insertion.After)}",
+            StopLocation.NewFile => $"{name} · {s.PairingStopNewFile}",
+            _ => throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location."),
+        };
+    }
 
     private static int DraftLine(StopDraft draft) => draft.Place switch
     {

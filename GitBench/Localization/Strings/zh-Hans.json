@@ -1052,7 +1052,7 @@
   "pairing.roadmap_added": "新增",
   "pairing.roadmap_dropped": "已移除",
   "pairing.stop_number": "第 {number} 站",
-  "pairing.stop_new_file": "创建 {path}",
+  "pairing.stop_new_file": "新文件",
   "pairing.stop_after": "新增，位于 {symbol} 之后",
   "pairing.go_to_stop": "转到该站",
   "pairing.accept_and_next": "接受并继续",

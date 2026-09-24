@@ -1052,7 +1052,7 @@
   "pairing.roadmap_added": "새로 추가",
   "pairing.roadmap_dropped": "제외됨",
   "pairing.stop_number": "스톱 {number}",
-  "pairing.stop_new_file": "{path} 만들기",
+  "pairing.stop_new_file": "새 파일",
   "pairing.stop_after": "새로 추가, {symbol} 다음",
   "pairing.go_to_stop": "스톱으로 이동",
   "pairing.accept_and_next": "수락 후 다음",

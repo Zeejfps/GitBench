@@ -1174,7 +1174,7 @@
   "pairing.roadmap_added": "новое",
   "pairing.roadmap_dropped": "убрано",
   "pairing.stop_number": "Остановка {number}",
-  "pairing.stop_new_file": "Создайте {path}",
+  "pairing.stop_new_file": "Новый файл",
   "pairing.stop_after": "Новое, после {symbol}",
   "pairing.go_to_stop": "Перейти к остановке",
   "pairing.accept_and_next": "Принять и дальше",
