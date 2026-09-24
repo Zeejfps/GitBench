@@ -65,12 +65,15 @@ internal sealed record BranchesHeader : Widget
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [
-                                new BranchLabel
+                                new Shrink
                                 {
-                                    BranchName = branchName,
-                                    IsDetached = isDetached,
-                                    IsSwitching = isSwitching,
-                                    SwitchRotation = spinner.Rotation,
+                                    Child = new BranchLabel
+                                    {
+                                        BranchName = branchName,
+                                        IsDetached = isDetached,
+                                        IsSwitching = isSwitching,
+                                        SwitchRotation = spinner.Rotation,
+                                    },
                                 },
                                 new Spacer(),
                                 new LocalChangesHeaderActionButton
@@ -154,13 +157,18 @@ internal sealed record BranchLabel : Widget
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.BranchesHeader.PrefixText),
                     },
-                    new Text
+                    new Shrink
                     {
-                        Value = Prop.Bind(BranchName),
-                        FontSize = FontSize.Heading,
-                        Weight = FontWeight.Bold,
-                        VAlign = TextAlignment.Center,
-                        Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
+                        Child = new Text
+                        {
+                            Value = Prop.Bind(BranchName),
+                            FontSize = FontSize.Heading,
+                            Weight = FontWeight.Bold,
+                            HAlign = TextAlignment.Start,
+                            VAlign = TextAlignment.Center,
+                            Overflow = TextOverflow.Ellipsis,
+                            Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
+                        },
                     },
                 ],
             },
