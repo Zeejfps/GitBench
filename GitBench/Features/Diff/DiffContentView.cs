@@ -348,6 +348,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         RefreshSearchScope();
         ApplyGhost();
+        _list.ScrollPastEnd = _body is DiffBody.Edited;
         _list.ItemCount = RowSource.Rows.Count;
         _list.NotifyItemsChanged();
         ApplyScrollForTransition(state, prevPath, prevWasFullFile, prevTopLine, prevScrollY, prevScrollX);
@@ -1607,8 +1608,19 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     bool IDiffSelectionSurface.IsInteractiveAt(PointF point) => _surface.IsInteractiveAt(point);
 
-    DiffTextHit? IDiffSelectionSurface.HitTestText(PointF point) =>
-        _surface.TextPosAt(point) is { } pos ? new DiffTextHit(null, SnapToCaret(pos)) : null;
+    DiffTextHit? IDiffSelectionSurface.HitTestText(PointF point)
+    {
+        if (_surface.TextPosAt(point) is { } pos) return new DiffTextHit(null, SnapToCaret(pos));
+        return Document is not null && IsPastEnd(point)
+            ? ((IDiffSelectionSurface)this).ClampToScope(point, null)
+            : null;
+    }
+
+    // The band under the last row, which an editor treats as its last line.
+    private bool IsPastEnd(PointF point) =>
+        _list.Position.ContainsPoint(point)
+        && _list.TryGetRowRect(RowSource.Rows.Count - 1, out var last)
+        && point.Y < last.Bottom;
 
     private DiffTextPos SnapToCaret(DiffTextPos pos) => Document?.Snap(pos) ?? pos;
 
