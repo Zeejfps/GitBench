@@ -53,9 +53,6 @@ internal abstract record AcpPermissionDecision
 
     /// <summary>The policy has no opinion: the user decides.</summary>
     public sealed record AskUser : AcpPermissionDecision;
-
-    /// <summary>No option fits: answer <c>cancelled</c>.</summary>
-    public sealed record Cancel : AcpPermissionDecision;
 }
 
 internal enum AcpPermissionVerdict
@@ -66,8 +63,8 @@ internal enum AcpPermissionVerdict
 
 /// <summary>
 /// The write guard for an agent run over ACP: reads and shell commands are allowed — the agent runs
-/// the tests itself — except a push, which is put to the user; file edits are refused, and the app's
-/// own MCP tools are allowed each time they are asked about. The same rules for every harness, which
+/// the tests, formatters and generators itself — except a push, which is put to the user; file edits
+/// are put to the user too, and the app's own MCP tools are allowed each time they are asked about. The same rules for every harness, which
 /// is why the guard lives in the client rather than in each CLI's flags.
 /// </summary>
 internal static partial class AcpPermissionPolicy
@@ -78,7 +75,7 @@ internal static partial class AcpPermissionPolicy
         // own .claude/settings.local.json, which is the user's file, not the session's.
         if (request.McpServer is null && request.IsMcpApproval) return new AcpPermissionDecision.AskUser();
         if (request.McpServer is { } server && string.Equals(server, ownServer, StringComparison.OrdinalIgnoreCase))
-            return Pick(request, AcpPermissionVerdict.Allowed, AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways);
+            return AllowOnce(request);
 
         // Codex files another server's MCP tool calls as execute: only a shell command is the agent's own.
         return request.Kind switch
@@ -86,10 +83,9 @@ internal static partial class AcpPermissionPolicy
             AcpToolKind.Execute when request.McpServer is not null => new AcpPermissionDecision.AskUser(),
             AcpToolKind.Execute when Pushes(request.Command ?? request.Title) => new AcpPermissionDecision.AskUser(),
             AcpToolKind.Read or AcpToolKind.Search or AcpToolKind.Think or AcpToolKind.Fetch or AcpToolKind.Execute =>
-                Pick(request, AcpPermissionVerdict.Allowed, AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways),
-            AcpToolKind.Edit or AcpToolKind.Delete or AcpToolKind.Move =>
-                Pick(request, AcpPermissionVerdict.Rejected, AcpPermissionOptionKind.RejectOnce, AcpPermissionOptionKind.RejectAlways),
-            AcpToolKind.SwitchMode or AcpToolKind.Other => new AcpPermissionDecision.AskUser(),
+                AllowOnce(request),
+            AcpToolKind.Edit or AcpToolKind.Delete or AcpToolKind.Move or AcpToolKind.SwitchMode or AcpToolKind.Other =>
+                new AcpPermissionDecision.AskUser(),
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, "Unknown tool kind."),
         };
     }
@@ -101,14 +97,13 @@ internal static partial class AcpPermissionPolicy
     [GeneratedRegex(@"(?<![\w-])git(?:\.exe)?(?:\s+(?:-C|-c|--git-dir|--work-tree)\s+\S+|\s+-\S+)*\s+push\b", RegexOptions.IgnoreCase)]
     private static partial Regex GitPush();
 
-    private static AcpPermissionDecision Pick(
-        AcpPermissionRequest request, AcpPermissionVerdict verdict, AcpPermissionOptionKind first, AcpPermissionOptionKind second)
+    private static AcpPermissionDecision AllowOnce(AcpPermissionRequest request)
     {
-        foreach (var wanted in new[] { first, second })
+        foreach (var wanted in new[] { AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways })
             foreach (var option in request.Options)
                 if (option.Kind == wanted)
-                    return new AcpPermissionDecision.Select(option.OptionId, verdict);
-        return verdict == AcpPermissionVerdict.Rejected ? new AcpPermissionDecision.Cancel() : new AcpPermissionDecision.AskUser();
+                    return new AcpPermissionDecision.Select(option.OptionId, AcpPermissionVerdict.Allowed);
+        return new AcpPermissionDecision.AskUser();
     }
 
     /// <summary>Parses a request's params. <paramref name="announcedServers"/> maps the tool call ids

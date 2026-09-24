@@ -5,7 +5,7 @@ using Xunit;
 namespace GitBench.Tests;
 
 /// <summary>The ACP write guard, over permission requests as the three adapters really send them
-/// (captured by the Step 1 spike): file writes refused, reads and shell allowed, the app's own MCP tools
+/// (captured by the Step 1 spike): file writes put to the user, reads and shell allowed, the app's own MCP tools
 /// allowed however each adapter names them, anything else left to the user.</summary>
 public sealed class AcpPermissionPolicyTests
 {
@@ -30,12 +30,12 @@ public sealed class AcpPermissionPolicyTests
         """[{"optionId":"allow-once","name":"Yes","kind":"allow_once"},{"optionId":"allow-with-updates","name":"Yes, always","kind":"allow_always"},{"optionId":"reject","name":"No","kind":"reject_once"}]""";
 
     [Fact]
-    public void ClaudeWrite_IsRejected()
+    public void ClaudeWrite_IsPutToTheUser()
     {
         var decision = Decide("""
-            {"sessionId":"s","toolCall":{"toolCallId":"t1","name":"Write","title":"Write created.txt","kind":"edit"},"options":
+            {"sessionId":"s","toolCall":{"toolCallId":"t1","name":"Write","title":"Write plan.md","kind":"edit"},"options":
             """ + ClaudeOptions + "}");
-        AssertSelected(decision, "reject", AcpPermissionVerdict.Rejected);
+        Assert.IsType<AcpPermissionDecision.AskUser>(decision);
     }
 
     [Fact]
@@ -88,13 +88,13 @@ public sealed class AcpPermissionPolicyTests
     }
 
     [Fact]
-    public void CodexEdit_IsRejected()
+    public void CodexEdit_IsPutToTheUser()
     {
         var decision = Decide("""
             {"sessionId":"s","toolCall":{"toolCallId":"exec-2","kind":"edit","status":"pending","title":"Edit files"},
              "options":[{"optionId":"allow_once","name":"Yes, proceed","kind":"allow_once"},{"optionId":"cancel","name":"No","kind":"reject_once"}]}
             """);
-        AssertSelected(decision, "cancel", AcpPermissionVerdict.Rejected);
+        Assert.IsType<AcpPermissionDecision.AskUser>(decision);
     }
 
     [Fact]
@@ -120,12 +120,21 @@ public sealed class AcpPermissionPolicyTests
     }
 
     [Fact]
-    public void RejectionWithNoRejectOption_Cancels()
+    public void Delete_IsPutToTheUser()
     {
         var decision = Decide("""
             {"sessionId":"s","toolCall":{"toolCallId":"t","kind":"delete"},"options":[{"optionId":"ok","name":"Yes","kind":"allow_once"}]}
             """);
-        Assert.IsType<AcpPermissionDecision.Cancel>(decision);
+        Assert.IsType<AcpPermissionDecision.AskUser>(decision);
+    }
+
+    [Fact]
+    public void Formatter_IsAllowedOnce()
+    {
+        var decision = Decide("""
+            {"sessionId":"s","toolCall":{"toolCallId":"t1","title":"`dotnet format`","kind":"execute","rawInput":{"command":"dotnet format"}},"options":
+            """ + ClaudeOptions + "}");
+        AssertSelected(decision, "allow-once", AcpPermissionVerdict.Allowed);
     }
 
     [Fact]

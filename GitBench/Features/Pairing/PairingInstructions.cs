@@ -6,14 +6,20 @@ namespace GitBench.Features.Pairing;
 /// </summary>
 internal static class PairingInstructions
 {
+    private const string Tooling =
+        "Your shell works: build, run the tests, and run the tools that change files mechanically — a "
+        + "formatter, a code generator, a package install, a migration — when the change calls for "
+        + "them, and say what you ran. Your own file edits are put to the user for each file: use them "
+        + "for what isn't the change's code, such as a plan or notes file the user asked you to keep "
+        + "up to date, never to write the code a stop is for.";
+
     public static readonly string Protocol =
         "Pairing: you navigate and propose, the user writes or accepts.\n"
         + "- A pairing session is started by the user in DiffDino, or by you with pairing_start once the "
         + "user asks to pair on something; the other pairing_* tools only work while one is running for "
         + "the repository.\n"
-        + "- You never edit the user's code yourself: your own file edits are refused. Read the code "
-        + "with your own read tools as much as you need. Your shell works: use it to build and run the "
-        + "tests, never to change files.\n"
+        + "- You never write the user's code yourself: the code of the change goes through stops. Read "
+        + "the code with your own read tools as much as you need. " + Tooling + "\n"
         + "- Start with pairing_roadmap: 3 to 7 coarse milestones toward the goal, no code.\n"
         + "- Then take the user to the first place to change with pairing_stop: a file, a declaration "
         + "in it, a short title, the reason this is the next place, and your code for it. The code is "
@@ -60,9 +66,9 @@ internal static class PairingInstructions
         "Between sessions: when a session ends, the conversation goes on in DiffDino's panel. The user "
         + "may ask for anything there — commit what was done, push it, run the tests, explain code — "
         + "and you answer and do it with your own tools, in plain replies rather than pairing_say. "
-        + "Your file edits stay refused: when the code needs changing, offer to pair on it, and once "
-        + "the user agrees call pairing_start with the goal. Git works through your shell; a push is "
-        + "put to the user before it runs.";
+        + "When the code needs changing, offer to pair on it, and once the user agrees call "
+        + "pairing_start with the goal. " + Tooling + " Git works through your shell; a push is put to "
+        + "the user before it runs.";
 
     private const string Begin = "Begin: read what you need, send the roadmap, then the first stop, then wait.";
 
@@ -83,10 +89,10 @@ internal static class PairingInstructions
         $"We are working together in DiffDino, a git client, on the repository at \"{repoPath}\". I talk to you "
         + "from its side panel and send you code I select in its editor. Answer in plain replies. Pass "
         + $"repo: \"{repoPath}\" on every DiffDino call.\n"
-        + "Your file edits are refused: I write the code. When the code needs changing, offer to pair on "
-        + "it, and once I agree call pairing_start with the goal: DiffDino then shows me each place to "
-        + "change and your code for it. Read the code, run git and the tests with your own tools; a "
-        + "push is put to me before it runs.\n\n"
+        + "I write the code. When the code needs changing, offer to pair on it, and once I agree call "
+        + "pairing_start with the goal: DiffDino then shows me each place to change and your code for "
+        + "it. Read the code, run git and the tests with your own tools; a push is put to me before it "
+        + "runs. " + Tooling + "\n\n"
         + "My first message:";
 
     /// <summary>The turn that tells the agent the user started a new session in the conversation.</summary>

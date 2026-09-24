@@ -81,13 +81,14 @@ public sealed class AcpAgentConnectionTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Prompt_StreamsUpdates_AndRefusesAWriteWithoutAskingTheUser()
+    public async Task Prompt_StreamsUpdates_AndPutsAWriteToTheUser()
     {
         Assert.Null(await _connection.OpenAsync("C:/repo", Server, "default", null, CancellationToken.None).WaitAsync(Deadline));
         var updates = new List<AcpSessionUpdate>();
         var decided = new List<(string, AcpPermissionVerdict)>();
         _connection.Updated += u => { lock (updates) updates.Add(u); };
         _connection.PermissionDecided += (r, v) => { lock (decided) decided.Add((r.Title, v)); };
+        _prompt.Answer = "no";
         _agent.OnPrompt = async agent =>
         {
             await agent.Update("""{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Looking."}}""");
@@ -104,7 +105,7 @@ public sealed class AcpAgentConnectionTests : IAsyncDisposable
         Assert.Equal(AcpStopReason.EndTurn, stop);
         Assert.Contains(updates, u => u is AcpSessionUpdate.MessageChunk { Text: "Looking." });
         Assert.Equal([("Write a.txt", AcpPermissionVerdict.Rejected)], decided);
-        Assert.Empty(_prompt.Asked);
+        Assert.Equal(["Write a.txt"], _prompt.Asked);
     }
 
     [Fact]

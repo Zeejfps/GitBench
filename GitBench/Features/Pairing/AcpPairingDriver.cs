@@ -165,7 +165,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
                 if (idle < IdleTurnLimit)
                 {
                     prompt = new AgentPrompt(Volatile.Read(ref _refusedThisTurn) > 0
-                        ? "Writing files is refused: the user writes the code. " + PairingInstructions.Continue
+                        ? "The user declined: the code of the change goes through stops. " + PairingInstructions.Continue
                         : PairingInstructions.Continue);
                     continue;
                 }

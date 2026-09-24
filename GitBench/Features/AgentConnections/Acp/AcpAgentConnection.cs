@@ -27,7 +27,7 @@ internal abstract record AcpStart
 /// <summary>
 /// One agent run over the Agent Client Protocol: the adapter process, its one session, and the
 /// write guard. Every permission request goes through <see cref="AcpPermissionPolicy"/> — reads,
-/// shell commands and the app's own MCP tools pass, file edits are refused, the rest is asked — and the
+/// shell commands and the app's own MCP tools pass, file edits and the rest are asked — and the
 /// session is put in its harness's asking mode first, so that no write is decided inside the CLI.
 /// Events are raised on the reader's thread.
 /// </summary>
@@ -308,10 +308,6 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
             case AcpPermissionDecision.AskUser:
                 chosen = await _prompt.AskAsync(request, ct).ConfigureAwait(false);
                 PermissionDecided?.Invoke(request, IsAllow(request, chosen) ? AcpPermissionVerdict.Allowed : AcpPermissionVerdict.Rejected);
-                break;
-            case AcpPermissionDecision.Cancel:
-                PermissionDecided?.Invoke(request, AcpPermissionVerdict.Rejected);
-                chosen = null;
                 break;
             default:
                 throw new InvalidOperationException("Unhandled permission decision.");

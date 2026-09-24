@@ -380,7 +380,9 @@ level before the useful thing — the code — showed up. Now:
 - `pairing_start(goal)` opens a session in the repository's conversation; with no conversation open
   in DiffDino it refuses. The New pairing session dialog starts the session in the existing
   conversation and keeps its agent.
-- Edits stay refused between sessions. A shell command that runs `git push` is put to the user
+- An ACP agent's file edits are put to the user, never refused outright: the agent may keep a plan
+  or notes file, and its shell may run formatters and generators. The change's code still goes
+  through stops (a prompt rule, not a guard). A shell command that runs `git push` is put to the user
   (`AcpPermissionPolicy.Pushes`). A push that the CLI's own allow rules already cover never reaches
   the client, and the terminal preset has no guard at all.
 - Moving on from a stop clears only the session's own part of the transcript.
