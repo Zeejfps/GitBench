@@ -93,7 +93,7 @@ internal sealed record PairingPanel : Widget
                                                             CrossAxis = CrossAxisAlignment.Stretch,
                                                             Children =
                                                             [
-                                                                new PairingStopSlot { Store = session.Store, Actions = false },
+                                                                new PairingStopSlot { Store = session.Store },
                                                                 new PairingGoalAndRoadmap { Store = session.Store },
                                                             ],
                                                         },
@@ -109,7 +109,13 @@ internal sealed record PairingPanel : Widget
                         new Switch<PairingSession?>
                         {
                             Value = conversation.Session,
-                            Case = session => session is null ? Empty.Widget : new PairingStopSlot { Store = session.Store, Actions = true },
+                            Case = session => session is null
+                                ? Empty.Widget
+                                : new Show
+                                {
+                                    When = new Derived<bool>(() => session.Store.IsLive),
+                                    Then = () => new PairingStopActions { Store = session.Store },
+                                },
                         },
                     ],
                 },

@@ -12,29 +12,88 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>The stop card's place at the top of what the panel scrolls: the open stop, or nothing
-/// between stops.</summary>
+/// <summary>The stop card's place at the top of what the panel scrolls: the open stop, a placeholder
+/// while the agent works out the next one, and nothing once the session is over.</summary>
 internal sealed record PairingStopSlot : Widget
 {
-    public required PairingStore Store { get; init; }
+    private const int Over = -1;
+    private const int Between = 0;
 
-    /// <summary>Which part of the stop this slot shows.</summary>
-    public required bool Actions { get; init; }
+    public required PairingStore Store { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
         var store = Store;
-        var actions = Actions;
+        var shown = Over;
         // Keyed on the stop's number: a change within the stop doesn't rebuild the card.
         return new Switch<int>
         {
-            Value = new Derived<int>(() => store.Stop.Value?.Stop.Number ?? 0),
-            Case = number => number == 0 || store.Stop.Value is not { } stop
-                ? Empty.Widget
-                : actions
-                    ? new PairingStopActions { Store = store, Stop = stop }
-                    : new PairingStopCard { Store = store, Stop = stop },
+            Value = new Derived<int>(() => store.Stop.Value?.Stop.Number ?? (store.IsLive ? Between : Over)),
+            Case = number =>
+            {
+                var fromPlaceholder = shown == Between;
+                shown = number;
+                if (number == Over || (number != Between && store.Stop.Value is null)) return Empty.Widget;
+                if (number == Between) return new FadeIn { Bloom = true, Child = new PairingStopPlaceholder() };
+                IWidget card = new PairingStopCard { Store = store, Stop = store.Stop.Value! };
+                return fromPlaceholder ? new FadeIn { Child = card } : card;
+            },
         };
+    }
+}
+
+/// <summary>The stop card's shape, breathing, while the agent works out the next stop.</summary>
+internal sealed record PairingStopPlaceholder : Widget
+{
+    public const string PlaceholderId = "pairing-stop-placeholder";
+
+    protected override View CreateView(Context ctx)
+    {
+        var theme = ctx.Theme();
+        var pulse = new Pulse(ctx.Require<IFrameTicker>());
+        pulse.Start();
+
+        Prop<uint> Fill(float dim) => Prop.Bind(() =>
+            SkeletonPainter.Fill(theme.Styles.Value.Palette.TextPrimary, pulse.Value.Value, dim));
+        IWidget Bar(float width, float height, float dim = 1f) => new Box
+        {
+            Width = width,
+            Height = height,
+            Background = Fill(dim),
+            BorderRadius = BorderRadiusStyle.All(height / 2f),
+        };
+
+        var view = new Box
+        {
+            Id = PlaceholderId,
+            Background = Theme.Color(s => s.Palette.SurfaceRaised),
+            BorderRadius = BorderRadiusStyle.All(Radius.Md),
+            Children =
+            [
+                new Padding
+                {
+                    Amount = PaddingStyle.All(Spacing.Md),
+                    Children =
+                    [
+                        new Column
+                        {
+                            Gap = Spacing.Sm,
+                            Children =
+                            [
+                                Bar(48f, 8f, dim: 0.8f),
+                                Bar(200f, 14f),
+                                Bar(150f, 8f, dim: 0.7f),
+                                Bar(220f, 8f, dim: 0.8f),
+                                Bar(180f, 8f, dim: 0.8f),
+                                Bar(120f, 8f, dim: 0.8f),
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }.BuildView(ctx);
+        view.Use(() => pulse);
+        return view;
     }
 }
 
@@ -143,20 +202,20 @@ internal sealed record PairingStopCard : Widget
 }
 
 /// <summary>
-/// The open stop's controls, pinned under what the panel scrolls: what they are busy with, Accept &amp;
+/// The stop's controls, pinned under what the panel scrolls for the whole session: Accept &amp;
 /// next — which puts the agent's code into the file and moves on — Next, which moves on with the
-/// file as it is, and Skip. Once the code is in, Next is the one to press. Anything to tell the
-/// agent goes in the conversation below.
+/// file as it is, and Skip. Once the code is in, Next is the one to press. Between stops they stay
+/// where they are, unavailable. Anything to tell the agent goes in the conversation below.
 /// </summary>
 internal sealed record PairingStopActions : Widget
 {
+    public const string BarId = "pairing-stop-actions";
     public const string AcceptAndNextId = "pairing-accept-next";
     public const string NextId = "pairing-next";
     public const string SkipId = "pairing-skip";
     public const string ShowChangeId = "pairing-show-change";
 
     public required PairingStore Store { get; init; }
-    public required OpenStop Stop { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -164,7 +223,8 @@ internal sealed record PairingStopActions : Widget
         var loc = ctx.Localization();
         var keys = ctx.KeyMap();
 
-        var idle = new Derived<bool>(() => store.Activity.Value == StopActivity.Idle);
+        var open = new Derived<bool>(() => store.Stop.Value is not null);
+        var idle = new Derived<bool>(() => store.Stop.Value is not null && store.Activity.Value == StopActivity.Idle);
         var accepted = new Derived<bool>(() => store.Stop.Value?.DraftState is DraftState.Taken);
 
         void AcceptAndNext() => _ = store.AcceptAndNextAsync();
@@ -185,6 +245,7 @@ internal sealed record PairingStopActions : Widget
 
         IWidget bar = new Box
         {
+            Id = BarId,
             BorderSize = new BorderSizeStyle { Top = 1 },
             BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.Palette.Border }),
             Children =
@@ -194,74 +255,53 @@ internal sealed record PairingStopActions : Widget
                     Amount = PaddingStyle.All(Spacing.Md),
                     Children =
                     [
-                        new Column
+                        new Wrap
                         {
                             Gap = Spacing.Sm,
-                            CrossAxis = CrossAxisAlignment.Stretch,
+                            RunGap = Spacing.Sm,
                             Children =
                             [
-                                new Text
+                                new Switch<bool>
                                 {
-                                    Value = Prop.Bind<string?>(() => store.Activity.Value switch
-                                    {
-                                        StopActivity.Checking => loc.Strings.Value.PairingChecking,
-                                        StopActivity.Accepting => loc.Strings.Value.PairingAccepting,
-                                        StopActivity.Idle => null,
-                                        _ => throw new InvalidOperationException("Unknown activity."),
-                                    }),
-                                    Visible = Prop.Bind(() => store.Activity.Value != StopActivity.Idle),
-                                    FontSize = FontSize.Caption,
-                                    Color = Theme.Color(s => s.Palette.TextSecondary),
-                                },
-                                new Wrap
-                                {
-                                    Gap = Spacing.Sm,
-                                    RunGap = Spacing.Sm,
-                                    Children =
-                                    [
-                                        new Switch<bool>
+                                    Value = accepted,
+                                    Case = isIn => isIn
+                                        ? NextButton(primary: true)
+                                        : new Row
                                         {
-                                            Value = accepted,
-                                            Case = isIn => isIn
-                                                ? NextButton(primary: true)
-                                                : new Row
+                                            Gap = Spacing.Sm,
+                                            CrossAxis = CrossAxisAlignment.Center,
+                                            Children =
+                                            [
+                                                new ButtonWidget
                                                 {
-                                                    Gap = Spacing.Sm,
-                                                    CrossAxis = CrossAxisAlignment.Center,
-                                                    Children =
-                                                    [
-                                                        new ButtonWidget
-                                                        {
-                                                            Id = AcceptAndNextId,
-                                                            Style = ButtonStyle.Filled(static s => s.Palette.Accent),
-                                                            Command = new Command(AcceptAndNext, idle),
-                                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingAcceptAndNext) }],
-                                                        }
-                                                        .WithTooltip(Tooltip(s => s.PairingAcceptAndNextTooltip, KeyCommand.PairingAcceptAndNext))
-                                                        .WithController<KbmController>(),
-                                                        NextButton(primary: false),
-                                                    ],
-                                                },
+                                                    Id = AcceptAndNextId,
+                                                    Style = ButtonStyle.Filled(static s => s.Palette.Accent),
+                                                    Command = new Command(AcceptAndNext, idle),
+                                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingAcceptAndNext) }],
+                                                }
+                                                .WithTooltip(Tooltip(s => s.PairingAcceptAndNextTooltip, KeyCommand.PairingAcceptAndNext))
+                                                .WithController<KbmController>(),
+                                                NextButton(primary: false),
+                                            ],
                                         },
-                                        new ButtonWidget
-                                        {
-                                            Id = SkipId,
-                                            Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                            Command = new Command(store.Skip, idle),
-                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingSkip) }],
-                                        }.WithController<KbmController>(),
-                                        new Grow { Child = Empty.Widget },
-                                        new ButtonWidget
-                                        {
-                                            Id = ShowChangeId,
-                                            Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                            Command = new Command(store.RevealStop),
-                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingShowChange) }],
-                                        }
-                                        .WithTooltip(L.T(s => s.PairingGoToStop))
-                                        .WithController<KbmController>(),
-                                    ],
                                 },
+                                new ButtonWidget
+                                {
+                                    Id = SkipId,
+                                    Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
+                                    Command = new Command(store.Skip, idle),
+                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingSkip) }],
+                                }.WithController<KbmController>(),
+                                new Grow { Child = Empty.Widget },
+                                new ButtonWidget
+                                {
+                                    Id = ShowChangeId,
+                                    Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
+                                    Command = new Command(store.RevealStop, open),
+                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingShowChange) }],
+                                }
+                                .WithTooltip(L.T(s => s.PairingGoToStop))
+                                .WithController<KbmController>(),
                             ],
                         },
                     ],
@@ -272,6 +312,7 @@ internal sealed record PairingStopActions : Widget
         return bar.Use(_ =>
         {
             var gates = new SubscriptionGroup();
+            gates.Add(open);
             gates.Add(idle);
             gates.Add(accepted);
             return gates;

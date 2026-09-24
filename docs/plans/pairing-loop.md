@@ -275,6 +275,10 @@ this says so and why.
 - **The stop card is part of the Pairing panel**, docked beside the content panel: the stop's text,
   test and draft note scroll with the roadmap and the conversation, and Accept, Done and Skip stay
   pinned above the message field.
+- **The controls stay for the whole session.** Between stops, while the agent works out the next
+  one, the bar keeps its place with every button unavailable, and a breathing placeholder in the
+  card's shape holds the top; the card fades in over it. There is no status line of its own: the
+  conversation's thinking indicator and the header already say the agent is at work.
 - **No note on Done.** The field under the conversation is the one place to talk to the agent, for
   questions and for "I did this instead" alike: the agent keeps the conversation, so what was said
   before Done is in mind when it reads the diff. On the wire the wait answers
