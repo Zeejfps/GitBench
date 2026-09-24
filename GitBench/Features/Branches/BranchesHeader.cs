@@ -119,7 +119,8 @@ internal sealed record BranchesHeader : Widget
 /// <summary>
 /// Branch icon, "on"/"at" prefix, and branch name; hidden when there's no branch. While a checkout is
 /// switching branches the icon turns into a spinner and the prefix reads "switching to", so the app's
-/// most prominent branch claim never states a pending move as settled fact.
+/// most prominent branch claim never states a pending move as settled fact. When squeezed, the prefix
+/// drops out first, then the name ellipsizes.
 /// </summary>
 internal sealed record BranchLabel : Widget
 {
@@ -127,6 +128,8 @@ internal sealed record BranchLabel : Widget
     public required IReadable<bool> IsDetached { get; init; }
     public required IReadable<bool> IsSwitching { get; init; }
     public required IReadable<float> SwitchRotation { get; init; }
+
+    private const float PrefixShrinkFactor = 1000f;
 
     protected override IWidget Build(Context ctx) => new Padding
     {
@@ -136,7 +139,6 @@ internal sealed record BranchLabel : Widget
         [
             new Row
             {
-                Gap = Spacing.Sm,
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children =
                 [
@@ -149,25 +151,46 @@ internal sealed record BranchLabel : Widget
                         Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
                         Rotation = Prop.Bind(() => IsSwitching.Value ? SwitchRotation.Value : 0f),
                     },
-                    new Text
+                    new Shrink
                     {
-                        Value = L.T(s => IsSwitching.Value ? s.BranchesHeaderSwitchingTo
-                            : IsDetached.Value ? s.BranchesHeaderAt
-                            : s.BranchesHeaderOn),
-                        VAlign = TextAlignment.Center,
-                        Color = Theme.Color(s => s.BranchesHeader.PrefixText),
+                        Factor = PrefixShrinkFactor,
+                        Child = new FitOrHide
+                        {
+                            Child = new Padding
+                            {
+                                Amount = new PaddingStyle { Left = Spacing.Sm },
+                                Children =
+                                [
+                                    new Text
+                                    {
+                                        Value = L.T(s => IsSwitching.Value ? s.BranchesHeaderSwitchingTo
+                                            : IsDetached.Value ? s.BranchesHeaderAt
+                                            : s.BranchesHeaderOn),
+                                        VAlign = TextAlignment.Center,
+                                        Color = Theme.Color(s => s.BranchesHeader.PrefixText),
+                                    },
+                                ],
+                            },
+                        },
                     },
                     new Shrink
                     {
-                        Child = new Text
+                        Child = new Padding
                         {
-                            Value = Prop.Bind(BranchName),
-                            FontSize = FontSize.Heading,
-                            Weight = FontWeight.Bold,
-                            HAlign = TextAlignment.Start,
-                            VAlign = TextAlignment.Center,
-                            Overflow = TextOverflow.Ellipsis,
-                            Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
+                            Amount = new PaddingStyle { Left = Spacing.Sm },
+                            Children =
+                            [
+                                new Text
+                                {
+                                    Value = Prop.Bind(BranchName),
+                                    FontSize = FontSize.Heading,
+                                    Weight = FontWeight.Bold,
+                                    HAlign = TextAlignment.Start,
+                                    VAlign = TextAlignment.Center,
+                                    Overflow = TextOverflow.Ellipsis,
+                                    Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
+                                },
+                            ],
                         },
                     },
                 ],
