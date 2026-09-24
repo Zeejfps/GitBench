@@ -24,11 +24,13 @@ internal sealed class OneBrowser : IFileBrowserStore, IDisposable
 
     public IReadable<FileBrowserViewModel?> Active => _active;
 
-    public event Action<FileBrowserMove>? FileShown;
+    public FileBrowserViewModel? For(Guid repoId) => _browser;
+
+    public event Action<FileBrowserViewModel, FileBrowserMove>? FileShown;
 
     public event Action? AllFilesClosed;
 
-    private void Shown(FileBrowserMove move) => FileShown?.Invoke(move);
+    private void Shown(FileBrowserMove move) => FileShown?.Invoke(_browser, move);
 
     private void Closed() => AllFilesClosed?.Invoke();
 

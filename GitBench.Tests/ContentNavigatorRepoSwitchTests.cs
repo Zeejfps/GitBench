@@ -105,6 +105,38 @@ public sealed class ContentNavigatorRepoSwitchTests(CodeIntelFixture fixture) : 
         Assert.False(Nav.CanGoBack.Value);
     }
 
+    [Fact]
+    public void AFileShownInARepositoryNotOnScreen_LeavesTheOneOnScreenAlone()
+    {
+        var a = NewRepo("a");
+        var b = NewRepo("b");
+        Start(a);
+        Nav.Show(new ContentPlace.View(MainViewMode.History));
+        Nav.GoBack();
+
+        _browsers.Show(b.Browser, new FileBrowserMove(null, IsMove: true));
+
+        Assert.Equal(MainViewMode.LocalChanges, _mode.Value);
+        Assert.False(Nav.CanGoBack.Value);
+        Assert.True(Nav.CanGoForward.Value);
+    }
+
+    [Fact]
+    public void ARepositoryAFileWasShownIn_WhileAway_ComesBackOnItsFiles()
+    {
+        var a = NewRepo("a");
+        var b = NewRepo("b");
+        Start(a);
+        var file = Path.Combine(_dir.Path, "b", "stop.cs");
+        File.WriteAllText(file, "class Stop {}\n");
+
+        b.Browser.PlaceCaret(file, Features.Editor.TextPosition.At(1, 0));
+        _browsers.Show(b.Browser, new FileBrowserMove(null, IsMove: true));
+        SwitchTo(b);
+
+        Assert.Equal(MainViewMode.Files, _mode.Value);
+    }
+
     private ContentNavigator Nav => _navigator!;
 
     private (FileBrowserViewModel Browser, TerminalTabs Shells) NewRepo(string name)
@@ -149,7 +181,11 @@ public sealed class ContentNavigatorRepoSwitchTests(CodeIntelFixture fixture) : 
 
         IReadable<FileBrowserViewModel?> IFileBrowserStore.Active => Active;
 
-        public event Action<FileBrowserMove>? FileShown { add { } remove { } }
+        public FileBrowserViewModel? For(Guid repoId) => null;
+
+        public event Action<FileBrowserViewModel, FileBrowserMove>? FileShown;
+
+        public void Show(FileBrowserViewModel browser, FileBrowserMove move) => FileShown?.Invoke(browser, move);
 
         public event Action? AllFilesClosed { add { } remove { } }
     }

@@ -15,8 +15,8 @@ namespace GitBench.Features.Pairing;
 /// <summary>
 /// The pairing loop over the Files pane: a stop is found in the file as the user has it — unsaved
 /// edits included — through the tree-sitter outline, and the repository's browser opens it with the
-/// caret on the declaration. Switches to the session's repository first when another is active.
-/// UI thread only.
+/// caret on the declaration. Never switches repositories: with another one on screen, the stop waits
+/// in the session's browser for the user to come back to it. UI thread only.
 /// </summary>
 internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposable
 {
@@ -225,12 +225,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         return rest.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
     }
 
-    // The browser of the session's repository, made active first: a stop is somewhere to go.
-    private FileBrowserViewModel? Browser()
-    {
-        if (_repos.Active.Value?.Id != _repo.Id) _repos.SetActive(_repo.Id);
-        return _browsers.Active.Value;
-    }
+    private FileBrowserViewModel? Browser() => _browsers.For(_repo.Id);
 
     private string? Absolute(string relative)
     {

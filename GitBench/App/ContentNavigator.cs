@@ -208,12 +208,19 @@ internal sealed class ContentNavigator : IContentNavigator, IHostedService, IDis
     }
 
     /// <summary>
-    /// The browser moved. Recorded here rather than by the browser, because where the reader was
+    /// A browser moved. Recorded here rather than by the browser, because where the reader was
     /// may not have been a file at all — opening one from the tree while the working changes are on
-    /// screen is a step away from the working changes.
+    /// screen is a step away from the working changes. A repository not on screen is left alone and
+    /// comes back on its files, where the move went.
     /// </summary>
-    private void OnFileShown(FileBrowserMove move)
+    private void OnFileShown(FileBrowserViewModel browser, FileBrowserMove move)
     {
+        if (!ReferenceEquals(browser, Browser))
+        {
+            _leftOn.GetOrCreateValue(browser).Value = MainViewMode.Files;
+            return;
+        }
+
         if (!_navigating)
         {
             var onFiles = _mode.Value == MainViewMode.Files;

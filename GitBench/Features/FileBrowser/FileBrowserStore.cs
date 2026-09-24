@@ -16,12 +16,15 @@ internal interface IFileBrowserStore
     /// switch, so the pane binds to this and never asks which repo it is showing.</summary>
     IReadable<FileBrowserViewModel?> Active { get; }
 
-    /// <summary>A file became the one some browser is showing — the tree was clicked, a definition
-    /// was jumped to, the back button was pressed. Which browser is not said: only the active one is
-    /// ever on screen.</summary>
-    event Action<FileBrowserMove>? FileShown;
+    /// <summary>A repository's browser, whether or not it is the one on screen; null for a
+    /// repository that is not open.</summary>
+    FileBrowserViewModel? For(Guid repoId);
 
-    /// <summary>A browser's last open file was closed.</summary>
+    /// <summary>A file became the one a browser is showing — the tree was clicked, a definition was
+    /// jumped to, the back button was pressed, or something moved a browser that is not on screen.</summary>
+    event Action<FileBrowserViewModel, FileBrowserMove>? FileShown;
+
+    /// <summary>The active browser's last open file was closed.</summary>
     event Action? AllFilesClosed;
 }
 
@@ -55,6 +58,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
     private readonly IDocumentStore _documents;
 
     private readonly Dictionary<Guid, FileBrowserViewModel> _browsers = new();
+    private readonly Dictionary<FileBrowserViewModel, Relay> _relays = new();
     private readonly State<FileBrowserViewModel?> _active = new(null);
 
     private IDisposable? _activeSub;
@@ -85,7 +89,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
 
     public IReadable<FileBrowserViewModel?> Active => _active;
 
-    public event Action<FileBrowserMove>? FileShown;
+    public event Action<FileBrowserViewModel, FileBrowserMove>? FileShown;
 
     public event Action? AllFilesClosed;
 
@@ -97,6 +101,12 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
         _reposSub = _registry.Repos.Subscribe(_ => DropClosedRepos());
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged);
+    }
+
+    public FileBrowserViewModel? For(Guid repoId)
+    {
+        if (_disposed) return null;
+        return _registry.Repos.FirstOrDefault(repo => repo.Id == repoId) is { } open ? BrowserFor(open) : null;
     }
 
     private void OnActiveChanged()
@@ -130,17 +140,20 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
             _documents.For(repoId),
             AskBeforeDiscarding,
             AskBeforeReloading);
-        browser.FileShown += RaiseFileShown;
-        browser.AllFilesClosed += RaiseAllFilesClosed;
+        var relay = new Relay(move => FileShown?.Invoke(browser, move), () => RaiseAllFilesClosed(browser));
+        browser.FileShown += relay.Shown;
+        browser.AllFilesClosed += relay.Closed;
+        _relays[browser] = relay;
         _browsers[repo.Id] = browser;
         return browser;
     }
 
-    // Only the active browser is on screen, and only it can be interacted with; a background one
-    // reopening its tabs on construction is restoring, which the view model keeps quiet about.
-    private void RaiseFileShown(FileBrowserMove move) => FileShown?.Invoke(move);
-
-    private void RaiseAllFilesClosed() => AllFilesClosed?.Invoke();
+    // A background browser emptying says nothing about the tab on screen: coming back to it is
+    // what finds it empty.
+    private void RaiseAllFilesClosed(FileBrowserViewModel browser)
+    {
+        if (ReferenceEquals(_active.Value, browser)) AllFilesClosed?.Invoke();
+    }
 
     /// <summary>Puts the "these edits are not on disk" question on screen, and runs the close only
     /// if it is answered.</summary>
@@ -179,8 +192,12 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
 
     private void Release(FileBrowserViewModel browser)
     {
-        browser.FileShown -= RaiseFileShown;
-        browser.AllFilesClosed -= RaiseAllFilesClosed;
+        if (_relays.Remove(browser, out var relay))
+        {
+            browser.FileShown -= relay.Shown;
+            browser.AllFilesClosed -= relay.Closed;
+        }
+
         browser.Dispose();
     }
 
@@ -199,4 +216,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         _browsers.Clear();
         _active.Dispose();
     }
+
+    /// <summary>What a browser's events are passed on through, kept so they can be taken off again.</summary>
+    private sealed record Relay(Action<FileBrowserMove> Shown, Action Closed);
 }

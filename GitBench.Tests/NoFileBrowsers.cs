@@ -9,7 +9,9 @@ internal sealed class NoFileBrowsers : IFileBrowserStore
 {
     public IReadable<FileBrowserViewModel?> Active { get; } = new State<FileBrowserViewModel?>(null);
 
-    public event Action<FileBrowserMove>? FileShown { add { } remove { } }
+    public FileBrowserViewModel? For(Guid repoId) => null;
+
+    public event Action<FileBrowserViewModel, FileBrowserMove>? FileShown { add { } remove { } }
 
     public event Action? AllFilesClosed { add { } remove { } }
 }
