@@ -28,54 +28,66 @@ internal sealed record StagingProgressRow : Widget
         return new Row
         {
             Visible = visible,
-            Gap = Spacing.Sm,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
-                new Row
+                new Shrink
                 {
-                    Gap = Spacing.Sm,
-                    CrossAxis = CrossAxisAlignment.Center,
-                    Visible = Prop.Bind(() => !review.Hud.Value.IsComplete),
-                    Children =
-                    [
-                        new ReviewProgressMeter
+                    Child = new Show
+                    {
+                        When = new Derived<bool>(() => review.Hud.Value.IsComplete),
+                        Then = () => new Row
                         {
-                            Fraction = review.FilesFraction,
-                            Fill = Theme.Color(s => s.Status.Success),
+                            Gap = Spacing.Xs,
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Children =
+                            [
+                                new Text
+                                {
+                                    FontFamily = LucideIcons.FontFamily,
+                                    FontSize = FontSize.Body,
+                                    Value = LucideIcons.CircleCheck,
+                                    Color = Theme.Color(s => s.Status.Success),
+                                    VAlign = TextAlignment.Center,
+                                },
+                                new Shrink
+                                {
+                                    Child = new Text
+                                    {
+                                        Value = L.T(s => s.ReviewAllStaged),
+                                        FontSize = FontSize.Caption,
+                                        Overflow = TextOverflow.Ellipsis,
+                                        Color = Theme.Color(s => s.Status.Success),
+                                        VAlign = TextAlignment.Center,
+                                    },
+                                },
+                            ],
                         },
-                        new Text
+                        Else = () => new Row
                         {
-                            Value = Prop.Bind<string?>(review.FilesStagedLabel),
-                            FontSize = FontSize.Caption,
-                            Color = Theme.Color(s => s.Palette.TextSecondary),
-                            VAlign = TextAlignment.Center,
+                            Gap = Spacing.Sm,
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Children =
+                            [
+                                new ReviewProgressMeter
+                                {
+                                    Fraction = review.FilesFraction,
+                                    Fill = Theme.Color(s => s.Status.Success),
+                                },
+                                new Shrink
+                                {
+                                    Child = new Text
+                                    {
+                                        Value = Prop.Bind<string?>(review.FilesStagedLabel),
+                                        FontSize = FontSize.Caption,
+                                        Overflow = TextOverflow.Ellipsis,
+                                        Color = Theme.Color(s => s.Palette.TextSecondary),
+                                        VAlign = TextAlignment.Center,
+                                    },
+                                },
+                            ],
                         },
-                    ],
-                },
-                new Row
-                {
-                    Gap = Spacing.Xs,
-                    CrossAxis = CrossAxisAlignment.Center,
-                    Visible = Prop.Bind(() => review.Hud.Value.IsComplete),
-                    Children =
-                    [
-                        new Text
-                        {
-                            FontFamily = LucideIcons.FontFamily,
-                            FontSize = FontSize.Body,
-                            Value = LucideIcons.CircleCheck,
-                            Color = Theme.Color(s => s.Status.Success),
-                            VAlign = TextAlignment.Center,
-                        },
-                        new Text
-                        {
-                            Value = L.T(s => s.ReviewAllStaged),
-                            FontSize = FontSize.Caption,
-                            Color = Theme.Color(s => s.Status.Success),
-                            VAlign = TextAlignment.Center,
-                        },
-                    ],
+                    },
                 },
             ],
         };

@@ -52,7 +52,7 @@ internal sealed record WorkingChangesTabStrip : Widget
                                     L.T(s => s.LocalchangesLayoutFiles),
                                     L.T(s => s.LocalchangesLayoutFilesTooltip)),
                                 new Grow { Child = new Box() },
-                                new StagingProgressRow(),
+                                new Shrink { Child = new Clipped { Child = new StagingProgressRow() } },
                             ],
                         },
                     ],
