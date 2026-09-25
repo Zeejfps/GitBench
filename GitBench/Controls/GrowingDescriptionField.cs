@@ -65,6 +65,16 @@ internal sealed class GrowingDescriptionField : ContainerView
     public void BeginEditing() => _inputController.BeginEditing();
     public void EndEditing() => _inputController.EndEditing();
 
+    /// <summary>Takes the caret when the field appears, for a field that is the first thing its
+    /// owner asks for.</summary>
+    public bool AutoFocus
+    {
+        init
+        {
+            if (value) Behaviors.Add(new FocusOnMount(_inputController));
+        }
+    }
+
     public Action? OnTab
     {
         get => _inputController.OnTab;
@@ -208,6 +218,12 @@ internal sealed class GrowingDescriptionField : ContainerView
 
             base.Enter(c);
         }
+    }
+
+    private sealed class FocusOnMount(FieldController controller) : IViewBehavior
+    {
+        public void Attach(View view) => controller.BeginEditing();
+        public void Detach(View view) => controller.EndEditing();
     }
 
     protected override void OnLayoutChildren()

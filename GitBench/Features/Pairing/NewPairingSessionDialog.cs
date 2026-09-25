@@ -83,7 +83,7 @@ internal sealed record NewPairingSessionDialog : Widget
             }
         }
 
-        var goalField = new GrowingDescriptionField(ctx, 72f, 200f) { Id = GoalId, PlaceholderText = s.PairingGoalPlaceholder };
+        var goalField = new GrowingDescriptionField(ctx, 72f, 200f) { Id = GoalId, PlaceholderText = s.PairingGoalPlaceholder, AutoFocus = true };
         goalField.BindTwoWay(goal, v => goal.Value = v);
 
         List<IWidget> body =

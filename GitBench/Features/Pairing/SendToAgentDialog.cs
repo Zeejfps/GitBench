@@ -67,7 +67,7 @@ internal sealed record SendToAgentDialog : Widget
             onClose();
         }
 
-        var field = new GrowingDescriptionField(ctx, 72f, 200f) { Id = QuestionId, PlaceholderText = s.AgentSendPlaceholder };
+        var field = new GrowingDescriptionField(ctx, 72f, 200f) { Id = QuestionId, PlaceholderText = s.AgentSendPlaceholder, AutoFocus = true };
         field.BindTwoWay(question, v => question.Value = v);
         var location = quote.Location(path => repo is null ? path : AgentPrompt.RepoRelative(repo.Path, path));
 
