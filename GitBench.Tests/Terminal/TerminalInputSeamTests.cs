@@ -217,12 +217,58 @@ public class TerminalPaneWiringTests : IDisposable
         pane.Harness.Render();
         pane.Start();
         pane.Activate(pane.SecondRepo);
-        pane.Harness.Root.IsVisible = false;
+        pane.Showing.Value = false;
 
         pane.Activate(pane.FirstRepo);
         pane.Harness.Render();
 
         Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void ARepositoryPutBackOnItsTerminal_LeavesTheKeyboardInIt()
+    {
+        // A switch mounts the repository's terminal first and only then puts back the tab it was
+        // left on, so the shell is already running by the time the pane comes to the front.
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Showing.Value = false;
+        pane.Activate(pane.SecondRepo);
+        pane.Activate(pane.FirstRepo);
+
+        pane.Showing.Value = true;
+        pane.Harness.Render();
+
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void ComingBackToTheTerminalTab_LeavesTheKeyboardInIt()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Showing.Value = false;
+
+        pane.Showing.Value = true;
+        pane.Harness.Render();
+
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void TurningAwayFromTheTerminalTab_LetsGoOfTheKeyboard()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        var grid = pane.Harness.Input.GetController(pane.Grid);
+        Assert.Same(grid, pane.Harness.Input.FocusedComponent);
+
+        pane.Showing.Value = false;
+
+        Assert.NotSame(grid, pane.Harness.Input.FocusedComponent);
     }
 
     [Fact]
@@ -263,16 +309,17 @@ public class TerminalPaneWiringTests : IDisposable
 
             Harness = GuiTestHarness.Create(
                 // The pane under the one control that makes a terminal, which lives in the toolbar
-                // rather than in the pane. Wrapped so a test can hide the pane the way
-                // the panel does. The pane's own root is a swap region, which owns its IsVisible and
-                // sets it back on every swap.
+                // rather than in the pane. Whether the panel is on its terminal tab is Showing.
                 ctx => new Column
                 {
                     CrossAxis = CrossAxisAlignment.Stretch,
                     Children =
                     [
                         new NewTerminalButton { OnShow = _ => { } },
-                        new Grow { Child = new Box { Children = [new TerminalPane()] } },
+                        new Grow
+                        {
+                            Child = new Box { Children = [new TerminalPane { PaneShowing = () => Showing.Value }] },
+                        },
                     ],
                 }.BuildView(ctx),
                 width: 800,
@@ -291,6 +338,10 @@ public class TerminalPaneWiringTests : IDisposable
 
         public GuiTestHarness Harness { get; }
         public QueuedDispatcher Dispatcher { get; } = new();
+
+        /// <summary>Whether the content panel is on its terminal tab.</summary>
+        public State<bool> Showing { get; } = new(true);
+
         public Guid FirstRepo { get; }
         public Guid SecondRepo { get; }
 

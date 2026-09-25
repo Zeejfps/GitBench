@@ -34,7 +34,7 @@ internal sealed record MainContent : Widget
                         {
                             MainViewMode.History => new CommitHistory(),
                             MainViewMode.LocalChanges => new WorkingChanges(),
-                            MainViewMode.Terminal => new TerminalPane(),
+                            MainViewMode.Terminal => new TerminalPane { PaneShowing = () => mode.Value == MainViewMode.Terminal },
                             MainViewMode.Files => new FileBrowserPane(),
                             _ => Empty.Widget,
                         },

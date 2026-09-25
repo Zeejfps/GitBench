@@ -35,17 +35,23 @@ internal sealed record TerminalPane : Widget
     /// </summary>
     public const string ReplayEnvVar = "DIFFDINO_TERMINAL_REPLAY";
 
+    /// <summary>
+    /// Whether the content panel is on its terminal tab. Tracked, so a terminal already running
+    /// behind another tab takes the keyboard the moment the panel comes round to it.
+    /// </summary>
+    public required Func<bool> PaneShowing { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         if (Environment.GetEnvironmentVariable(ReplayEnvVar) is { Length: > 0 } replayPath)
-            return new TerminalReplayScreen { RecordingPath = replayPath };
+            return new TerminalReplayScreen { RecordingPath = replayPath, PaneShowing = PaneShowing };
 
         return new Switch<TerminalTabs?>
         {
             Value = ctx.Require<ITerminalSessionStore>().Tabs,
             Case = tabs => tabs is null
                 ? new TerminalNotice { Message = L.T(s => s.TerminalNoRepo) }
-                : new TerminalActiveScreen { Tabs = tabs },
+                : new TerminalActiveScreen { Tabs = tabs, PaneShowing = PaneShowing },
         };
     }
 }
@@ -55,13 +61,14 @@ internal sealed record TerminalPane : Widget
 internal sealed record TerminalActiveScreen : Widget
 {
     public required TerminalTabs Tabs { get; init; }
+    public required Func<bool> PaneShowing { get; init; }
 
     protected override IWidget Build(Context ctx) => new Switch<TerminalInstance?>
     {
         Value = Tabs.Active,
         Case = instance => instance is null
             ? Empty.Widget
-            : new TerminalScreen { Instance = instance },
+            : new TerminalScreen { Instance = instance, PaneShowing = PaneShowing },
     };
 }
 
@@ -89,6 +96,7 @@ internal sealed record TerminalScreen : Widget
     public const string GridId = "terminal-grid";
 
     public required TerminalInstance Instance { get; init; }
+    public required Func<bool> PaneShowing { get; init; }
 
     protected override View CreateView(Context ctx)
     {
@@ -119,7 +127,7 @@ internal sealed record TerminalScreen : Widget
             ctx.KeyMap(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IUiDispatcher>()));
-        grid.Use(() => new TerminalKeyboardHandover(instance, grid, input));
+        grid.Use(() => new TerminalKeyboardHandover(instance, PaneShowing, grid, input));
 
         return new Stack
         {
@@ -156,6 +164,7 @@ internal sealed record TerminalScreen : Widget
 internal sealed record TerminalReplayScreen : Widget
 {
     public required string RecordingPath { get; init; }
+    public required Func<bool> PaneShowing { get; init; }
 
     protected override View CreateView(Context ctx)
     {
@@ -179,7 +188,7 @@ internal sealed record TerminalReplayScreen : Widget
             ctx.Require<IUiDispatcher>());
         instance.Start();
 
-        var view = new TerminalScreen { Instance = instance }.BuildView(ctx);
+        var view = new TerminalScreen { Instance = instance, PaneShowing = PaneShowing }.BuildView(ctx);
         view.Use(() => instance);
         return view;
     }
@@ -279,48 +288,58 @@ internal sealed record TerminalRestartGate : Widget
 /// <remarks>
 /// <para>
 /// Bringing a terminal to the front is asking to type in it — switching tabs, opening one, or
-/// switching to a repository whose shell is still running. Without this the keyboard stayed wherever
+/// switching to a repository that was left on its terminal. Without this the keyboard stayed wherever
 /// the last click left it, so every one of those had to be followed by a click on the grid.
 /// </para>
 /// <para>
-/// It waits for the render state rather than taking the keyboard when the view mounts, because the
-/// spawn waits for this grid to report a viewport: the tab is on screen before its shell exists. A
-/// terminal with no shell to type into is left alone, because one holding the keyboard declines
-/// every key it is given and the application's own chords have to survive over it.
+/// It waits for both halves of being in front: a shell, because the spawn waits for this grid to
+/// report a viewport, so the tab is on screen before its shell exists; and the panel being on its
+/// terminal tab, because the panel keeps this view mounted behind whichever tab is showing. The two
+/// arrive in either order — a repository switch mounts its terminal before it puts back the tab it
+/// was left on — so it is their meeting that hands over, not either one alone. The panel's own say
+/// is asked rather than the view's visibility, which the panel only updates after its tab has
+/// already changed.
 /// </para>
 /// <para>
-/// Only while the pane is showing, and only once. The content panel keeps this view mounted behind
-/// whichever tab is on screen, so a repository switched from another tab would otherwise hand the
-/// keyboard to a terminal nobody can see; and a shell exiting long afterwards would pull it back
-/// from wherever the reader had moved on to.
+/// Once per arrival. A shell exiting long afterwards does not pull the keyboard back from wherever
+/// the reader moved on to, and a terminal the panel turns away from lets go of it, so the keys typed
+/// on the tab in front are not declined by one nobody can see.
 /// </para>
 /// </remarks>
 internal sealed class TerminalKeyboardHandover : IDisposable
 {
     readonly TerminalGridView _grid;
     readonly InputSystem _input;
+    readonly Derived<bool> _inFront;
     readonly IDisposable _subscription;
 
-    bool _handedOver;
-
-    public TerminalKeyboardHandover(TerminalInstance instance, TerminalGridView grid, InputSystem input)
+    public TerminalKeyboardHandover(
+        TerminalInstance instance, Func<bool> paneShowing, TerminalGridView grid, InputSystem input)
     {
         _grid = grid;
         _input = input;
-        _subscription = instance.Render.Subscribe(OnRender);
+        _inFront = new Derived<bool>(() => paneShowing() && instance.Render.Value is not TerminalRenderState.Idle);
+        _subscription = _inFront.Subscribe(OnInFront);
     }
 
-    void OnRender(TerminalRenderState render)
+    void OnInFront(bool inFront)
     {
-        if (_handedOver || render is TerminalRenderState.Idle) return;
         if (_input.GetController(_grid) is not TerminalInputController controller) return;
-        if (!controller.IsOnScreen) return;
 
-        _handedOver = true;
+        if (!inFront)
+        {
+            _input.Blur(controller);
+            return;
+        }
+
         _input.StealFocus(controller);
     }
 
-    public void Dispose() => _subscription.Dispose();
+    public void Dispose()
+    {
+        _subscription.Dispose();
+        _inFront.Dispose();
+    }
 }
 
 /// <summary>
