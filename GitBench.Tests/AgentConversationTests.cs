@@ -110,6 +110,29 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
+    public void ProseAfterAToolCall_StartsAParagraphOfItsOwn()
+    {
+        var transcript = new AgentTranscript();
+        transcript.AppendNarration("```cs\nvar x = 1;\n```");
+        transcript.BreakNarration();
+        transcript.AppendNarration("Now the tests.");
+
+        var narration = Assert.IsType<PairingMessage.Narration>(Assert.Single(transcript.Messages));
+        Assert.Equal("```cs\nvar x = 1;\n```\n\nNow the tests.", narration.Text.Value);
+    }
+
+    [Fact]
+    public void ABreakBeforeAnyProse_LeavesTheNextMessageAsItIs()
+    {
+        var transcript = new AgentTranscript();
+        transcript.BreakNarration();
+        transcript.AppendNarration("Looking.");
+
+        var narration = Assert.IsType<PairingMessage.Narration>(Assert.Single(transcript.Messages));
+        Assert.Equal("Looking.", narration.Text.Value);
+    }
+
+    [Fact]
     public void MovingOnFromAStop_KeepsWhatWasSaidBeforeTheSession()
     {
         var conversation = Create();

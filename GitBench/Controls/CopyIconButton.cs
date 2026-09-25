@@ -10,7 +10,8 @@ namespace GitBench.Controls;
 /// <summary>
 /// Icon-only "copy this to the clipboard" button for content that sits in the page rather than in a
 /// dialog — a code block, an assistant reply. Quiet until hovered, so a surface can carry several
-/// without becoming a row of buttons.
+/// without becoming a row of buttons. A press turns it into a green check for a moment, so the copy
+/// is seen to have happened.
 /// </summary>
 /// <remarks>
 /// The text is taken at press time, so a value still being written copies as it stands rather than
@@ -19,6 +20,8 @@ namespace GitBench.Controls;
 /// </remarks>
 internal sealed record CopyIconButton : Widget
 {
+    private const float CopiedSeconds = 1.5f;
+
     /// <summary>What is being copied, localized: the tooltip, and the accessible name the glyph
     /// itself cannot carry (a PUA codepoint reads as nothing).</summary>
     public required Func<Strings, string> Label { get; init; }
@@ -31,17 +34,27 @@ internal sealed record CopyIconButton : Widget
         var clipboard = ctx.Require<IClipboard>();
         var label = Label;
         var text = GetText;
+        var copied = new State<bool>(false);
+        var flash = new Tween(ctx.Require<IFrameTicker>(), CopiedSeconds);
+        flash.Completed += () => copied.Value = false;
 
         return new IconButtonWidget
         {
-            Command = new Command(() => clipboard.SetText(text())),
-            Icon = LucideIcons.Copy,
+            Command = new Command(() =>
+            {
+                clipboard.SetText(text());
+                copied.Value = true;
+                flash.Restart();
+            }),
+            Icon = copied.Bind<bool, string?>(c => c ? LucideIcons.Check : LucideIcons.Copy),
             Width = Sizes.RowHeight,
             Height = Sizes.RowHeight,
             Accessibility = new AccessibilityInfo(
                 AccessibilityRole.Button, label(ctx.Localization().Strings.Value)),
             Surface = s => Theme.Color(t => s.Hovered.Value ? t.Palette.SurfaceHover : 0u),
-            Foreground = s => Theme.Color(t => s.Hovered.Value ? t.Palette.TextPrimary : t.Palette.TextMuted),
-        }.WithTooltip(L.T(label)).WithController<KbmController>();
+            Foreground = s => Theme.Color(t => copied.Value
+                ? t.Status.Success
+                : s.Hovered.Value ? t.Palette.TextPrimary : t.Palette.TextMuted),
+        }.WithTooltip(L.T(label)).WithController<KbmController>().Use(_ => flash);
     }
 }

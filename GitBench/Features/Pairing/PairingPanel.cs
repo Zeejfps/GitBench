@@ -31,6 +31,8 @@ internal sealed record PairingPanelSlot : Widget
                     Edge = SidebarEdge.Trailing,
                     InitialWidth = preferences.Current.PairingPanelWidth,
                     MinResizeWidth = 280f,
+                    MaxResizeWidth = float.PositiveInfinity,
+                    MinRemainingWidth = 320f,
                     OnWidthChanged = w => preferences.Update(p => p with { PairingPanelWidth = w }),
                     Content = new PairingPanel { Conversation = conversation },
                 },
@@ -464,8 +466,8 @@ internal sealed record PairingRoadmapRow : Widget
     }
 }
 
-/// <summary>The conversation with the agent, read as the assistant chat is, with the agent's
-/// thinking indicator while its next words are on the way.</summary>
+/// <summary>The conversation with the agent, with a typing bubble while its next words are on the
+/// way.</summary>
 internal sealed record PairingConversation : Widget
 {
     public required AgentConversation Conversation { get; init; }
@@ -473,7 +475,6 @@ internal sealed record PairingConversation : Widget
     protected override IWidget Build(Context ctx)
     {
         var conversation = Conversation;
-        var loc = ctx.Localization();
         return new Column
         {
             Gap = Spacing.Lg,
@@ -490,10 +491,7 @@ internal sealed record PairingConversation : Widget
                 new Show
                 {
                     When = conversation.IsComposing,
-                    Then = () => new AssistantThinkingIndicator
-                    {
-                        Label = Prop.Bind<string?>(() => loc.Strings.Value.PairingStatusThinking(conversation.Harness.Label)),
-                    },
+                    Then = () => new AgentChatTypingBubble(),
                 },
             ],
         };
@@ -566,28 +564,18 @@ internal sealed record PairingMessageRow : Widget
                 },
             },
             PairingMessage.SessionOver over => new PairingOutcome { Outcome = over.Outcome },
-            PairingMessage.FromUser { Quote: null } said => new TranscriptMessageRow
+            PairingMessage.FromUser said => new AgentChatUserBubble
             {
                 Text = new State<string>(said.Text),
-                Label = L.T(s => s.AssistantYou),
-                LabelColor = static s => s.Palette.TextSecondary,
+                Attachment = said.Quote is { } quote
+                    ? new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(conversation.Repo.Path, path)) }
+                    : null,
             },
-            PairingMessage.FromUser { Quote: { } quote } said => new Column
+            PairingMessage.Narration narration => new AgentChatReply
             {
-                Gap = Spacing.Sm,
-                CrossAxis = CrossAxisAlignment.Stretch,
-                Children =
-                [
-                    new TranscriptMessageRow
-                    {
-                        Text = new State<string>(said.Text),
-                        Label = L.T(s => s.AssistantYou),
-                        LabelColor = static s => s.Palette.TextSecondary,
-                    },
-                    new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(conversation.Repo.Path, path)) },
-                ],
+                Text = narration.Text,
+                Streams = ReferenceEquals(conversation.Transcript.OpenNarration.Value, narration.Text),
             },
-            PairingMessage.Narration narration => new TranscriptReplyRow { Text = narration.Text, Speaker = conversation.Harness.Label },
             PairingMessage.Notice notice => new TranscriptNoticeRow
             {
                 Text = new State<string>(notice.Text),

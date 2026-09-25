@@ -32,6 +32,10 @@ public sealed record ResizableSidebar : Widget
     public required float InitialWidth { get; init; }
     public float MinResizeWidth { get; init; } = 140f;
     public float MaxResizeWidth { get; init; } = 600f;
+
+    /// <summary>What the sidebar leaves of the window's width however far it is dragged, so it can't
+    /// crowd out what sits beside it.</summary>
+    public float MinRemainingWidth { get; init; }
     public Action<float>? OnWidthChanged { get; init; }
     public Action? OnSplitterDoubleClick { get; init; }
 
@@ -46,6 +50,7 @@ public sealed record ResizableSidebar : Widget
         {
             WidthChanged = OnWidthChanged,
             SplitterAtInlineStart = Edge == SidebarEdge.Trailing,
+            MinRemainingWidth = MinRemainingWidth,
         };
 
         splitter.UseController(ctx.Require<InputSystem>(), () => new SplitterController(
@@ -70,6 +75,7 @@ internal sealed class ResizableSidebarView : ContainerView
 
     public Action<float>? WidthChanged { get; init; }
     public bool SplitterAtInlineStart { get; init; }
+    public float MinRemainingWidth { get; init; }
 
     public ResizableSidebarView(View content, View splitter, float initialWidth, float minWidth, float maxWidth)
     {
@@ -91,10 +97,18 @@ internal sealed class ResizableSidebarView : ContainerView
     public void AdjustWidthByPixels(float dx)
     {
         var signed = SplitterOnRight ? dx : -dx;
-        var newWidth = Math.Clamp((float)Width + signed, _minWidth, _maxWidth);
+        var newWidth = Math.Clamp((float)Width + signed, _minWidth, MaxWidthNow());
         if (Math.Abs(newWidth - (float)Width) < 0.5f) return;
         Width = newWidth;
         WidthChanged?.Invoke(newWidth);
+    }
+
+    private float MaxWidthNow()
+    {
+        if (MinRemainingWidth <= 0f) return _maxWidth;
+        View root = this;
+        while (root.Parent is { } parent) root = parent;
+        return Math.Max(_minWidth, Math.Min(_maxWidth, root.Position.Width - MinRemainingWidth));
     }
 
     protected override void OnLayoutChildren()
