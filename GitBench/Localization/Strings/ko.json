@@ -1085,6 +1085,7 @@
   "pairing.approval_allow_file": "이 파일 허용",
   "pairing.approval_approved_file": "이 파일에 대해 승인됨",
   "pairing.approval_more_lines": "… {count}줄 더 있음",
+  "pairing.allowed_edit": "{what}: 이 파일은 허용됨",
   "pairing.ask_placeholder": "에이전트에게 메시지…",
   "pairing.ask_send": "보내기",
   "shortcuts.command_new_pairing_session": "새 페어 세션",

@@ -189,6 +189,9 @@ internal abstract record PairingMessage
     /// would change, and the answer that covers its files from then on, where it has any.</summary>
     public sealed record Approval(PendingToolApproval Pending, IReadOnlyList<EditPreviewLine> Preview, FileAllowance? Allowance) : PairingMessage;
 
+    /// <summary>An edit to a file the user allowed, let through without asking, and what it changed.</summary>
+    public sealed record AllowedEdit(string Title, IReadOnlyList<EditPreviewLine> Preview) : PairingMessage;
+
 }
 
 internal enum NoticeTone

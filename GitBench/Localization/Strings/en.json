@@ -1086,6 +1086,7 @@
   "pairing.approval_allow_file": "Allow this file",
   "pairing.approval_approved_file": "Approved for this file",
   "pairing.approval_more_lines": "… {count} more lines",
+  "pairing.allowed_edit": "{what}: allowed for this file",
   "pairing.ask_placeholder": "Message the agent…",
   "pairing.ask_send": "Send",
   "shortcuts.command_new_pairing_session": "New pairing session",

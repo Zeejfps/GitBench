@@ -1201,6 +1201,7 @@
   "pairing.approval_allow_file": "Разрешить этот файл",
   "pairing.approval_approved_file": "Разрешено для этого файла",
   "pairing.approval_more_lines": "… ещё строк: {count}",
+  "pairing.allowed_edit": "{what}: разрешено для этого файла",
   "pairing.ask_placeholder": "Напишите агенту…",
   "pairing.ask_send": "Отправить",
   "shortcuts.command_new_pairing_session": "Новый парный сеанс",

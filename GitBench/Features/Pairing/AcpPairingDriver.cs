@@ -307,7 +307,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         if (isEdit && _allowedEdits.Cover(request.Paths))
         {
             var what = request.Title.Length > 0 ? request.Title : string.Join(", ", request.Paths);
-            _conversation.Transcript.AddNotice($"Allowed {what}: the file is allowed for this session.", NoticeTone.Info);
+            _conversation.Transcript.Add(new PairingMessage.AllowedEdit(what, EditPreview.Of(request.Edits, _conversation.Repo.Path)));
             return null;
         }
 
