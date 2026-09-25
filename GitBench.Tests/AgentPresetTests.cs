@@ -77,11 +77,17 @@ public sealed class AgentPresetTests : IDisposable
         Assert.Null(extra["verbose"]);
         Assert.Equal("../other", extra["add-dir"]!.GetValue<string>());
         Assert.Equal("Mine", harness.Label);
+        Assert.Equal("opus", harness.Environment["ANTHROPIC_MODEL"]);
     }
 
     [Fact]
-    public void ClaudeCode_WithNoArguments_SendsNoMeta() =>
-        Assert.Null(Assert.IsType<AcpLaunch.Ready>(AcpHarness.For(AgentPreset.ClaudeCode)).Harness.SessionMetaJson);
+    public void ClaudeCode_WithNoArguments_SendsNoMeta_AndLeavesTheModelToItsSettings()
+    {
+        var harness = Assert.IsType<AcpLaunch.Ready>(AcpHarness.For(AgentPreset.ClaudeCode)).Harness;
+
+        Assert.Null(harness.SessionMetaJson);
+        Assert.Empty(harness.Environment);
+    }
 
     [Theory]
     [InlineData(AgentKind.Codex)]

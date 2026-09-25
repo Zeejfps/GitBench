@@ -21,6 +21,9 @@ internal sealed record AcpHarness(
     AcpHarnessId Id, string Label, string Command, IReadOnlyList<string> Args, string AskingMode, string? SessionMetaJson = null,
     string? ChatMode = null)
 {
+    /// <summary>Variables set on the adapter's process, over the app's own.</summary>
+    public IReadOnlyDictionary<string, string> Environment { get; init; } = new Dictionary<string, string>();
+
     public static readonly AcpHarness ClaudeCode = new(
         new AcpHarnessId("claude"), "Claude Code", "npx", ["-y", "@agentclientprotocol/claude-agent-acp"], "default");
 
@@ -50,6 +53,7 @@ internal sealed record AcpHarness(
                 return new AcpLaunch.Ready(agent with
                 {
                     Id = id, Label = preset.Name, ChatMode = chatMode, SessionMetaJson = ClaudeMeta(flags),
+                    Environment = ClaudeEnvironment(flags),
                 });
             case AgentKind.Codex:
             case AgentKind.Gemini:
@@ -83,6 +87,17 @@ internal sealed record AcpHarness(
         (AgentKind.Gemini, AgentPermission.Bypass) => "yolo",
         _ => throw new ArgumentOutOfRangeException(nameof(permission), (kind, permission), "Unknown permission."),
     };
+
+    // The adapter settles the session's model from ANTHROPIC_MODEL, else the model in the user's
+    // Claude settings, and re-applies it over the SDK's --model; only the variable outranks settings.
+    private static Dictionary<string, string> ClaudeEnvironment(IReadOnlyList<ClaudeFlag> flags)
+    {
+        var environment = new Dictionary<string, string>();
+        foreach (var flag in flags)
+            if (flag is { Name: "model", Value: { } model })
+                environment["ANTHROPIC_MODEL"] = model;
+        return environment;
+    }
 
     // The SDK takes model and effort as options of their own and passes each other flag to the CLI
     // as --name [value]; a null value is a flag with none.

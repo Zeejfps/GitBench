@@ -108,6 +108,7 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
         };
         foreach (var argument in harness.Args) start.ArgumentList.Add(argument);
         foreach (var (key, value) in environment.Variables) start.Environment[key] = value;
+        foreach (var (key, value) in harness.Environment) start.Environment[key] = value;
 
         Process process;
         try
