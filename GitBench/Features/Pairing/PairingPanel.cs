@@ -599,8 +599,8 @@ internal sealed record PairingMessageRow : Widget
         && ReferenceEquals(conversation.Transcript.Messages.LastOrDefault(m => m is PairingMessage.SessionStarted), started);
 }
 
-/// <summary>A tool call the write guard left to the user: what it is, what an edit would change,
-/// and Deny / Approve, with Allow this file for an edit.</summary>
+/// <summary>A tool call the write guard left to the user, in a bubble of the agent's: what it is,
+/// what an edit would change, and the answers.</summary>
 internal sealed record PairingApprovalCard : Widget
 {
     public required PairingMessage.Approval Approval { get; init; }
@@ -622,42 +622,29 @@ internal sealed record PairingApprovalCard : Widget
                     Color = Theme.Color(s => s.Palette.TextSecondary),
                 },
             ];
-        return new Box
+        return new AgentChatBubble
         {
-            Background = Theme.Color(s => s.Palette.SurfaceRaised),
-            BorderSize = BorderSizeStyle.All(1),
-            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Palette.BorderStrong)),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Children =
-            [
-                new Padding
-                {
-                    Amount = PaddingStyle.All(Spacing.Md),
-                    Children =
-                    [
-                        new Column
-                        {
-                            Gap = Spacing.Sm,
-                            CrossAxis = CrossAxisAlignment.Stretch,
-                            Children =
-                            [
-                                new Text
-                                {
-                                    Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingApprovalTitle(pending.ToolName)),
-                                    FontSize = FontSize.Body,
-                                    Weight = FontWeight.Bold,
-                                    Wrap = TextWrap.Wrap,
-                                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                                },
-                                .. details,
-                                Approval.Allowance is { } allowance
-                                    ? new FileAllowanceActions { Pending = pending, Allowance = allowance }
-                                    : new ToolApprovalActions { Pending = pending },
-                            ],
-                        },
-                    ],
-                },
-            ],
+            Trailing = false,
+            Fills = true,
+            Fill = static s => s.Palette.SurfaceRaised,
+            Content = new Column
+            {
+                Gap = Spacing.Md,
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children =
+                [
+                    new Text
+                    {
+                        Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingApprovalTitle(pending.ToolName)),
+                        FontSize = FontSize.Body,
+                        Weight = FontWeight.Bold,
+                        Wrap = TextWrap.Wrap,
+                        Color = Theme.Color(s => s.Palette.TextPrimary),
+                    },
+                    .. details,
+                    new PairingApprovalActions { Pending = pending, Allowance = Approval.Allowance },
+                ],
+            },
         };
     }
 }

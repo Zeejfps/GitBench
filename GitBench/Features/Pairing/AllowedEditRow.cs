@@ -6,7 +6,8 @@ using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>An edit let through because its file is allowed: what it was, and what it changed.</summary>
+/// <summary>An edit let through because its file is allowed, in a bubble of the agent's: what it was,
+/// and what it changed.</summary>
 internal sealed record AllowedEditRow : Widget
 {
     public required PairingMessage.AllowedEdit Edit { get; init; }
@@ -16,21 +17,27 @@ internal sealed record AllowedEditRow : Widget
         var edit = Edit;
         var loc = ctx.Localization();
         IWidget[] preview = edit.Preview.Count > 0 ? [new EditPreviewBlock { Lines = edit.Preview }] : [];
-        return new Column
+        return new AgentChatBubble
         {
-            Gap = Spacing.Xs,
-            CrossAxis = CrossAxisAlignment.Stretch,
-            Children =
-            [
-                new Text
-                {
-                    Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingAllowedEdit(edit.Title)),
-                    FontSize = FontSize.Caption,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.Palette.TextMuted),
-                },
-                .. preview,
-            ],
+            Trailing = false,
+            Fills = preview.Length > 0,
+            Fill = static s => s.Palette.SurfaceRaised,
+            Content = new Column
+            {
+                Gap = Spacing.Md,
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children =
+                [
+                    new Text
+                    {
+                        Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingAllowedEdit(edit.Title)),
+                        FontSize = FontSize.Caption,
+                        Wrap = TextWrap.Wrap,
+                        Color = Theme.Color(s => s.Palette.TextMuted),
+                    },
+                    .. preview,
+                ],
+            },
         };
     }
 }

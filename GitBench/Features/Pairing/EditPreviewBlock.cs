@@ -7,20 +7,23 @@ using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>What an edit the user is asked about would change, as diff lines.</summary>
+/// <summary>What an edit the user is asked about would change, as diff lines in a block framed like
+/// a reply's code block.</summary>
 internal sealed record EditPreviewBlock : Widget
 {
     public required IReadOnlyList<EditPreviewLine> Lines { get; init; }
 
     protected override IWidget Build(Context ctx) => new Box
     {
-        Background = Theme.Color(s => s.DiffContent.Background),
-        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+        Background = Theme.Color(s => s.Markdown.CodeBlockBackground),
+        BorderSize = BorderSizeStyle.All(1),
+        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Markdown.CodeBlockBorder)),
+        BorderRadius = BorderRadiusStyle.All(Radius.Md),
         Children =
         [
             new Padding
             {
-                Amount = PaddingStyle.All(Spacing.Xs),
+                Amount = PaddingStyle.All(Spacing.Sm),
                 Children =
                 [
                     new Column
