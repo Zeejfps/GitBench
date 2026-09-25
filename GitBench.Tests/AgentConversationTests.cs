@@ -138,6 +138,23 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
+    public void ProseAfterAReply_IsNotShown_UntilTheNextTurn()
+    {
+        var transcript = new AgentTranscript();
+        transcript.BeginAgentTurn();
+        transcript.AppendNarration("Looking at the hook.");
+        transcript.AddReply("OK, leaving it out.");
+        transcript.AppendNarration("OK, I've left it out.");
+        transcript.CloseNarration();
+        transcript.BeginAgentTurn();
+        transcript.AppendNarration("Next stop is open.");
+
+        Assert.Equal(
+            ["Looking at the hook.", "OK, leaving it out.", "Next stop is open."],
+            transcript.Messages.Select(m => Assert.IsType<PairingMessage.Narration>(m).Text.Value));
+    }
+
+    [Fact]
     public void ABreakBeforeAnyProse_LeavesTheNextMessageAsItIs()
     {
         var transcript = new AgentTranscript();

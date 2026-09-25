@@ -185,6 +185,7 @@ internal sealed class AgentConversation : IAsyncDisposable
 
     public void BeginTurn()
     {
+        Transcript.BeginAgentTurn();
         if (_phase.Value is AgentPhase.Running) _phase.Value = new AgentPhase.Running(true);
         _session.Value?.Store.MarkTurnStarted();
     }

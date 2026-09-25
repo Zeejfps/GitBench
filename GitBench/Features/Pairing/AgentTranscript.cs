@@ -13,6 +13,7 @@ internal sealed class AgentTranscript
     private readonly ObservableList<PairingMessage> _messages = new();
     private readonly State<State<string>?> _openNarration = new(null);
     private bool _narrationBroken;
+    private bool _repliedThisTurn;
 
     public ObservableList<PairingMessage> Messages => _messages;
 
@@ -21,9 +22,14 @@ internal sealed class AgentTranscript
 
     public int Count => _messages.Count;
 
-    /// <summary>Streams the agent's prose onto the message its current turn is writing.</summary>
+    /// <summary>The agent's turn begins: prose it writes is shown again.</summary>
+    public void BeginAgentTurn() => _repliedThisTurn = false;
+
+    /// <summary>Streams the agent's prose onto the message its current turn is writing. Prose after a
+    /// reply in the same turn is not shown: it recaps the reply the user just read.</summary>
     public void AppendNarration(string text)
     {
+        if (_repliedThisTurn) return;
         if (_openNarration.Value is { } open)
         {
             if (_narrationBroken && text.Trim().Length > 0)
@@ -61,6 +67,7 @@ internal sealed class AgentTranscript
     {
         if (string.IsNullOrWhiteSpace(markdown)) return;
         Add(new PairingMessage.Narration(new State<string>(markdown.Trim())));
+        _repliedThisTurn = true;
     }
 
     public void AddFromUser(string text, CodeQuote? quote = null) => Add(new PairingMessage.FromUser(text, quote));
