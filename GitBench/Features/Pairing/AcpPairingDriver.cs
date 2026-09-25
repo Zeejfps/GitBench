@@ -13,11 +13,11 @@ namespace GitBench.Features.Pairing;
 /// Runs a conversation's agent over ACP: starts the adapter against the app's MCP server, sends the
 /// opening turn, and streams what the agent says into the panel. Each turn after that is what the
 /// user did or said next, so an agent waiting on the user costs nothing. While a pairing session is
-/// live, a turn that ends leaving the user neither a stop nor a reply gets a nudge to carry on, and an
-/// agent that keeps doing that is reported gone from the session. The write guard lives
-/// in the connection; what it refused is shown, and what it has no rule for is asked of the user in
-/// the panel. Each turn runs in the mode its moment calls for: the asking mode while a pairing
-/// session is live, the preset's chat mode otherwise.
+/// live, a turn that ends leaving the user neither a stop nor a reply, through the tools or in prose,
+/// gets a nudge to carry on, and an agent that keeps doing that is reported gone from the session.
+/// The write guard lives in the connection; what it refused is shown, and what it has no rule for is
+/// asked of the user in the panel. Each turn runs in the mode its moment calls for: the asking mode
+/// while a pairing session is live, the preset's chat mode otherwise.
 /// </summary>
 internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 {
@@ -39,6 +39,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private AcpAgentConnection? _connection;
     private Task _run = Task.CompletedTask;
     private int _refusedThisTurn;
+    private int _narratedThisTurn;
 
     private AcpPairingDriver(
         AgentConversation conversation, AgentPrompt? opening, AgentPreset preset, AgentEndpoints endpoints, IServerEnvironment environment,
@@ -156,6 +157,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         while (!_stop.IsCancellationRequested)
         {
             Interlocked.Exchange(ref _refusedThisTurn, 0);
+            Interlocked.Exchange(ref _narratedThisTurn, 0);
             var mode = harness.ModeFor(await OnUi(() => Task.FromResult(_conversation.IsPairing)).ConfigureAwait(false));
             if (mode != current)
             {
@@ -187,7 +189,8 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 
             if (pairing)
             {
-                var handedOver = await OnUi(() => Task.FromResult(_conversation.Session.Value?.Store.HasHandedOver ?? true)).ConfigureAwait(false);
+                var handedOver = Volatile.Read(ref _narratedThisTurn) > 0
+                    || await OnUi(() => Task.FromResult(_conversation.Session.Value?.Store.HasHandedOver ?? true)).ConfigureAwait(false);
                 idle = handedOver ? 0 : idle + 1;
                 if (idle is > 0 and < IdleTurnLimit)
                 {
@@ -235,7 +238,9 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         switch (update)
         {
             case AcpSessionUpdate.MessageChunk chunk:
-                if (chunk.Text.Length > 0) Post(() => _conversation.Transcript.AppendNarration(chunk.Text));
+                if (chunk.Text.Length == 0) break;
+                if (chunk.Text.Trim().Length > 0) Interlocked.Exchange(ref _narratedThisTurn, 1);
+                Post(() => _conversation.Transcript.AppendNarration(chunk.Text));
                 break;
             case AcpSessionUpdate.ToolCall:
                 Post(() => _conversation.Transcript.BreakNarration());
