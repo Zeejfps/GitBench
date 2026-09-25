@@ -6,8 +6,8 @@ using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>Asked before the agent chat is closed or restarted: either way the agent is stopped and
-/// what was said is gone.</summary>
+/// <summary>Asked before something in the agent chat that can't be taken back: closing or restarting
+/// it, or ending the pairing session.</summary>
 internal sealed record ConfirmAgentChatDialog : Widget
 {
     public required string Title { get; init; }
@@ -15,6 +15,8 @@ internal sealed record ConfirmAgentChatDialog : Widget
     public required string Body { get; init; }
 
     public required string ActionLabel { get; init; }
+
+    public string? CancelLabel { get; init; }
 
     public required Action OnClose { get; init; }
 
@@ -25,7 +27,7 @@ internal sealed record ConfirmAgentChatDialog : Widget
         Title = Title,
         OnClose = OnClose,
         Width = DialogFrame.WidthCompact,
-        CancelLabel = ctx.Localization().Strings.Value.PairingKeepTalking,
+        CancelLabel = CancelLabel ?? ctx.Localization().Strings.Value.PairingKeepTalking,
         Action = (ActionLabel, DialogButtonRole.Destructive, () =>
         {
             OnClose();

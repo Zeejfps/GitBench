@@ -187,12 +187,11 @@ internal sealed record PairingSessionPane : Widget
     }
 }
 
-/// <summary>The panel's top band: the agent, whose turn it is, End while a session runs, Restart,
+/// <summary>The panel's top band: the agent, whose turn it is, Restart,
 /// which starts the conversation over with the same agent, and Close, which ends the conversation
 /// and stops the agent.</summary>
 internal sealed record PairingHeader : Widget
 {
-    public const string EndId = "pairing-end";
     public const string RestartId = "pairing-restart";
     public const string CloseId = "pairing-close";
 
@@ -204,7 +203,6 @@ internal sealed record PairingHeader : Widget
         var conversation = Conversation;
         var sessions = ctx.Require<PairingSessions>();
         var bus = ctx.Require<IMessageBus>();
-        var pairing = new Derived<bool>(() => conversation.IsPairing);
         var canRestart = new Derived<bool>(() => PairingSessions.CanRestart(conversation));
         var agent = conversation.Harness.Label;
 
@@ -259,17 +257,6 @@ internal sealed record PairingHeader : Widget
                                 },
                                 new Show
                                 {
-                                    When = pairing,
-                                    Then = () => new ButtonWidget
-                                    {
-                                        Id = EndId,
-                                        Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                        Command = new Command(() => conversation.Session.Value?.Store.EndByUser()),
-                                        Children = [new ButtonLabel { Value = L.T(s => s.PairingEnd) }],
-                                    }.WithController<KbmController>(),
-                                },
-                                new Show
-                                {
                                     When = new Derived<bool>(() => conversation.Harness is PairingHarness.Acp),
                                     Then = () => new ButtonWidget
                                     {
@@ -308,7 +295,6 @@ internal sealed record PairingHeader : Widget
         }.Use(_ =>
         {
             var owned = new SubscriptionGroup();
-            owned.Add(pairing);
             owned.Add(canRestart);
             return owned;
         });
