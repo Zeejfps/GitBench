@@ -47,6 +47,7 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
     private readonly Dictionary<string, string> _announcedServers = new();
     private readonly Queue<string> _stderr = new();
     private string? _sessionId;
+    private IReadOnlySet<string> _modes = new HashSet<string>();
     private int _disposed;
 
     private AcpAgentConnection(TextReader incoming, TextWriter outgoing, Process? process, IAcpPermissionPrompt prompt, string ownServer)
@@ -129,6 +130,8 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
         try
         {
             failure = await connection.OpenAsync(workingDirectory, server, harness.AskingMode, harness.SessionMetaJson, ct).ConfigureAwait(false);
+            if (failure is null && harness.ChatMode is { } chatMode && !connection.Offers(chatMode))
+                failure = $"The agent offers no '{chatMode}' mode.";
         }
         catch
         {
@@ -187,7 +190,8 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
                 return "The agent opened no session.";
             _sessionId = sessionId;
 
-            if (!OffersMode(session, askingMode))
+            _modes = OfferedModes(session);
+            if (!Offers(askingMode))
                 return $"The agent offers no '{askingMode}' mode, so its writes can't be refused.";
             await _rpc.RequestAsync("session/set_mode", new JsonObject
             {
@@ -210,13 +214,29 @@ internal sealed class AcpAgentConnection : IAsyncDisposable, IAcpClientMessages
         }
     }
 
-    private static bool OffersMode(JsonNode session, string mode)
+    private static HashSet<string> OfferedModes(JsonNode session)
     {
-        if (session["modes"]?["availableModes"] is not JsonArray modes) return false;
-        foreach (var offered in modes)
-            if (offered?["id"] is JsonValue id && id.TryGetValue<string>(out var value) && value == mode)
-                return true;
-        return false;
+        var offered = new HashSet<string>(StringComparer.Ordinal);
+        if (session["modes"]?["availableModes"] is not JsonArray modes) return offered;
+        foreach (var mode in modes)
+            if (mode?["id"] is JsonValue id && id.TryGetValue<string>(out var value))
+                offered.Add(value);
+        return offered;
+    }
+
+    /// <summary>Whether the session offered <paramref name="mode"/> when it opened.</summary>
+    public bool Offers(string mode) => _modes.Contains(mode);
+
+    /// <summary>Puts the session in <paramref name="mode"/>, which it must offer.</summary>
+    public async Task SetModeAsync(string mode, CancellationToken ct)
+    {
+        var sessionId = _sessionId ?? throw new InvalidOperationException("The session is not open.");
+        if (!Offers(mode)) throw new InvalidOperationException($"The agent offers no '{mode}' mode.");
+        await _rpc.RequestAsync("session/set_mode", new JsonObject
+        {
+            ["sessionId"] = sessionId,
+            ["modeId"] = mode,
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>Sends one user turn and completes when the agent ends it.</summary>

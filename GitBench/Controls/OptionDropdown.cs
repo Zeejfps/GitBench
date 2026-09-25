@@ -9,7 +9,7 @@ using ZGF.Observable;
 
 namespace GitBench.Controls;
 
-internal sealed record OptionDropdown<T> : Widget where T : struct, Enum
+internal sealed record OptionDropdown<T> : Widget where T : notnull
 {
     public required State<T> Selected { get; init; }
     public required (T Value, string Label, string Detail)[] Options { get; init; }

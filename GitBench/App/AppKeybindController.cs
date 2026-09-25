@@ -1,7 +1,6 @@
 using GitBench.Features.Assistant;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Notifications;
-using GitBench.Features.AgentConnections.Acp;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Search;
@@ -92,7 +91,7 @@ internal sealed class AppKeybindController : KeyboardMouseController, IDisposabl
         if (_keys.Matches(KeyCommand.ToggleAssistant, e.Key, e.Modifiers))
         {
             // No menu to ask from here: the first agent on offer until one is picked.
-            if (_chat.Press() is AgentChatPress.NeedsAgent) _chat.Open(AcpHarness.ClaudeCode);
+            if (_chat.Press() is AgentChatPress.NeedsAgent) _chat.Open(_chat.Default);
             e.Consume();
             return;
         }

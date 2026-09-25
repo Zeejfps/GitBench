@@ -1,3 +1,4 @@
+using GitBench.Features.AgentConnections;
 using GitBench.Features.LocalChanges;
 using GitBench.Input;
 using GitBench.Localization;
@@ -42,9 +43,12 @@ public sealed record Preferences
     /// <summary>The command a terminal pairing session starts its agent with.</summary>
     public string PairingTerminalCommand { get; init; } = Features.Pairing.TerminalAgentCommand.ClaudeCode;
 
-    /// <summary>The id of the ACP harness the chat button opens a conversation with; null until one
-    /// is picked.</summary>
+    /// <summary>The id of the agent preset the chat button opens a conversation with; null until
+    /// one is picked.</summary>
     public string? ChatAgent { get; init; }
+
+    /// <summary>The agents on offer, in the order they are listed. Never empty.</summary>
+    public IReadOnlyList<AgentPreset> AgentPresets { get; init; } = AgentPreset.BuiltIn;
     public float CommitDetailsWidth { get; init; } = 380f;
     public float CommitDetailsSplitFraction { get; init; } = 2f / 3f;
 

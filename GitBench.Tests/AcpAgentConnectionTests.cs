@@ -81,6 +81,28 @@ public sealed class AcpAgentConnectionTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SetMode_MovesTheSessionToAModeItOffered_AndRefusesOneItDidNot()
+    {
+        Assert.Null(await _connection.OpenAsync("C:/repo", Server, "default", null, CancellationToken.None).WaitAsync(Deadline));
+
+        await _connection.SetModeAsync("auto", CancellationToken.None).WaitAsync(Deadline);
+
+        Assert.Equal("auto", _agent.Params("session/set_mode")!["modeId"]!.GetValue<string>());
+        Assert.True(_connection.Offers("default"));
+        Assert.False(_connection.Offers("yolo"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _connection.SetModeAsync("yolo", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Open_SendsTheSessionMeta()
+    {
+        const string meta = """{"claudeCode":{"options":{"model":"opus"}}}""";
+        Assert.Null(await _connection.OpenAsync("C:/repo", Server, "default", meta, CancellationToken.None).WaitAsync(Deadline));
+
+        Assert.Equal("opus", _agent.Params("session/new")!["_meta"]!["claudeCode"]!["options"]!["model"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Prompt_StreamsUpdates_AndPutsAWriteToTheUser()
     {
         Assert.Null(await _connection.OpenAsync("C:/repo", Server, "default", null, CancellationToken.None).WaitAsync(Deadline));

@@ -1,4 +1,4 @@
-using GitBench.Features.AgentConnections.Acp;
+using GitBench.Features.AgentConnections;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.Pairing;
@@ -20,7 +20,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
 
     private AgentConversation Create(PairingHarness? harness = null)
     {
-        var conversation = new AgentConversation(_repo, harness ?? new PairingHarness.Acp(AcpHarness.ClaudeCode), (goal, transcript) =>
+        var conversation = new AgentConversation(_repo, harness ?? new PairingHarness.Acp(AgentPreset.ClaudeCode), (goal, transcript) =>
         {
             var presentation = new RecordingPairingPresentation();
             var store = new PairingStore(goal, "Claude Code", transcript, presentation, new ScriptedWorkspace(), _dispatcher, _clock);

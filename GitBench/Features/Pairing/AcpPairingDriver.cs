@@ -14,7 +14,8 @@ namespace GitBench.Features.Pairing;
 /// turn that ends gets a nudge to carry on, and an agent that stops calling tools is reported gone
 /// from the session; between sessions each turn is what the user says next. The write guard lives
 /// in the connection; what it refused is shown, and what it has no rule for is asked of the user in
-/// the panel.
+/// the panel. Each turn runs in the mode its moment calls for: the asking mode while a pairing
+/// session is live, the preset's chat mode otherwise.
 /// </summary>
 internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 {
@@ -25,7 +26,8 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 
     private readonly AgentConversation _conversation;
     private readonly AgentPrompt? _opening;
-    private readonly AcpHarness _harness;
+    private readonly AgentPreset _preset;
+    private readonly string _label;
     private readonly AgentEndpoints _endpoints;
     private readonly IServerEnvironment _environment;
     private readonly IUiDispatcher _dispatcher;
@@ -37,12 +39,13 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private int _refusedThisTurn;
 
     private AcpPairingDriver(
-        AgentConversation conversation, AgentPrompt? opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
+        AgentConversation conversation, AgentPrompt? opening, AgentPreset preset, AgentEndpoints endpoints, IServerEnvironment environment,
         IUiDispatcher dispatcher)
     {
         _conversation = conversation;
         _opening = opening;
-        _harness = harness;
+        _preset = preset;
+        _label = preset.Name;
         _endpoints = endpoints;
         _environment = environment;
         _dispatcher = dispatcher;
@@ -51,10 +54,10 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     /// <summary>Starts the agent for a conversation, with <paramref name="opening"/> as its first
     /// turn, or with none to wait for the user's. UI thread.</summary>
     public static AcpPairingDriver Start(
-        AgentConversation conversation, AgentPrompt? opening, AcpHarness harness, AgentEndpoints endpoints, IServerEnvironment environment,
+        AgentConversation conversation, AgentPrompt? opening, AgentPreset preset, AgentEndpoints endpoints, IServerEnvironment environment,
         IUiDispatcher dispatcher)
     {
-        var driver = new AcpPairingDriver(conversation, opening, harness, endpoints, environment, dispatcher);
+        var driver = new AcpPairingDriver(conversation, opening, preset, endpoints, environment, dispatcher);
         driver._run = driver.RunAsync();
         return driver;
     }
@@ -80,6 +83,19 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     {
         try
         {
+            AcpHarness harness;
+            switch (AcpHarness.For(_preset))
+            {
+                case AcpLaunch.Ready ready:
+                    harness = ready.Harness;
+                    break;
+                case AcpLaunch.Invalid invalid:
+                    Post(() => _conversation.Fail($"{_label} could not be started. {Describe(invalid.Problem)}"));
+                    return;
+                default:
+                    throw new InvalidOperationException("Unhandled launch.");
+            }
+
             Uri url;
             switch (await OnUi(() => _endpoints.EnsureAsync(_stop.Token)).ConfigureAwait(false))
             {
@@ -94,14 +110,14 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
             }
 
             AcpAgentConnection connection;
-            switch (await AcpAgentConnection.StartAsync(_harness, _conversation.Repo.Path, new AcpMcpServer(ServerName, url), this, _environment, _stop.Token)
+            switch (await AcpAgentConnection.StartAsync(harness, _conversation.Repo.Path, new AcpMcpServer(ServerName, url), this, _environment, _stop.Token)
                         .ConfigureAwait(false))
             {
                 case AcpStart.Started started:
                     connection = started.Connection;
                     break;
                 case AcpStart.Failed failed:
-                    Post(() => _conversation.Fail($"{_harness.Label} could not be started. {failed.Reason}"));
+                    Post(() => _conversation.Fail($"{_label} could not be started. {failed.Reason}"));
                     return;
                 default:
                     throw new InvalidOperationException("Unhandled start outcome.");
@@ -114,7 +130,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
             _ = connection.Closed.ContinueWith(_ => OnClosed(connection), TaskScheduler.Default);
             Post(_conversation.MarkRunning);
 
-            await Converse(connection).ConfigureAwait(false);
+            await Converse(connection, harness).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested)
         {
@@ -125,18 +141,26 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         }
         catch (AcpRpcException e)
         {
-            Post(() => _conversation.Fail($"{_harness.Label} failed: {e.Message}"));
+            Post(() => _conversation.Fail($"{_label} failed: {e.Message}"));
         }
     }
 
-    private async Task Converse(AcpAgentConnection connection)
+    private async Task Converse(AcpAgentConnection connection, AcpHarness harness)
     {
         var prompt = _opening ?? await _inbox.Reader.ReadAsync(_stop.Token).ConfigureAwait(false);
         var idle = 0;
+        var current = harness.AskingMode;
         while (!_stop.IsCancellationRequested)
         {
             var before = ToolCallCount;
             Interlocked.Exchange(ref _refusedThisTurn, 0);
+            var mode = harness.ModeFor(await OnUi(() => Task.FromResult(_conversation.IsPairing)).ConfigureAwait(false));
+            if (mode != current)
+            {
+                await connection.SetModeAsync(mode, _stop.Token).ConfigureAwait(false);
+                current = mode;
+            }
+
             Post(_conversation.BeginTurn);
             var reason = await connection.PromptAsync(Content(connection, prompt), _stop.Token).ConfigureAwait(false);
             Post(_conversation.EndTurn);
@@ -145,7 +169,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
             var pairing = await OnUi(() => Task.FromResult(_conversation.IsPairing)).ConfigureAwait(false);
             if (reason == AcpStopReason.Refusal)
             {
-                var refused = $"{_harness.Label} refused to continue.";
+                var refused = $"{_label} refused to continue.";
                 if (pairing) Post(() => _conversation.Session.Value?.Store.MarkDisconnected(refused));
                 else Post(() => _conversation.Transcript.AddNotice(refused, NoticeTone.Error));
                 pairing = false;
@@ -170,7 +194,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
                     continue;
                 }
 
-                Post(() => _conversation.Session.Value?.Store.MarkDisconnected($"{_harness.Label} stopped calling the pairing tools."));
+                Post(() => _conversation.Session.Value?.Store.MarkDisconnected($"{_label} stopped calling the pairing tools."));
             }
 
             idle = 0;
@@ -237,6 +261,13 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         Post(() => _conversation.Transcript.AddNotice($"Refused {Describe(request.Kind)}: {what}", NoticeTone.Refused));
     }
 
+    private static string Describe(AgentArgumentsProblem problem) => problem switch
+    {
+        AgentArgumentsProblem.UnclosedQuote => "Its extra arguments leave a quote open.",
+        AgentArgumentsProblem.NotAFlag notAFlag => $"Its extra argument '{notAFlag.Token}' is not a --flag.",
+        _ => throw new ArgumentOutOfRangeException(nameof(problem), problem, "Unknown problem."),
+    };
+
     private static string Describe(AcpToolKind kind) => kind switch
     {
         AcpToolKind.Edit => "an edit",
@@ -274,7 +305,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     {
         if (_stop.IsCancellationRequested) return;
         var tail = connection.StderrTail;
-        Post(() => _conversation.Fail(tail.Length == 0 ? $"{_harness.Label} exited." : $"{_harness.Label} exited.\n{tail}"));
+        Post(() => _conversation.Fail(tail.Length == 0 ? $"{_label} exited." : $"{_label} exited.\n{tail}"));
     }
 
     private void Post(Action action) => _dispatcher.Post(action);

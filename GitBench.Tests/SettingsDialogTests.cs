@@ -36,6 +36,8 @@ public sealed class SettingsDialogTests : IDisposable
     private readonly FakeAssistantSessionStore _store = new();
     private readonly MessageBus _bus = new();
     private readonly KeyMap _keys = new();
+    private readonly TempDir _dir = new("gitbench-settings-dialog-");
+    private readonly PreferencesService _preferences;
     private readonly LocalizationService _loc;
     private readonly AssistantViewModel _chat;
     private bool _closed;
@@ -45,6 +47,7 @@ public sealed class SettingsDialogTests : IDisposable
     {
         _loc = new LocalizationService(_locale);
         _chat = new AssistantViewModel(_store, _loc);
+        _preferences = new PreferencesService(new Preferences(), Path.Combine(_dir.Path, "prefs.json"));
         _dialog = new SettingsDialog { OnClose = () => _closed = true };
     }
 
@@ -74,6 +77,7 @@ public sealed class SettingsDialogTests : IDisposable
         ctx.AddService(_chat);
         ctx.AddService(_keys);
         ctx.AddService<IKeyMap>(_keys);
+        ctx.AddService(_preferences);
     }
 
     [Fact]
@@ -312,9 +316,13 @@ public sealed class SettingsDialogTests : IDisposable
             if (rect.Bottom >= 0 && rect.Top <= height) continue;
 
             h.MoveTo(provider.X, provider.Y);
-            for (var i = 0; i < 20; i++) h.Scroll(0f, -1f);
-            h.Layout();
-            rect = h.Get(id).Position;
+            for (var i = 0; i < 60 && !(rect.Bottom >= 0 && rect.Top <= height); i++)
+            {
+                h.Scroll(0f, rect.Bottom < 0 ? -1f : 1f);
+                h.Layout();
+                rect = h.Get(id).Position;
+            }
+
             Assert.True(rect.Bottom >= 0 && rect.Top <= height, $"{id}: {rect} is not reachable in {height} tall");
         }
     }
@@ -470,6 +478,8 @@ public sealed class SettingsDialogTests : IDisposable
 
     public void Dispose()
     {
+        _preferences.Dispose();
+        _dir.Dispose();
         _chat.Dispose();
         _store.Dispose();
         _loc.Dispose();

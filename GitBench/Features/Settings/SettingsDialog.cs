@@ -28,6 +28,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
     public const string ConnectionsTabId = "settings-tab-connections";
 
     internal const float DialogHeight = 660f;
+    internal const float DialogWidth = 760f;
 
     public required Action OnClose { get; init; }
     public bool HostedInWindow { get; init; }
@@ -41,7 +42,7 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
 
     protected override IWidget Build(Context ctx, SettingsDialogState state) => new Box
     {
-        Width = HostedInWindow ? default(Prop<float>) : DialogFrame.WidthWide,
+        Width = HostedInWindow ? default(Prop<float>) : DialogWidth,
         Height = HostedInWindow ? default(Prop<float>) : DialogHeight,
         BorderSize = BorderSizeStyle.All(1),
         BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
@@ -186,6 +187,15 @@ internal sealed record SettingsDialog : Widget<SettingsDialogState>
                     [
                         new SettingsSectionHeader { Value = L.T(s => s.AssistantSettingsTitle) },
                         new AssistantSettingsCard(),
+                        new SettingsSectionHeader { Value = L.T(s => s.AgentPresetsTitle) },
+                        new Text
+                        {
+                            Value = L.T(s => s.AgentPresetsDesc),
+                            Wrap = TextWrap.Wrap,
+                            FontSize = FontSize.Caption,
+                            Color = Theme.Color(s => s.Palette.TextMuted),
+                        },
+                        new AgentPresetsSettingsSection(),
                     ],
                 },
             }),

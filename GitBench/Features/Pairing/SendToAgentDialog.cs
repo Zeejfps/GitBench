@@ -2,7 +2,6 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.AgentConnections;
-using GitBench.Features.AgentConnections.Acp;
 using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -55,16 +54,16 @@ internal sealed record SendToAgentDialog : Widget
         var repo = repos.Active.Value;
         var ongoing = repo is null ? null : sessions.LiveConversation(repo.Id);
         var question = new State<string>(Question);
-        var agent = new State<PairingAgentChoice>(ChoiceOf(chat.Remembered));
+        var agent = new State<AgentPreset>(chat.Default);
         var error = new State<string?>(repo is null ? s.PairingNoRepo : null);
         var canSend = new Derived<bool>(() => question.Value.Trim().Length > 0 && repos.Active.Value is not null);
 
         void Send()
         {
             if (repos.Active.Value is not { } target || question.Value.Trim().Length == 0) return;
-            var harness = NewPairingSessionDialog.HarnessOf(agent.Value);
-            if (ongoing is null) preferences.Update(p => p with { ChatAgent = harness.Id.Value });
-            sessions.Ask(target, question.Value, quote, ongoing?.Harness ?? new PairingHarness.Acp(harness));
+            var preset = agent.Value;
+            if (ongoing is null) preferences.Update(p => p with { ChatAgent = preset.Id.Value });
+            sessions.Ask(target, question.Value, quote, ongoing?.Harness ?? new PairingHarness.Acp(preset));
             onClose();
         }
 
@@ -82,15 +81,10 @@ internal sealed record SendToAgentDialog : Widget
             : new LabeledRow
             {
                 Label = s.PairingAgent,
-                Value = new OptionDropdown<PairingAgentChoice>
+                Value = new OptionDropdown<AgentPreset>
                 {
                     Selected = agent,
-                    Options =
-                    [
-                        (PairingAgentChoice.ClaudeCode, AcpHarness.ClaudeCode.Label, s.PairingAgentClaudeDetail),
-                        (PairingAgentChoice.Codex, AcpHarness.Codex.Label, s.PairingAgentCodexDetail),
-                        (PairingAgentChoice.Gemini, AcpHarness.Gemini.Label, s.PairingAgentGeminiDetail),
-                    ],
+                    Options = [.. chat.Presets.Select(p => (p, p.Name, AgentKinds.Detail(p.Kind, s)))],
                 },
             });
         if (ongoing is null && endpoints.WillEnable) body.Add(new DialogBodyText { Value = s.PairingEnablesConnections });
@@ -106,11 +100,6 @@ internal sealed record SendToAgentDialog : Widget
             Body = [.. body],
         };
     }
-
-    private static PairingAgentChoice ChoiceOf(AcpHarness? harness) =>
-        harness?.Id == AcpHarness.Codex.Id ? PairingAgentChoice.Codex
-        : harness?.Id == AcpHarness.Gemini.Id ? PairingAgentChoice.Gemini
-        : PairingAgentChoice.ClaudeCode;
 }
 
 /// <summary>Code sent to the agent, as the user sees it went: where it is, then the first lines of it.</summary>

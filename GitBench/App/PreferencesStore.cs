@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GitBench.Features.AgentConnections;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.LocalChanges;
 using GitBench.Infrastructure;
@@ -46,6 +47,7 @@ public static class PreferencesStore
         public float? PairingPanelWidth { get; set; }
         public string? PairingTerminalCommand { get; set; }
         public string? ChatAgent { get; set; }
+        public List<AgentPresetShape>? AgentPresets { get; set; }
         public float? CommitDetailsWidth { get; set; } = 380f;
         public float? FileBrowserWidth { get; set; } = 260f;
         public float? CommitDetailsSplitFraction { get; set; } = 2f / 3f;
@@ -99,6 +101,17 @@ public static class PreferencesStore
         public string? BaseUrl { get; set; }
     }
 
+    // Agent and permission as free text: a preset this version can't run drops that one preset,
+    // not the whole file.
+    internal sealed class AgentPresetShape
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Agent { get; set; }
+        public string? Permission { get; set; }
+        public List<string>? Arguments { get; set; }
+    }
+
     // Both as free text: a command or key this version no longer knows drops that one entry, not
     // the whole file.
     internal sealed class KeyBindingShape
@@ -143,6 +156,7 @@ public static class PreferencesStore
                     ? defaults.PairingTerminalCommand
                     : file.PairingTerminalCommand,
                 ChatAgent = string.IsNullOrWhiteSpace(file.ChatAgent) ? null : file.ChatAgent,
+                AgentPresets = ReadAgentPresets(file),
                 CommitDetailsWidth = file.CommitDetailsWidth is > 0 ? file.CommitDetailsWidth.Value : defaults.CommitDetailsWidth,
                 FileBrowserWidth = file.FileBrowserWidth is > 0 ? file.FileBrowserWidth.Value : defaults.FileBrowserWidth,
                 CommitDetailsSplitFraction = file.CommitDetailsSplitFraction is > 0 ? file.CommitDetailsSplitFraction.Value : defaults.CommitDetailsSplitFraction,
@@ -190,6 +204,16 @@ public static class PreferencesStore
             PairingPanelWidth = preferences.PairingPanelWidth,
             PairingTerminalCommand = preferences.PairingTerminalCommand,
             ChatAgent = preferences.ChatAgent,
+            AgentPresets = preferences.AgentPresets
+                .Select(p => new AgentPresetShape
+                {
+                    Id = p.Id.Value,
+                    Name = p.Name,
+                    Agent = p.Kind.ToString(),
+                    Permission = p.Permission.ToString(),
+                    Arguments = [.. p.Arguments],
+                })
+                .ToList(),
             CommitDetailsWidth = preferences.CommitDetailsWidth,
             FileBrowserWidth = preferences.FileBrowserWidth,
             CommitDetailsSplitFraction = preferences.CommitDetailsSplitFraction,
@@ -216,6 +240,25 @@ public static class PreferencesStore
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
         AtomicFile.WriteAllText(path, json);
+    }
+
+    // A preset survives only whole: an id not already taken, a name, a known agent and permission,
+    // and arguments that agent can take. A file with none left reads as the built-in presets.
+    private static IReadOnlyList<AgentPreset> ReadAgentPresets(FileShape file)
+    {
+        var presets = new List<AgentPreset>();
+        foreach (var entry in file.AgentPresets ?? [])
+        {
+            if (entry.Id is not { Length: > 0 } id || presets.Any(p => p.Id.Value == id)) continue;
+            if (entry.Name?.Trim() is not { Length: > 0 } name) continue;
+            if (!Enum.TryParse<AgentKind>(entry.Agent, ignoreCase: true, out var kind) || !Enum.IsDefined(kind)) continue;
+            if (!Enum.TryParse<AgentPermission>(entry.Permission, ignoreCase: true, out var permission) || !Enum.IsDefined(permission)) continue;
+            var arguments = entry.Arguments ?? [];
+            if (arguments.Any(a => a is null) || AgentArguments.Check(arguments, kind) is not null) continue;
+            presets.Add(new AgentPreset(new AgentPresetId(id), name, kind, permission, arguments));
+        }
+
+        return presets.Count > 0 ? presets : AgentPreset.BuiltIn;
     }
 
     // An entry survives only whole: a known command with at least one readable key. A command that

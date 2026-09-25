@@ -20,10 +20,11 @@ internal abstract record PairingHarness
 {
     public abstract string Label { get; }
 
-    /// <summary>An agent the app runs over ACP, with the write guard enforced by the app.</summary>
-    public sealed record Acp(AcpHarness Harness) : PairingHarness
+    /// <summary>An agent the app runs over ACP from a preset, with the write guard enforced by the
+    /// app.</summary>
+    public sealed record Acp(AgentPreset Preset) : PairingHarness
     {
-        public override string Label => Harness.Label;
+        public override string Label => Preset.Name;
     }
 
     /// <summary>An agent CLI started in a terminal tab from a command template. Nothing the app
@@ -148,10 +149,10 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         return Open(repo, harness, new AgentOpening.Chat(text.Trim(), quote));
     }
 
-    /// <summary>A new conversation with <paramref name="harness"/> that waits for the user to say
+    /// <summary>A new conversation with <paramref name="preset"/> that waits for the user to say
     /// something, in place of the repository's conversation if it has one.</summary>
-    public AgentConversation OpenChat(Repo repo, AcpHarness harness) =>
-        Open(repo, new PairingHarness.Acp(harness), new AgentOpening.Blank());
+    public AgentConversation OpenChat(Repo repo, AgentPreset preset) =>
+        Open(repo, new PairingHarness.Acp(preset), new AgentOpening.Blank());
 
     private AgentConversation Open(Repo repo, PairingHarness harness, AgentOpening opening)
     {
@@ -258,7 +259,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
 
             IAgentDriver driver = harness switch
             {
-                PairingHarness.Acp acp => AcpPairingDriver.Start(conversation, first, acp.Harness, endpoints, environment, dispatcher),
+                PairingHarness.Acp acp => AcpPairingDriver.Start(conversation, first, acp.Preset, endpoints, environment, dispatcher),
                 PairingHarness.Terminal terminal => TerminalPairingDriver.Start(
                     conversation, first ?? throw new InvalidOperationException("A terminal agent opens on a goal or a message."), terminal.Name, terminal.Template, endpoints, terminals, launches, navigator, dispatcher),
                 _ => throw new ArgumentOutOfRangeException(nameof(harness), harness, "Unknown harness."),

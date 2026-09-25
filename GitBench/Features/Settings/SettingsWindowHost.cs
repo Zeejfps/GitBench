@@ -51,7 +51,7 @@ internal sealed record SettingsWindowHost : Widget
             }
 
             var size = context.Require<IWindowCoordinates>().ToScreenPoints(
-                new CanvasRect(0, 0, DialogFrame.WidthWide + ShadowPadding * 2,
+                new CanvasRect(0, 0, SettingsDialog.DialogWidth + ShadowPadding * 2,
                     SettingsDialog.DialogHeight + ShadowPadding * 2));
             ISecondaryWindow? opened = null;
             opened = context.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest

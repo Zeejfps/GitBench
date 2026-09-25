@@ -1,5 +1,5 @@
 using GitBench.App;
-using GitBench.Features.AgentConnections.Acp;
+using GitBench.Features.AgentConnections;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -65,20 +65,20 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void PickingAnAgent_OpensABlankConversationOnScreen_AndRemembersIt()
     {
-        var conversation = _chat.Open(AcpHarness.Codex);
+        var conversation = _chat.Open(AgentPreset.Codex);
 
         var (harness, opening, opened) = Assert.Single(_opened);
         Assert.Same(opened, conversation);
-        Assert.Equal(new PairingHarness.Acp(AcpHarness.Codex), harness);
+        Assert.Equal(new PairingHarness.Acp(AgentPreset.Codex), harness);
         Assert.IsType<AgentOpening.Blank>(opening);
         Assert.Same(conversation, _sessions.Shown.Value);
-        Assert.Equal(AcpHarness.Codex, _chat.Remembered);
+        Assert.Equal(AgentPreset.Codex, _chat.Remembered);
     }
 
     [Fact]
     public void PressingAgain_HidesAndShowsTheConversation_WithoutEndingIt()
     {
-        var conversation = _chat.Open(AcpHarness.ClaudeCode)!;
+        var conversation = _chat.Open(AgentPreset.ClaudeCode)!;
 
         Assert.IsType<AgentChatPress.Existing>(_chat.Press());
         Assert.Null(_sessions.Shown.Value);
@@ -93,7 +93,7 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void RevealingAHiddenConversation_ShowsIt_AndRevealingAgainKeepsItUp()
     {
-        var conversation = _chat.Open(AcpHarness.ClaudeCode)!;
+        var conversation = _chat.Open(AgentPreset.ClaudeCode)!;
         _sessions.HidePanel(RepoId);
 
         _chat.Reveal();
@@ -105,17 +105,17 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void WithAnAgentRemembered_APress_OpensAConversationWithIt()
     {
-        _preferences.Update(p => p with { ChatAgent = AcpHarness.Gemini.Id.Value });
+        _preferences.Update(p => p with { ChatAgent = AgentPreset.Gemini.Id.Value });
 
         var opened = Assert.IsType<AgentChatPress.Opened>(_chat.Press());
 
-        Assert.Equal(new PairingHarness.Acp(AcpHarness.Gemini), opened.Conversation.Harness);
+        Assert.Equal(new PairingHarness.Acp(AgentPreset.Gemini), opened.Conversation.Harness);
     }
 
     [Fact]
     public void AskingInAHiddenConversation_PutsItBackOnScreen()
     {
-        var conversation = _chat.Open(AcpHarness.ClaudeCode)!;
+        var conversation = _chat.Open(AgentPreset.ClaudeCode)!;
         _sessions.HidePanel(RepoId);
 
         _sessions.Ask(_registry.Active.Value!, "explain this", null, conversation.Harness);
@@ -126,14 +126,14 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void PickingAnotherAgent_ReplacesTheConversation_AndTheMenuMarksIt()
     {
-        var first = _chat.Open(AcpHarness.ClaudeCode)!;
+        var first = _chat.Open(AgentPreset.ClaudeCode)!;
 
-        var second = _chat.Open(AcpHarness.Codex)!;
+        var second = _chat.Open(AgentPreset.Codex)!;
 
         Assert.NotSame(first, second);
         Assert.Same(second, _sessions.Shown.Value);
         var marked = Assert.Single(_chat.AgentMenu(), item => item.Checked);
-        Assert.Equal(AcpHarness.Codex.Label, marked.Label);
+        Assert.Equal(AgentPreset.Codex.Name, marked.Label);
     }
 
     [Fact]
@@ -146,13 +146,13 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void AskingWithAnAgentRemembered_OpensAConversationOnTheQuestion()
     {
-        _preferences.Update(p => p with { ChatAgent = AcpHarness.Codex.Id.Value });
+        _preferences.Update(p => p with { ChatAgent = AgentPreset.Codex.Id.Value });
 
         var asked = Assert.IsType<AgentChatAsk.Asked>(_chat.Ask("What could break here?", null));
 
         var (harness, opening, conversation) = Assert.Single(_opened);
         Assert.Same(conversation, asked.Conversation);
-        Assert.Equal(new PairingHarness.Acp(AcpHarness.Codex), harness);
+        Assert.Equal(new PairingHarness.Acp(AgentPreset.Codex), harness);
         Assert.Equal("What could break here?", Assert.IsType<AgentOpening.Chat>(opening).Text);
         Assert.Same(conversation, _sessions.Shown.Value);
     }
@@ -160,7 +160,7 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void AskingWhileAConversationIsHidden_SaysItThere_AndShowsIt()
     {
-        var conversation = _chat.Open(AcpHarness.ClaudeCode)!;
+        var conversation = _chat.Open(AgentPreset.ClaudeCode)!;
         conversation.MarkRunning();
         _sessions.HidePanel(RepoId);
 
@@ -178,7 +178,7 @@ public sealed class AgentChatTests : IAsyncDisposable
     {
         AgentConversation? carried = null;
 
-        var codex = Assert.Single(_chat.AgentMenu(conversation => carried = conversation), i => i.Label == AcpHarness.Codex.Label);
+        var codex = Assert.Single(_chat.AgentMenu(conversation => carried = conversation), i => i.Label == AgentPreset.Codex.Name);
         codex.OnSelected();
 
         Assert.NotNull(carried);
@@ -188,10 +188,10 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void PickingTheSameAgent_KeepsTheConversation()
     {
-        var first = _chat.Open(AcpHarness.ClaudeCode)!;
+        var first = _chat.Open(AgentPreset.ClaudeCode)!;
         _sessions.HidePanel(RepoId);
 
-        Assert.Same(first, _chat.Open(AcpHarness.ClaudeCode));
+        Assert.Same(first, _chat.Open(AgentPreset.ClaudeCode));
         Assert.Same(first, _sessions.Shown.Value);
         Assert.Single(_opened);
     }

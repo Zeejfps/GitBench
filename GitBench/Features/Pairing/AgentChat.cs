@@ -1,7 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.AgentConnections;
-using GitBench.Features.AgentConnections.Acp;
 using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -64,9 +63,16 @@ internal sealed class AgentChat : IDisposable
     /// <summary>Whether a repository is on screen to talk about.</summary>
     public IReadable<bool> IsAvailable => _available;
 
-    /// <summary>The agent picked last, if it is still one the app runs.</summary>
-    public AcpHarness? Remembered =>
-        _preferences.Current.ChatAgent is { } id ? AcpHarness.Find(new AcpHarnessId(id)) : null;
+    /// <summary>The presets to pick an agent from.</summary>
+    public IReadOnlyList<AgentPreset> Presets => _preferences.Current.AgentPresets;
+
+    /// <summary>The preset picked last, if it is still there.</summary>
+    public AgentPreset? Remembered =>
+        _preferences.Current.ChatAgent is { } id ? Presets.FirstOrDefault(p => p.Id.Value == id) : null;
+
+    /// <summary>The preset to start with when there is no way to ask: the one picked last, else the
+    /// first on offer.</summary>
+    public AgentPreset Default => Remembered ?? (Presets.Count > 0 ? Presets[0] : AgentPreset.ClaudeCode);
 
     /// <summary>Shows or hides the repository's conversation, or opens one with the agent picked
     /// last.</summary>
@@ -90,20 +96,20 @@ internal sealed class AgentChat : IDisposable
             : new AgentChatPress.NeedsAgent();
     }
 
-    /// <summary>Shows the repository's conversation with <paramref name="harness"/>, opening one
+    /// <summary>Shows the repository's conversation with <paramref name="preset"/>, opening one
     /// in place of a conversation with another agent, and remembers the pick.</summary>
-    public AgentConversation? Open(AcpHarness harness)
+    public AgentConversation? Open(AgentPreset preset)
     {
         if (_repos.Active.Value is not { } repo) return null;
-        _preferences.Update(p => p with { ChatAgent = harness.Id.Value });
-        if (_sessions.ConversationOf(repo.Id) is { } existing && (Runs(existing, harness) || existing.IsPairing))
+        _preferences.Update(p => p with { ChatAgent = preset.Id.Value });
+        if (_sessions.ConversationOf(repo.Id) is { } existing && (Runs(existing, preset) || existing.IsPairing))
         {
             _sessions.ShowPanel(repo.Id);
             return existing;
         }
 
         var announce = _endpoints.WillEnable;
-        var conversation = _sessions.OpenChat(repo, harness);
+        var conversation = _sessions.OpenChat(repo, preset);
         if (announce) conversation.Transcript.AddNotice(_loc.Strings.Value.AgentChatConnectionsOn, NoticeTone.Info);
         return conversation;
     }
@@ -128,24 +134,25 @@ internal sealed class AgentChat : IDisposable
     public IReadOnlyList<RepoBarContextMenu.Item> AgentMenu(Action<AgentConversation>? then = null)
     {
         var current = _repos.Active.Value is { } repo ? _sessions.ConversationOf(repo.Id) : null;
-        var marked = current is { IsGone: false, Harness: PairingHarness.Acp acp } ? acp.Harness.Id : Remembered?.Id;
+        var marked = current is { IsGone: false, Harness: PairingHarness.Acp acp } ? acp.Preset.Id : Remembered?.Id;
         var locked = current?.IsPairing == true;
-        var items = new List<RepoBarContextMenu.Item>(AcpHarness.BuiltIn.Count);
-        foreach (var harness in AcpHarness.BuiltIn)
+        var presets = Presets;
+        var items = new List<RepoBarContextMenu.Item>(presets.Count);
+        foreach (var preset in presets)
             items.Add(new RepoBarContextMenu.Item(
-                harness.Label,
+                preset.Name,
                 () =>
                 {
-                    if (Open(harness) is { } conversation) then?.Invoke(conversation);
+                    if (Open(preset) is { } conversation) then?.Invoke(conversation);
                 },
                 LucideIcons.Sparkles,
-                Enabled: !locked || harness.Id == marked,
-                Checked: harness.Id == marked));
+                Enabled: !locked || preset.Id == marked,
+                Checked: preset.Id == marked));
         return items;
     }
 
-    private static bool Runs(AgentConversation conversation, AcpHarness harness) =>
-        !conversation.IsGone && conversation.Harness is PairingHarness.Acp acp && acp.Harness.Id == harness.Id;
+    private static bool Runs(AgentConversation conversation, AgentPreset preset) =>
+        !conversation.IsGone && conversation.Harness is PairingHarness.Acp acp && acp.Preset.Id == preset.Id;
 
     public void Dispose() => _available.Dispose();
 }
