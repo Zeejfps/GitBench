@@ -12,7 +12,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>The stop card's place at the top of the session's pane: the open stop, a placeholder
+/// <summary>The stop card's place in the session's pane, under the goal and roadmap: the open stop, a placeholder
 /// while the agent works out the next one, and nothing once the session is over.</summary>
 internal sealed record PairingStopSlot : Widget
 {
@@ -98,7 +98,7 @@ internal sealed record PairingStopPlaceholder : Widget
 }
 
 /// <summary>
-/// The stop the user is on, at the top of the session's pane: its number, the title, where it
+/// The stop the user is on, in the session's pane: its number, the title, where it
 /// is — a click goes back there — and why, then where the agent's code is.
 /// </summary>
 internal sealed record PairingStopCard : Widget

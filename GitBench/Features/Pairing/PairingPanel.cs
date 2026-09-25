@@ -40,9 +40,9 @@ internal sealed record PairingPanelSlot : Widget
 
 /// <summary>
 /// The conversation with a repository's agent, the way the user follows it: who drives and whose
-/// turn it is; while a pairing session runs, the stop they are on and the goal and roadmap with what
-/// the agent last changed in it, in a pane of their own; and the conversation under it with a field to talk to the agent,
-/// which stays once the session is over.
+/// turn it is; while a pairing session runs, the goal and roadmap with what the agent last changed
+/// in it and the stop they are on, in a pane of their own; and the conversation under it with a
+/// field to talk to the agent, which stays once the session is over.
 /// </summary>
 internal sealed record PairingPanel : Widget
 {
@@ -135,8 +135,8 @@ internal sealed record PairingPanel : Widget
     }
 }
 
-/// <summary>The session's pane over the conversation: the stop the user is on, then the goal and
-/// roadmap. It scrolls on its own, and a new stop takes it back to the top, where its card is.</summary>
+/// <summary>The session's pane over the conversation: the goal and roadmap, then the stop the user
+/// is on. It scrolls on its own, and a new stop takes it back to the top.</summary>
 internal sealed record PairingSessionPane : Widget
 {
     public required PairingStore Store { get; init; }
@@ -161,8 +161,8 @@ internal sealed record PairingSessionPane : Widget
                         CrossAxis = CrossAxisAlignment.Stretch,
                         Children =
                         [
-                            new PairingStopSlot { Store = store },
                             new PairingGoalAndRoadmap { Store = store },
+                            new PairingStopSlot { Store = store },
                         ],
                     },
                 ],
