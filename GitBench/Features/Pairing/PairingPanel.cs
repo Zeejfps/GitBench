@@ -437,16 +437,7 @@ internal sealed record PairingRoadmapRow : Widget
                 Width = Sizes.Icon,
                 Color = Theme.Color(s => entry.Done ? s.Status.Success : s.Palette.TextMuted),
             },
-            new Grow
-            {
-                Child = new Text
-                {
-                    Value = entry.Title,
-                    FontSize = FontSize.Body,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => dropped || entry.Done ? s.Palette.TextMuted : s.Palette.TextBody),
-                },
-            },
+            new Grow { Child = dropped ? StruckTitle(ctx, entry.Title) : Title(entry) },
         };
         if (entry.Change != RoadmapChange.Kept)
             children.Add(new Text
@@ -462,6 +453,29 @@ internal sealed record PairingRoadmapRow : Widget
             Gap = Spacing.Sm,
             CrossAxis = CrossAxisAlignment.Start,
             Children = [.. children],
+        };
+    }
+
+    private static IWidget Title(RoadmapEntry entry) => new Text
+    {
+        Value = entry.Title,
+        FontSize = FontSize.Body,
+        Wrap = TextWrap.Wrap,
+        Color = Theme.Color(s => entry.Done ? s.Palette.TextMuted : s.Palette.TextBody),
+    };
+
+    private static IWidget StruckTitle(Context ctx, string title)
+    {
+        var theme = ctx.Theme();
+        return new RichText
+        {
+            Runs = Prop.Bind<IReadOnlyList<RichTextRun>>(() =>
+            [
+                new RichTextRun(
+                    title,
+                    new TextStyle { FontSize = FontSize.Body, TextColor = theme.Styles.Value.Palette.TextMuted },
+                    Strikethrough: true),
+            ]),
         };
     }
 }
