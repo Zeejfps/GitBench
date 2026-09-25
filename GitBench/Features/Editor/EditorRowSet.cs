@@ -307,11 +307,14 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         var line = LineOfRow(index);
         var own = RowOfLine(line);
         if (index > own && _ghost is { } ghost)
+        {
+            var at = ghost.FirstAfter(new FileLine(line)) + index - own - 1;
             return new DiffRow.Ghost(
-                DiffText.ExpandTabs(ghost.Lines[index - own - 1]),
-                ghost.Emphasis?[index - own - 1],
-                ghost.SpansAt(index - own - 1),
-                ghost.NamesAt(index - own - 1));
+                DiffText.ExpandTabs(ghost.Lines[at]),
+                ghost.Emphasis?[at],
+                ghost.SpansAt(at),
+                ghost.NamesAt(at));
+        }
         if (own != index)
             return _plan.LensAt(line)
                 ?? throw new InvalidOperationException(
@@ -415,7 +418,7 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
         if (_outline is { } outline && lastOld != lastNew)
             _outline = Shifted(outline, lastOld + 1, lastNew - lastOld);
         if (_ghost is { } ghost && lastOld != lastNew)
-            _ghost = ghost with { After = new FileLine(Math.Clamp(Move(ghost.After.Value, lastOld + 1, lastNew - lastOld), 1, Math.Max(1, _lines.Count))) };
+            _ghost = ghost.Moved(line => Math.Clamp(Move(line, lastOld + 1, lastNew - lastOld), 1, Math.Max(1, _lines.Count)));
 
         if (!patch)
         {
@@ -519,12 +522,12 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
             lineOfRow.Add(line);
             _widths.Add(Contribution(i));
 
-            if (_ghost is not { } ghost || ghost.After.Value != line) continue;
-            foreach (var text in ghost.Lines)
+            if (_ghost is not { } ghost) continue;
+            for (var g = ghost.FirstAfter(new FileLine(line)); g < ghost.Lines.Count && ghost.AnchorOf(g).Value == line; g++)
             {
                 lineOfRow.Add(line);
                 _ghostRows++;
-                _widths.Add(DiffText.VisualCells(DiffText.ExpandTabs(text)));
+                _widths.Add(DiffText.VisualCells(DiffText.ExpandTabs(ghost.Lines[g])));
             }
         }
 
@@ -628,16 +631,43 @@ internal sealed class EditorRowSet : IDiffRowSource, IAnchoredRows
     }
 }
 
-/// <summary>Lines suggested to the reader, drawn after a line of the file, with the characters that
-/// differ from the lines they replace, if any, and their syntax colors, if known. Compared by
-/// content, so setting the same suggestion again changes nothing.</summary>
+/// <summary>Lines suggested to the reader, drawn after a line of the file — or, with
+/// <paramref name="Anchors"/>, each after its own line, in order, <paramref name="After"/> being the
+/// last of them — with the characters that differ from the lines they replace, if any, and their
+/// syntax colors, if known. Compared by content, so setting the same suggestion again changes
+/// nothing.</summary>
 internal sealed record GhostLines(
     FileLine After,
     IReadOnlyList<string> Lines,
     IReadOnlyList<IReadOnlyList<CharRange>?>? Emphasis = null,
     IReadOnlyList<IReadOnlyList<TokenSpan>>? Spans = null,
-    IReadOnlyList<IReadOnlyList<DraftName>>? Names = null)
+    IReadOnlyList<IReadOnlyList<DraftName>>? Names = null,
+    IReadOnlyList<FileLine>? Anchors = null)
 {
+    /// <summary>The file line the suggested line at <paramref name="index"/> is drawn after.</summary>
+    public FileLine AnchorOf(int index) => Anchors is { } anchors ? anchors[index] : After;
+
+    /// <summary>The first suggested line drawn after <paramref name="line"/> or a line below it.</summary>
+    public int FirstAfter(FileLine line)
+    {
+        if (Anchors is not { } anchors) return line.Value <= After.Value ? 0 : Lines.Count;
+        var (low, high) = (0, anchors.Count);
+        while (low < high)
+        {
+            var mid = (low + high) / 2;
+            if (anchors[mid].Value < line.Value) low = mid + 1;
+            else high = mid;
+        }
+        return low;
+    }
+
+    /// <summary>The same lines with every anchor carried through <paramref name="move"/>.</summary>
+    public GhostLines Moved(Func<int, int> move) => this with
+    {
+        After = new FileLine(move(After.Value)),
+        Anchors = Anchors?.Select(anchor => new FileLine(move(anchor.Value))).ToArray(),
+    };
+
     public IReadOnlyList<TokenSpan>? SpansAt(int index) => Spans is { } spans && index < spans.Count ? spans[index] : null;
 
     /// <summary>The names on the shown line at <paramref name="index"/>, placed in its tab-expanded
@@ -665,7 +695,8 @@ internal sealed record GhostLines(
 
     public bool Equals(GhostLines? other) =>
         other is not null && After == other.After && Lines.SequenceEqual(other.Lines) && SameEmphasis(Emphasis, other.Emphasis)
-        && SameSpans(Spans, other.Spans) && SameNames(Names, other.Names);
+        && SameSpans(Spans, other.Spans) && SameNames(Names, other.Names)
+        && (Anchors is null || other.Anchors is null ? Anchors is null && other.Anchors is null : Anchors.SequenceEqual(other.Anchors));
 
     private static bool SameNames(IReadOnlyList<IReadOnlyList<DraftName>>? a, IReadOnlyList<IReadOnlyList<DraftName>>? b)
     {

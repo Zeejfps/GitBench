@@ -138,3 +138,116 @@ internal static class GhostMatch
         return new FileLine(Math.Max(start.Line.Value, below.Value + added - removed));
     }
 }
+
+/// <summary>A suggestion in place of a run of lines, set against them as a diff sets its two sides:
+/// the lines it removed, lit up, and the suggested lines drawn under them, each after the file
+/// line it follows. The first removed line is null where nothing is removed.</summary>
+internal sealed record GhostReplacement(GhostLines Ghost, ReplacedLine?[] Replaced, FileLine? FirstRemoved);
+
+/// <summary>Sets a suggestion against the lines it replaces, line by line, so lines it keeps read
+/// as the file's own and only the rest are lit up or drawn.</summary>
+internal static class GhostReplace
+{
+    // Past this many line pairs the two sides are not matched up: the whole run reads as replaced.
+    private const long MaxCells = 4_000_000;
+
+    /// <param name="old">The lines replaced, the first of them file line <paramref name="from"/>.</param>
+    /// <param name="to">The last line replaced, under which a suggestion replacing nothing hangs.</param>
+    public static GhostReplacement Of(IReadOnlyList<string> old, FileLine from, FileLine to, EditorGhost ghost)
+    {
+        var draft = ghost.Lines;
+        var kept = Kept(old, draft);
+
+        // The file has no line above the run to hang lines from: suggested lines before the first
+        // kept line go under it, and it is replaced along with them.
+        if (kept.Count > 0 && kept[0] is (0, > 0)) kept.RemoveAt(0);
+        kept.Add((old.Count, draft.Count));
+
+        var replaced = new ReplacedLine?[old.Count];
+        var added = new List<int>(draft.Count);
+        var anchors = new List<FileLine>(draft.Count);
+        var emphasis = new List<IReadOnlyList<CharRange>?>(draft.Count);
+        FileLine? firstRemoved = null;
+        var (i, j) = (0, 0);
+        foreach (var (keptOld, keptNew) in kept)
+        {
+            var removed = keptOld - i;
+            var adds = keptNew - j;
+            var anchor = old.Count == 0 ? to : new FileLine(from.Value + keptOld - 1);
+            for (var k = 0; k < Math.Max(removed, adds); k++)
+            {
+                IReadOnlyList<CharRange>? oldRanges = null, newRanges = null;
+                if (k < removed && k < adds)
+                    (oldRanges, newRanges) = IntraLineDiff.ForPair(DiffText.ExpandTabs(old[i + k]), DiffText.ExpandTabs(draft[j + k]));
+                if (k < removed)
+                {
+                    firstRemoved ??= new FileLine(from.Value + i + k);
+                    // A blank line going is not worth a red band: it is how an empty file reads.
+                    replaced[i + k] = old[i + k].Trim().Length == 0 ? null : new ReplacedLine(oldRanges is { Count: > 0 } ? oldRanges : null);
+                }
+
+                if (k < adds)
+                {
+                    added.Add(j + k);
+                    anchors.Add(anchor);
+                    emphasis.Add(newRanges is { Count: > 0 } ? newRanges : null);
+                }
+            }
+
+            (i, j) = (keptOld + 1, keptNew + 1);
+        }
+
+        var ghostLines = new GhostLines(
+            anchors.Count > 0 ? anchors[^1] : to,
+            added.Select(index => draft[index]).ToArray(),
+            emphasis,
+            ghost.Spans is { } spans ? added.Select(index => index < spans.Count ? spans[index] : []).ToArray() : null,
+            ghost.Names is { } names ? GhostLines.NamesByLine(names, added) : null,
+            anchors);
+        return new GhostReplacement(ghostLines, replaced, firstRemoved);
+    }
+
+    /// <summary>The longest run of lines the two sides share, in order, as index pairs.</summary>
+    private static List<(int Old, int New)> Kept(IReadOnlyList<string> old, IReadOnlyList<string> draft)
+    {
+        var kept = new List<(int Old, int New)>();
+        var prefix = 0;
+        while (prefix < old.Count && prefix < draft.Count && old[prefix] == draft[prefix]) prefix++;
+        var suffix = 0;
+        while (suffix < old.Count - prefix && suffix < draft.Count - prefix
+               && old[old.Count - 1 - suffix] == draft[draft.Count - 1 - suffix])
+            suffix++;
+
+        for (var k = 0; k < prefix; k++) kept.Add((k, k));
+
+        var n = old.Count - prefix - suffix;
+        var m = draft.Count - prefix - suffix;
+        if (n > 0 && m > 0 && (long)n * m <= MaxCells)
+        {
+            var lengths = new int[n + 1, m + 1];
+            for (var a = n - 1; a >= 0; a--)
+            for (var b = m - 1; b >= 0; b--)
+                lengths[a, b] = old[prefix + a] == draft[prefix + b]
+                    ? lengths[a + 1, b + 1] + 1
+                    : Math.Max(lengths[a + 1, b], lengths[a, b + 1]);
+
+            var (x, y) = (0, 0);
+            while (x < n && y < m)
+            {
+                if (old[prefix + x] == draft[prefix + y])
+                {
+                    kept.Add((prefix + x, prefix + y));
+                    x++;
+                    y++;
+                }
+                // On a tie the draft's line goes in first, so it keeps the earliest of the file's
+                // lines it can: a closing brace stays with the block it closes.
+                else if (lengths[x + 1, y] > lengths[x, y + 1]) x++;
+                else y++;
+            }
+        }
+
+        for (var k = suffix; k > 0; k--) kept.Add((old.Count - k, draft.Count - k));
+        return kept;
+    }
+}

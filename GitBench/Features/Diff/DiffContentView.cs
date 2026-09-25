@@ -217,6 +217,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private FileLine? _ghostBelow;
     private (string Path, Action<bool> Done)? _pendingTake;
     private ReplacedLine?[] _replaced = [];
+    private FileLine? _firstRemoved;
     private Features.Editor.EditorBuffer? _ghostBuffer;
     private bool _ghostRefreshPosted;
     private FileSpan? _pendingSearchReveal;
@@ -647,9 +648,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_ghostAnchor is not { } anchor) return null;
         var rows = editor.Rows;
         if (rows.RowForNewLine(_ghostFrom ?? anchor) is not { } first) return null;
-        var last = rows.Ghost is { } ghost && rows.RowForNewLine(ghost.After) is { } after
-            ? after.Value + ghost.Lines.Count
-            : rows.RowForNewLine(anchor)?.Value ?? first.Value;
+        var last = rows.RowForNewLine(anchor)?.Value ?? first.Value;
+        if (rows.Ghost is { } ghost && rows.RowForNewLine(ghost.After) is { } after)
+            last = Math.Max(last, after.Value + ghost.Lines.Count - ghost.FirstAfter(ghost.After));
         return (first.Value, Math.Min(last, rows.Rows.Count - 1));
     }
 
@@ -766,8 +767,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (_hints is not { } hints || Document is not { } editor || !IsHinted(editor.Path, hints.Path)) return null;
         if (editor.Rows.Ghost is { Lines.Count: > 0 } ghost)
-            return editor.Rows.RowForNewLine(ghost.After) is { } own ? own.Value + 1 : null;
-        return _ghostFrom is { } from && hints.Ghost.Lines.Count == 0 && editor.Rows.RowForNewLine(from) is { } row ? row.Value : null;
+            return editor.Rows.RowForNewLine(ghost.AnchorOf(0)) is { } own ? own.Value + 1 : null;
+        return _ghostFrom is { } from && editor.Rows.RowForNewLine(_firstRemoved ?? from) is { } row ? row.Value : null;
     }
 
     private static bool IsHinted(string documentPath, string hintedPath) =>
@@ -782,33 +783,17 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         return index >= 0 && index < _replaced.Length ? _replaced[index] : null;
     }
 
-    // The suggestion under the lines it replaces, paired with them line by line as a diff's replace
-    // block is, so each pair shows the characters that change.
+    // The suggestion set against the lines it replaces as a diff sets its two sides: lines it keeps
+    // stay the file's own, and each changed run pairs up line by line to show the characters that change.
     private Features.Editor.GhostLines Replacement(Features.Editor.TextDocument document, FileLine from, FileLine to, Features.Editor.EditorGhost ghost)
     {
-        var lines = ghost.Lines;
         var count = Math.Clamp(to.Value - from.Value + 1, 0, Math.Max(0, document.LineCount - from.Value + 1));
-        var replaced = new ReplacedLine?[count];
-        var added = new IReadOnlyList<CharRange>?[lines.Count];
-        for (var k = 0; k < count; k++)
-        {
-            IReadOnlyList<CharRange>? emphasis = null;
-            if (k < lines.Count)
-            {
-                var (old, @new) = IntraLineDiff.ForPair(
-                    DiffText.ExpandTabs(document.Line(new FileLine(from.Value + k))), DiffText.ExpandTabs(lines[k]));
-                if (old.Count > 0) emphasis = old;
-                if (@new.Count > 0) added[k] = @new;
-            }
-
-            // A blank line going is not worth a red band: it is how an empty file reads.
-            replaced[k] = document.Line(new FileLine(from.Value + k)).Trim().Length == 0 ? null : new ReplacedLine(emphasis);
-        }
-
-        _replaced = replaced;
-        return new Features.Editor.GhostLines(
-            to, lines, added, ghost.Spans,
-            ghost.Names is { } names ? Features.Editor.GhostLines.NamesByLine(names, Enumerable.Range(0, lines.Count).ToArray()) : null);
+        var old = new string[count];
+        for (var k = 0; k < count; k++) old[k] = document.Line(new FileLine(from.Value + k));
+        var replacement = Features.Editor.GhostReplace.Of(old, from, to, ghost);
+        _replaced = replacement.Replaced;
+        _firstRemoved = replacement.FirstRemoved;
+        return replacement.Ghost;
     }
 
     // Draws the suggestion into the buffer on screen when it is the hinted file, and takes it out of
