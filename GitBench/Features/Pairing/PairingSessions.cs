@@ -153,6 +153,20 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
     public AgentConversation OpenChat(Repo repo, AcpHarness harness) =>
         Open(repo, new PairingHarness.Acp(harness), new AgentOpening.Blank());
 
+    /// <summary>Whether the repository's conversation can start over: an ACP agent with no pairing
+    /// session running.</summary>
+    public static bool CanRestart(AgentConversation conversation) =>
+        conversation.Harness is PairingHarness.Acp && !conversation.IsPairing;
+
+    /// <summary>A fresh conversation with the same agent in place of the repository's, so the agent
+    /// starts again with none of what was said.</summary>
+    public AgentConversation? Restart(Guid repoId) =>
+        _conversations.TryGetValue(repoId, out var conversation)
+        && CanRestart(conversation)
+        && conversation.Harness is PairingHarness.Acp acp
+            ? OpenChat(conversation.Repo, acp.Harness)
+            : null;
+
     private AgentConversation Open(Repo repo, PairingHarness harness, AgentOpening opening)
     {
         if (_conversations.Remove(repo.Id, out var gone)) _ = gone.DisposeAsync().AsTask();

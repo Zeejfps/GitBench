@@ -3,6 +3,7 @@ using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -153,11 +154,13 @@ internal sealed record PairingPanel : Widget
     }
 }
 
-/// <summary>The panel's top band: the agent, whose turn it is, End while a session runs, and Close,
-/// which ends the conversation and stops the agent.</summary>
+/// <summary>The panel's top band: the agent, whose turn it is, End while a session runs, Restart,
+/// which starts the conversation over with the same agent, and Close, which ends the conversation
+/// and stops the agent.</summary>
 internal sealed record PairingHeader : Widget
 {
     public const string EndId = "pairing-end";
+    public const string RestartId = "pairing-restart";
     public const string CloseId = "pairing-close";
 
     public required AgentConversation Conversation { get; init; }
@@ -167,7 +170,20 @@ internal sealed record PairingHeader : Widget
         var loc = ctx.Localization();
         var conversation = Conversation;
         var sessions = ctx.Require<PairingSessions>();
+        var bus = ctx.Require<IMessageBus>();
         var pairing = new Derived<bool>(() => conversation.IsPairing);
+        var canRestart = new Derived<bool>(() => PairingSessions.CanRestart(conversation));
+        var agent = conversation.Harness.Label;
+
+        void Confirm(string title, string body, string action, Action then) =>
+            bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmAgentChatDialog
+            {
+                Title = title,
+                Body = body,
+                ActionLabel = action,
+                OnClose = onClose,
+                OnConfirm = then,
+            }));
 
         return new Box
         {
@@ -219,11 +235,34 @@ internal sealed record PairingHeader : Widget
                                         Children = [new ButtonLabel { Value = L.T(s => s.PairingEnd) }],
                                     }.WithController<KbmController>(),
                                 },
+                                new Show
+                                {
+                                    When = new Derived<bool>(() => conversation.Harness is PairingHarness.Acp),
+                                    Then = () => new ButtonWidget
+                                    {
+                                        Id = RestartId,
+                                        ContentInset = ButtonStyle.Plain.IconOnlyInset,
+                                        Command = new Command(
+                                            () => Confirm(
+                                                loc.Strings.Value.PairingRestartTitle(agent),
+                                                loc.Strings.Value.PairingRestartBody,
+                                                loc.Strings.Value.PairingRestartAction,
+                                                () => sessions.Restart(conversation.Repo.Id)),
+                                            canRestart),
+                                        Children = [new ButtonIcon { Value = LucideIcons.RotateCcw }],
+                                    }
+                                    .WithTooltip(L.T(s => s.PairingRestart))
+                                    .WithController<KbmController>(),
+                                },
                                 new ButtonWidget
                                 {
                                     Id = CloseId,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
-                                    Command = new Command(() => sessions.Close(conversation.Repo.Id)),
+                                    Command = new Command(() => Confirm(
+                                        loc.Strings.Value.PairingCloseTitle(agent),
+                                        loc.Strings.Value.PairingCloseBody,
+                                        loc.Strings.Value.PairingClose,
+                                        () => sessions.Close(conversation.Repo.Id))),
                                     Children = [new ButtonIcon { Value = LucideIcons.X }],
                                 }
                                 .WithTooltip(L.T(s => s.PairingClose))
@@ -233,7 +272,13 @@ internal sealed record PairingHeader : Widget
                     ],
                 },
             ],
-        }.Use(_ => pairing);
+        }.Use(_ =>
+        {
+            var owned = new SubscriptionGroup();
+            owned.Add(pairing);
+            owned.Add(canRestart);
+            return owned;
+        });
     }
 
     private static bool IsTrouble(AgentConversation conversation) =>
