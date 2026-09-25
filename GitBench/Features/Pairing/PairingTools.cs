@@ -1,6 +1,5 @@
 using System.Text.Json;
 using GitBench.Features.Assistant.Tools;
-using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using ZGF.Observable;
@@ -18,7 +17,8 @@ internal interface IPairingSessions
 
 /// <summary>
 /// The pairing loop's tools over one repository's live session: revise the roadmap, open a stop,
-/// wait for the user, read where they are, end. Thin adapters over <see cref="PairingStore"/>,
+/// read where the user is, end. None of them waits on the user: their moves reach the agent as its
+/// next turn. Thin adapters over <see cref="PairingStore"/>,
 /// which is UI-thread state — every call hops there first. None of them writes the user's code.
 /// </summary>
 internal static class PairingTools
@@ -31,62 +31,12 @@ internal static class PairingTools
             new PairingStartTool(target),
             new PairingRoadmapTool(target),
             new PairingStopTool(target),
-            new PairingWaitTool(target),
             new PairingStateTool(target),
             new PairingSayTool(target),
             new PairingShowTool(target),
             new PairingEndTool(target),
         ];
     }
-
-    /// <summary>The wire shape of what the user did.</summary>
-    internal static string WriteAction(PairingAction action, Func<string, string?> relative) => ToolJson.Write(writer =>
-    {
-        writer.WriteString("action", action switch
-        {
-            PairingAction.Done => "done",
-            PairingAction.Message => "message",
-            PairingAction.Skipped => "skipped",
-            PairingAction.Ended => "ended",
-            PairingAction.Pending => "pending",
-            PairingAction.Cancelled => "cancelled",
-            _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action."),
-        });
-        if (action.Stop > 0) writer.WriteNumber("stop", action.Stop);
-
-        switch (action)
-        {
-            case PairingAction.Done done:
-                writer.WriteString("diff", done.Diff.Length == 0 ? "(no changes)" : done.Diff);
-                writer.WriteString("draft", done.Draft switch
-                {
-                    DraftOutcome.NotAccepted => "not_accepted",
-                    DraftOutcome.AcceptedAsIs => "accepted_as_is",
-                    DraftOutcome.AcceptedThenEdited => "accepted_then_edited",
-                    _ => throw new ArgumentOutOfRangeException(nameof(action), done.Draft, "Unknown draft outcome."),
-                });
-                if (done.Problems.Count > 0)
-                {
-                    writer.WriteStartArray("problems");
-                    foreach (var problem in done.Problems) writer.WriteStringValue(problem);
-                    writer.WriteEndArray();
-                }
-
-                break;
-            case PairingAction.Message message:
-                writer.WriteString("text", message.Text);
-                if (message.Caret is { } caret) WriteCaret(writer, caret, relative);
-                break;
-            case PairingAction.Skipped:
-                break;
-            case PairingAction.Ended:
-            case PairingAction.Pending:
-            case PairingAction.Cancelled:
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action.");
-        }
-    });
 
     internal static void WriteCaret(Utf8JsonWriter writer, EditorCaret caret, Func<string, string?> relative)
     {
@@ -257,11 +207,14 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
         + "block only: the imports and the outline of its type, with members added at later stops. "
         + "For a small edit inside a "
         + "large declaration, pass lines (the lines code replaces) or after_line (the line code goes "
-        + "in after) instead, as numbered in the file now. Returns at once with where it landed and "
-        + "the lines the code replaces (read them back and correct yourself with replace: true if "
-        + "they are not what you meant); then call pairing_wait. Name the declaration, never a line "
-        + "number: \"Class.Method\" or \"Method\". Fails while another stop is open, unless replace "
-        + "is true.";
+        + "in after) instead, as numbered in the file now. Lines at either end of code that read the "
+        + "same as the file are trimmed off, so the lines the reply names can be narrower than what "
+        + "you sent: that is expected, the stop is shown as it should be, and it needs no resending. "
+        + "Returns at once; then end your turn: the user's move comes to you as your next message. "
+        + "Send a stop again with replace: true only when the user asks for different code, or the "
+        + "reply shows it landed in a different declaration than you meant. Name the declaration, "
+        + "never a line number: \"Class.Method\" or \"Method\". Fails while another stop is open, "
+        + "unless replace is true.";
 
     public string JsonSchema =>
         """
@@ -356,39 +309,10 @@ internal sealed class PairingStopTool(PairingTarget target) : IAssistantTool
                 throw new ArgumentOutOfRangeException(nameof(open), open.Draft.Place, "Unknown draft place.");
         }
 
-        writer.WriteString("next", "Call pairing_wait.");
+        writer.WriteString("next",
+            "The stop is shown. Lines your code left as they were are trimmed, so the span above can be narrower than what "
+            + "you sent; don't send it again. End your turn: the user's move comes to you as your next message.");
     });
-}
-
-/// <summary>Waits for the user's next move.</summary>
-internal sealed class PairingWaitTool(PairingTarget target) : IAssistantTool
-{
-    public string Name => "pairing_wait";
-
-    public string Description =>
-        $"Waits for the user, for at most {(int)PairingStore.WaitTimeout.TotalSeconds} seconds. Returns "
-        + "{action:\"done\", stop, diff, draft} when they finish a stop — diff is exactly what they "
-        + "changed since the stop was shown, and draft says what they did with your code: "
-        + "accepted_as_is, accepted_then_edited (read how they changed it: that is how they want it), "
-        + "or not_accepted (they wrote it themselves); "
-        + "read it, with what they told you in the conversation, before deciding what's next. "
-        + "{action:\"message\", text, caret?} when they say something — a "
-        + "question, or what they did instead of what you suggested: answer with pairing_say, keep it "
-        + "in mind, then wait again. {action:\"skipped\"} when they pass on the stop. "
-        + "{action:\"pending\"} "
-        + "when the wait ran out: call pairing_wait again. {action:\"ended\"} when the user ended the "
-        + "session: stop calling tools. {action:\"cancelled\"} when a newer wait took over.";
-
-    public string JsonSchema => """{"type":"object","properties":{},"additionalProperties":false}""";
-
-    public bool IsWrite => false;
-
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct) =>
-        target.OnStoreAsync(async store =>
-        {
-            var action = await store.WaitAsync(ct);
-            return ToolInvocation.Ok(PairingTools.WriteAction(action, store.Relative));
-        }, ct);
 }
 
 /// <summary>Where the session and the user are.</summary>
@@ -479,7 +403,7 @@ internal sealed class PairingSayTool(PairingTarget target) : IAssistantTool
         "Says something to the user in the Pairing panel's conversation: the answer to a message, or "
         + "a short remark about their diff. The user reads only what you send here — prose outside the "
         + "tools may never reach them. Markdown; keep it brief: the stop's code goes in pairing_stop, "
-        + "not here. Returns at once; then call pairing_wait.";
+        + "not here. Returns at once; end your turn once you have nothing more to do, and the user's answer comes to you as your next message.";
 
     public string JsonSchema =>
         """
@@ -495,7 +419,7 @@ internal sealed class PairingSayTool(PairingTarget target) : IAssistantTool
         return target.OnStoreAsync(store =>
         {
             store.AddReply(text);
-            return ToolInvocation.Ok(ToolJson.Write(writer => writer.WriteString("next", "Call pairing_wait.")));
+            return ToolInvocation.Ok(ToolJson.Write(writer => writer.WriteBoolean("ok", true)));
         }, ct);
     }
 }
@@ -510,7 +434,7 @@ internal sealed class PairingShowTool(PairingTarget target) : IAssistantTool
         + "or a line: a test, a caller, where something is used — whatever they asked to "
         + "see. It is not a stop: the open stop stays open, and nothing is asked of the user. Name a "
         + "declaration in symbol, or pass line; with neither, the file opens at its top. Returns "
-        + "where it landed; then answer with pairing_say or call pairing_wait.";
+        + "where it landed; then answer with pairing_say.";
 
     public string JsonSchema =>
         """

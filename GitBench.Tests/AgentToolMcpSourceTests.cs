@@ -374,14 +374,14 @@ public sealed class AgentToolMcpSourceTests : IDisposable
     }
     private PairingStore StartPairing()
     {
-        var store = new PairingStore("Add a retry", "Test agent", new AgentTranscript(), new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _clock);
+        var store = new PairingStore("Add a retry", "Test agent", new AgentTranscript(), new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _pairing.Moves.Add);
         store.MarkRunning();
         _pairing.Stores[_repo.Id] = store;
         return store;
     }
 
     [Fact]
-    public async Task PairingLoop_RoadmapStopWaitDone_OverMcp()
+    public async Task PairingLoop_RoadmapStopDone_OverMcp_WithTheDoneGoingToTheAgent()
     {
         await _client.Initialize();
         var store = StartPairing();
@@ -399,14 +399,9 @@ public sealed class AgentToolMcpSourceTests : IDisposable
         using (var json = JsonDocument.Parse(McpTestClient.TextOf(stop)))
             Assert.Equal(1, json.RootElement.GetProperty("stop").GetInt32());
 
-        var wait = _client.Call("pairing_wait", new { repo = _dir.Path });
-        Pump.WaitFor(_dispatcher, () => store.Phase.Value is PairingPhase.Running { Waiting: true }, "the wait to attach");
         Await(store.DoneAsync(), "Done");
-        var done = Await(wait, "the wait to return");
 
-        using var result = JsonDocument.Parse(McpTestClient.TextOf(done));
-        Assert.Equal("done", result.RootElement.GetProperty("action").GetString());
-        Assert.True(result.RootElement.TryGetProperty("diff", out _));
+        Assert.IsType<PairingAction.Done>(Assert.Single(_pairing.Moves));
         store.Dispose();
     }
 
@@ -426,7 +421,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
     {
         await _client.Initialize();
         _pairing.Starter = goal => new PairingStore(
-            goal, "Test agent", new AgentTranscript(), new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _clock);
+            goal, "Test agent", new AgentTranscript(), new RecordingPairingPresentation(), new ScriptedWorkspace(), _dispatcher, _pairing.Moves.Add);
 
         var result = Await(_client.Call("pairing_start", new { repo = _dir.Path, goal = "Add a retry" }), "the call");
 

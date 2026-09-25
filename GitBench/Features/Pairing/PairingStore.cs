@@ -97,26 +97,21 @@ internal abstract record Showing
 
 /// <summary>
 /// One pairing session's loop: the goal, the roadmap, the stop the user is on, its part of the conversation,
-/// and the hand-off between the agent and the user. The agent proposes a stop and waits; the user
-/// edits and presses Done, and the wait completes with their diff since the stop was shown. Every
-/// member is UI-thread only; the wait's task is what crosses to a tool thread.
+/// and the hand-off between the agent and the user. The agent proposes a stop and ends its turn; the
+/// user edits and presses Next, and their diff since the stop was shown goes to the agent as its next
+/// turn. Every member is UI-thread only.
 /// </summary>
 /// <remarks>
-/// One waiter ever: a newer wait, an end or a disconnect cancels the one attached. The user's moves
-/// queue while no waiter is attached and the next wait takes the oldest, so a Done is never lost
-/// behind a question asked after it. One open stop ever: a stop proposed while another is open is
-/// refused unless it says it replaces it.
+/// Nothing waits on the user: an agent with a stop open costs nothing until they move. The moves go
+/// out in the order the user made them, so a Done is never lost behind a question asked after it.
+/// One open stop ever: a stop proposed while another is open is refused unless it says it replaces it.
 /// </remarks>
 internal sealed class PairingStore : IDisposable
 {
-    /// <summary>How long one wait blocks before answering <see cref="PairingAction.Pending"/>, under
-    /// the per-call timeout MCP clients enforce.</summary>
-    public static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(45);
-
     private readonly IPairingPresentation _presentation;
     private readonly IPairingWorkspace _workspace;
     private readonly IUiDispatcher _dispatcher;
-    private readonly TimeProvider _clock;
+    private readonly Action<PairingAction> _deliver;
     private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
 
     private readonly State<PairingPhase> _phase = new(new PairingPhase.Starting());
@@ -124,7 +119,6 @@ internal sealed class PairingStore : IDisposable
     private readonly State<OpenStop?> _stop = new(null);
     private readonly State<StopActivity> _activity = new(StopActivity.Idle);
     private readonly AgentTranscript _transcript;
-    private readonly Queue<PairingAction> _queued = new();
 
     private IReadOnlyList<Milestone> _milestones = Array.Empty<Milestone>();
     private int _stopsSent;
@@ -132,7 +126,8 @@ internal sealed class PairingStore : IDisposable
     // An agent call is opening a stop across awaits; a second one meanwhile would work from the
     // state the first is about to replace.
     private bool _changingStop;
-    private Waiter? _waiter;
+    private AgentTurn _turn = AgentTurn.Unseen;
+    private bool _handedOver;
     private readonly CancellationTokenSource _lifetime = new();
     private bool _disposed;
 
@@ -143,14 +138,14 @@ internal sealed class PairingStore : IDisposable
         IPairingPresentation presentation,
         IPairingWorkspace workspace,
         IUiDispatcher dispatcher,
-        TimeProvider clock)
+        Action<PairingAction> deliver)
     {
         Goal = goal;
         Harness = harness;
         _presentation = presentation;
         _workspace = workspace;
         _dispatcher = dispatcher;
-        _clock = clock;
+        _deliver = deliver;
         _transcript = transcript;
     }
 
@@ -181,12 +176,32 @@ internal sealed class PairingStore : IDisposable
     /// <summary>Whether the session can still take moves from either side.</summary>
     public bool IsLive => _phase.Value is PairingPhase.Starting or PairingPhase.Running;
 
+    /// <summary>Whether the agent has left the user something to act on or read since its turn
+    /// began: a stop, or a reply. A turn that ends without either left the user nothing.</summary>
+    public bool HasHandedOver => _stop.Value is not null || _handedOver;
+
     // ── the agent's side ─────────────────────────────────────────────────────────────────────
 
     /// <summary>The agent is up and driving.</summary>
     public void MarkRunning()
     {
-        if (_phase.Value is PairingPhase.Starting) _phase.Value = new PairingPhase.Running(_waiter is not null);
+        if (_phase.Value is PairingPhase.Starting) _phase.Value = new PairingPhase.Running(false);
+    }
+
+    /// <summary>The agent's turn began. From here the user's turn is marked by the turn ending, not
+    /// by what the agent sends along the way.</summary>
+    public void MarkTurnStarted()
+    {
+        _turn = AgentTurn.Running;
+        _handedOver = false;
+        SetWaiting(false);
+    }
+
+    /// <summary>The agent's turn ended: whatever comes next is the user's.</summary>
+    public void MarkTurnEnded()
+    {
+        _turn = AgentTurn.Over;
+        SetWaiting(true);
     }
 
     /// <summary>Replaces the roadmap, marking what the revision added and what it dropped.</summary>
@@ -206,10 +221,10 @@ internal sealed class PairingStore : IDisposable
         if (!IsLive) return new StopOpening.Refused("The session has ended.");
         if (_stop.Value is { } open && !replace)
             return new StopOpening.Refused(
-                $"Stop {open.Stop.Number} (\"{open.Stop.Title}\") is still open. Call pairing_wait for the user's Done, "
-                + "or pass replace: true to take it back and open this one instead.");
+                $"Stop {open.Stop.Number} (\"{open.Stop.Title}\") is still open. End your turn: the user's move on it "
+                + "comes to you as your next message. Or pass replace: true to take it back and open this one instead.");
         if (_activity.Value != StopActivity.Idle)
-            return new StopOpening.Refused("The user is finishing the open stop right now. Call pairing_wait.");
+            return new StopOpening.Refused("The user is finishing the open stop right now. End your turn: their move comes to you next.");
         if (_changingStop) return new StopOpening.Refused("Another pairing call is still changing the stop. Wait for it to return.");
 
         _changingStop = true;
@@ -297,7 +312,7 @@ internal sealed class PairingStore : IDisposable
         if (_activity.Value != StopActivity.Idle || (_stop.Value is not null && !replace))
         {
             TakeBack(created);
-            return new StopOpening.Refused("The user moved on while the stop was being placed. Call pairing_wait.");
+            return new StopOpening.Refused("The user moved on while the stop was being placed. End your turn: their move comes to you next.");
         }
 
         if (_stop.Value?.CreatedFile is { } previous && previous != created) TakeBack(previous);
@@ -307,31 +322,8 @@ internal sealed class PairingStore : IDisposable
         _presentation.RevealDraft(location, draft);
         _presentation.ShowDraft(location, draft, new SuggestionActions(() => _ = AcceptAsync(), () => _ = AcceptAndNextAsync()));
         _transcript.CloseNarration();
+        HandOver();
         return new StopOpening.Opened(opened);
-    }
-
-    /// <summary>Blocks until the user moves, up to <see cref="WaitTimeout"/>. A queued move answers
-    /// at once. Attaching while another wait is attached cancels that one.</summary>
-    public Task<PairingAction> WaitAsync(CancellationToken ct)
-    {
-        ThrowIfDisposed();
-        if (_queued.TryDequeue(out var queued)) return Task.FromResult(queued);
-        if (!IsLive) return Task.FromResult<PairingAction>(new PairingAction.Ended(StopNumber));
-        if (ct.IsCancellationRequested) return Task.FromResult<PairingAction>(new PairingAction.Cancelled(StopNumber));
-
-        ResolveWaiter(new PairingAction.Cancelled(StopNumber));
-        var waiter = new Waiter(StopNumber);
-        _waiter = waiter;
-        SetWaiting(true);
-        _transcript.CloseNarration();
-        waiter.Timer = _clock.CreateTimer(
-            _ => _dispatcher.Post(() => OnTimeout(waiter)), null, WaitTimeout, Timeout.InfiniteTimeSpan);
-        waiter.Registration = ct.Register(() =>
-        {
-            waiter.Completion.TrySetResult(new PairingAction.Cancelled(waiter.AttachedAt));
-            _dispatcher.Post(() => Detach(waiter));
-        });
-        return waiter.Completion.Task;
     }
 
     /// <summary>The agent finished: the stop closes, the summary stays up.</summary>
@@ -358,7 +350,9 @@ internal sealed class PairingStore : IDisposable
     /// <summary>A whole reply from the agent, said through <c>pairing_say</c>.</summary>
     public void AddReply(string markdown)
     {
-        if (!_disposed) _transcript.AddReply(markdown);
+        if (_disposed) return;
+        _transcript.AddReply(markdown);
+        HandOver();
     }
 
     public void AddNotice(string text, NoticeTone tone)
@@ -502,13 +496,13 @@ internal sealed class PairingStore : IDisposable
         Deliver(new PairingAction.Message(StopNumber, told, _presentation.Caret.Value));
     }
 
-    /// <summary>The user ends the session. The agent's wait answers <c>ended</c>.</summary>
+    /// <summary>The user ends the session, and the agent is told.</summary>
     public void EndByUser()
     {
         if (!IsLive) return;
         var at = StopNumber;
-        _queued.Clear();
-        Finish(new PairingPhase.Ended(null), new PairingAction.Ended(at));
+        Finish(new PairingPhase.Ended(null));
+        _deliver(new PairingAction.Ended(at));
     }
 
     /// <summary>Takes the user to a place the agent points at while they talk: a declaration, or a
@@ -555,14 +549,13 @@ internal sealed class PairingStore : IDisposable
         if (_disposed) return;
         _disposed = true;
         _lifetime.Cancel();
-        ResolveWaiter(new PairingAction.Cancelled(StopNumber));
     }
 
     // ── internals ────────────────────────────────────────────────────────────────────────────
 
     private int StopNumber => _stop.Value?.Stop.Number ?? 0;
 
-    private void Finish(PairingPhase phase, PairingAction? lastWord = null)
+    private void Finish(PairingPhase phase)
     {
         TakeBack(_stop.Value?.CreatedFile);
         _stop.Value = null;
@@ -570,7 +563,6 @@ internal sealed class PairingStore : IDisposable
         _activity.Value = StopActivity.Idle;
         _transcript.CloseNarration();
         _phase.Value = phase;
-        ResolveWaiter(lastWord ?? new PairingAction.Cancelled(StopNumber));
     }
 
     // A file a stop created for the user to fill goes again if they moved on and left it empty.
@@ -581,40 +573,16 @@ internal sealed class PairingStore : IDisposable
 
     private void Deliver(PairingAction action)
     {
-        if (_waiter is not null) ResolveWaiter(action);
-        else _queued.Enqueue(action);
-    }
-
-    private void ResolveWaiter(PairingAction action)
-    {
-        if (_waiter is not { } waiter) return;
-        Detach(waiter);
-        // The caller's cancellation may have answered the wait on its own thread a moment ago; a
-        // move of the user's that finds it answered waits for the next one instead.
-        if (!waiter.Completion.TrySetResult(action) && IsMove(action)) _queued.Enqueue(action);
-    }
-
-    private static bool IsMove(PairingAction action) => action switch
-    {
-        PairingAction.Done or PairingAction.Message or PairingAction.Skipped => true,
-        PairingAction.Ended or PairingAction.Pending or PairingAction.Cancelled => false,
-        _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action."),
-    };
-
-    private void OnTimeout(Waiter waiter)
-    {
-        if (_waiter != waiter) return;
-        Detach(waiter);
-        waiter.Completion.TrySetResult(new PairingAction.Pending(StopNumber));
-    }
-
-    private void Detach(Waiter waiter)
-    {
-        waiter.Timer?.Dispose();
-        waiter.Registration.Dispose();
-        if (_waiter != waiter) return;
-        _waiter = null;
         SetWaiting(false);
+        _deliver(action);
+    }
+
+    // The agent gave the user something. Where its turns are seen, the turn ending is what hands
+    // over; an agent in a terminal says nothing of its turns, so this is all there is to go on.
+    private void HandOver()
+    {
+        _handedOver = true;
+        if (_turn != AgentTurn.Running) SetWaiting(true);
     }
 
     private void SetWaiting(bool waiting)
@@ -657,15 +625,12 @@ internal sealed class PairingStore : IDisposable
         public void GetResult() { }
     }
 
-    private sealed class Waiter(int attachedAt)
+    private enum AgentTurn
     {
-        public int AttachedAt { get; } = attachedAt;
-
-        public TaskCompletionSource<PairingAction> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public ITimer? Timer { get; set; }
-
-        public CancellationTokenRegistration Registration { get; set; }
+        /// <summary>No turn has been reported: the agent runs where the app can't see its turns.</summary>
+        Unseen,
+        Running,
+        Over,
     }
 }
 

@@ -33,8 +33,8 @@ internal abstract record PairingPhase
     /// <summary>The agent is being started and has not yet sent anything.</summary>
     public sealed record Starting : PairingPhase;
 
-    /// <summary>The agent is driving. <paramref name="Waiting"/> is true while a wait is attached —
-    /// the user's move goes straight to the agent — and false while it is thinking.</summary>
+    /// <summary>The agent is driving. <paramref name="Waiting"/> is true once it has handed the move
+    /// to the user — its turn is over — and false while it is working.</summary>
     public sealed record Running(bool Waiting) : PairingPhase;
 
     /// <summary>The agent stopped calling back without ending the session.</summary>
@@ -158,12 +158,6 @@ internal abstract record PairingAction(int Stop)
 
     /// <summary>The user ended the session.</summary>
     public sealed record Ended(int Stop) : PairingAction(Stop);
-
-    /// <summary>The bounded wait ran out; wait again.</summary>
-    public sealed record Pending(int Stop) : PairingAction(Stop);
-
-    /// <summary>A newer wait took over, or the caller went away.</summary>
-    public sealed record Cancelled(int Stop) : PairingAction(Stop);
 }
 
 /// <summary>One entry of the conversation with the agent, kept whole across a pairing session's

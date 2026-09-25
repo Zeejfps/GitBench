@@ -144,6 +144,9 @@ internal sealed class FixedPairingSessions : IPairingSessions
 
     public PairingStore? StoreFor(Guid repoId) => Stores.GetValueOrDefault(repoId);
 
+    /// <summary>What the user did, as the agent would be told it.</summary>
+    public List<PairingAction> Moves { get; } = new();
+
     /// <summary>What <see cref="StartByAgent"/> opens a session with; null answers that no
     /// conversation is open.</summary>
     public Func<string, PairingStore>? Starter { get; set; }

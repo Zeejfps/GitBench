@@ -9,21 +9,20 @@ namespace GitBench.Tests;
 
 /// <summary>The conversation around pairing sessions: it outlives each session, so the user can go
 /// on talking to the agent — to commit, to push, to start the next session — and what they say goes
-/// to the loop while a session runs and straight to the agent between sessions.</summary>
+/// to the agent as a move of the session while one runs, and as it is between sessions.</summary>
 public sealed class AgentConversationTests : IAsyncDisposable
 {
     private readonly QueuedDispatcher _dispatcher = new();
-    private readonly ManualTimeProvider _clock = new();
     private readonly RecordingDriver _driver = new();
     private readonly Repo _repo = new(Guid.NewGuid(), "C:/repo", "repo");
     private readonly List<AgentConversation> _conversations = new();
 
     private AgentConversation Create(PairingHarness? harness = null)
     {
-        var conversation = new AgentConversation(_repo, harness ?? new PairingHarness.Acp(AgentPreset.ClaudeCode), (goal, transcript) =>
+        var conversation = new AgentConversation(_repo, harness ?? new PairingHarness.Acp(AgentPreset.ClaudeCode), (goal, transcript, deliver) =>
         {
             var presentation = new RecordingPairingPresentation();
-            var store = new PairingStore(goal, "Claude Code", transcript, presentation, new ScriptedWorkspace(), _dispatcher, _clock);
+            var store = new PairingStore(goal, "Claude Code", transcript, presentation, new ScriptedWorkspace(), _dispatcher, deliver);
             return new PairingSession(_repo, store, new NoDisposal());
         }, _dispatcher);
         conversation.Attach(_driver);
@@ -55,18 +54,35 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void TheUserEndingTheSession_StillTellsTheWaitingAgentItEnded()
+    public void TheUserEndingTheSession_TellsTheAgentItEnded()
     {
         var conversation = Create();
         conversation.StartSession("Add a retry");
         conversation.MarkRunning();
-        var wait = conversation.Session.Value!.Store.WaitAsync(CancellationToken.None);
 
         conversation.Session.Value!.Store.EndByUser();
         _dispatcher.Drain();
 
-        Assert.IsType<PairingAction.Ended>(wait.Result);
+        Assert.Contains("ended the session", Assert.Single(_driver.Told).Text);
         Assert.Null(conversation.Session.Value);
+    }
+
+    [Fact]
+    public void TheAgentsTurnEnding_IsTheUsersTurnInTheSession()
+    {
+        var conversation = Create();
+        conversation.StartSession("Add a retry");
+        conversation.MarkRunning();
+        var store = conversation.Session.Value!.Store;
+
+        conversation.BeginTurn();
+        Assert.Equal(new PairingPhase.Running(false), store.Phase.Value);
+        Assert.True(conversation.IsComposing.Value);
+
+        conversation.EndTurn();
+
+        Assert.Equal(new PairingPhase.Running(true), store.Phase.Value);
+        Assert.False(conversation.IsComposing.Value);
     }
 
     [Fact]
@@ -82,7 +98,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void DuringASession_WhatTheUserSays_GoesThroughTheLoop()
+    public void DuringASession_WhatTheUserSays_ReachesTheAgentAsAMoveOfTheSession()
     {
         var conversation = Create();
         conversation.StartSession("Add a retry");
@@ -90,9 +106,9 @@ public sealed class AgentConversationTests : IAsyncDisposable
 
         conversation.Say("Why here?");
 
-        Assert.Empty(_driver.Told);
-        var said = Assert.IsType<PairingAction.Message>(conversation.Session.Value!.Store.WaitAsync(CancellationToken.None).Result);
-        Assert.Equal("Why here?", said.Text);
+        var told = Assert.Single(_driver.Told).Text;
+        Assert.StartsWith("DiffDino pairing:", told);
+        Assert.EndsWith("Why here?", told);
     }
 
     [Fact]
@@ -133,7 +149,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
     }
 
     [Fact]
-    public void MovingOnFromAStop_KeepsWhatWasSaidBeforeTheSession()
+    public void MovingOnFromAStop_KeepsTheWholeConversation()
     {
         var conversation = Create();
         conversation.MarkRunning();
@@ -148,7 +164,7 @@ public sealed class AgentConversationTests : IAsyncDisposable
         store.Skip();
 
         Assert.Equal(
-            [typeof(PairingMessage.FromUser), typeof(PairingMessage.SessionStarted)],
+            [typeof(PairingMessage.FromUser), typeof(PairingMessage.SessionStarted), typeof(PairingMessage.FromUser), typeof(PairingMessage.Narration)],
             conversation.Transcript.Messages.Select(m => m.GetType()));
     }
 
@@ -209,10 +225,10 @@ public sealed class AgentConversationTests : IAsyncDisposable
 
         conversation.Say("Should this retry too?", Quote);
 
-        var said = Assert.IsType<PairingAction.Message>(conversation.Session.Value!.Store.WaitAsync(CancellationToken.None).Result);
-        Assert.StartsWith("Should this retry too?", said.Text);
-        Assert.Contains("void Fetch()", said.Text);
-        Assert.Contains("`src/Client.cs`, lines 10-12", said.Text);
+        var told = Assert.Single(_driver.Told).Text;
+        Assert.Contains("Should this retry too?", told);
+        Assert.Contains("void Fetch()", told);
+        Assert.Contains("`src/Client.cs`, lines 10-12", told);
     }
 
     [Fact]

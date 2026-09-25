@@ -241,15 +241,14 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         ITerminalSessionStore terminals,
         CommandLaunchFactory launches,
         IContentNavigator navigator,
-        IUiDispatcher dispatcher,
-        TimeProvider clock) =>
+        IUiDispatcher dispatcher) =>
         (repo, harness, opening) =>
         {
-            var conversation = new AgentConversation(repo, harness, (sessionGoal, transcript) =>
+            var conversation = new AgentConversation(repo, harness, (sessionGoal, transcript, deliver) =>
             {
                 var presentation = new EditorPairingPresentation(repo, repos, browsers, texts, extractor, saver, highlighter, servers, dispatcher);
                 var store = new PairingStore(
-                    sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, clock);
+                    sessionGoal, harness.Label, transcript, presentation, new GitPairingWorkspace(repo.Path, snapshots), dispatcher, deliver);
                 return new PairingSession(repo, store, presentation);
             }, dispatcher);
             AgentPrompt? first;

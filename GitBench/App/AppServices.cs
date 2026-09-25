@@ -360,8 +360,7 @@ internal static class AppServices
                     ctx.Require<ITerminalPalette>(),
                     ctx.Require<IClipboard>()),
                 ctx.Require<IContentNavigator>(),
-                ctx.Require<IUiDispatcher>(),
-                TimeProvider.System)));
+                ctx.Require<IUiDispatcher>())));
         context.AddSingleton(ctx => new AgentChat(
             ctx.Require<PairingSessions>(),
             ctx.Require<IRepoRegistry>(),

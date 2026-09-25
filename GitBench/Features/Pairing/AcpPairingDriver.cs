@@ -11,16 +11,17 @@ namespace GitBench.Features.Pairing;
 
 /// <summary>
 /// Runs a conversation's agent over ACP: starts the adapter against the app's MCP server, sends the
-/// opening turn, and streams what the agent says into the panel. While a pairing session is live a
-/// turn that ends gets a nudge to carry on, and an agent that stops calling tools is reported gone
-/// from the session; between sessions each turn is what the user says next. The write guard lives
+/// opening turn, and streams what the agent says into the panel. Each turn after that is what the
+/// user did or said next, so an agent waiting on the user costs nothing. While a pairing session is
+/// live, a turn that ends leaving the user neither a stop nor a reply gets a nudge to carry on, and an
+/// agent that keeps doing that is reported gone from the session. The write guard lives
 /// in the connection; what it refused is shown, and what it has no rule for is asked of the user in
 /// the panel. Each turn runs in the mode its moment calls for: the asking mode while a pairing
 /// session is live, the preset's chat mode otherwise.
 /// </summary>
 internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 {
-    /// <summary>Turns in a row without a single tool call before the agent counts as gone.</summary>
+    /// <summary>Turns in a row that leave the user nothing before the agent counts as gone.</summary>
     private const int IdleTurnLimit = 3;
 
     private const string ServerName = "diffdino";
@@ -33,7 +34,6 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private readonly IServerEnvironment _environment;
     private readonly IUiDispatcher _dispatcher;
     private readonly CancellationTokenSource _stop = new();
-    private readonly HashSet<string> _toolCalls = new();
     private readonly Channel<AgentPrompt> _inbox = Channel.CreateUnbounded<AgentPrompt>(new UnboundedChannelOptions { SingleReader = true });
     private readonly EditAllowances _allowedEdits;
     private AcpAgentConnection? _connection;
@@ -155,7 +155,6 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         var current = harness.AskingMode;
         while (!_stop.IsCancellationRequested)
         {
-            var before = ToolCallCount;
             Interlocked.Exchange(ref _refusedThisTurn, 0);
             var mode = harness.ModeFor(await OnUi(() => Task.FromResult(_conversation.IsPairing)).ConfigureAwait(false));
             if (mode != current)
@@ -188,8 +187,9 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 
             if (pairing)
             {
-                idle = ToolCallCount == before ? idle + 1 : 0;
-                if (idle < IdleTurnLimit)
+                var handedOver = await OnUi(() => Task.FromResult(_conversation.Session.Value?.Store.HasHandedOver ?? true)).ConfigureAwait(false);
+                idle = handedOver ? 0 : idle + 1;
+                if (idle is > 0 and < IdleTurnLimit)
                 {
                     prompt = new AgentPrompt(Volatile.Read(ref _refusedThisTurn) > 0
                         ? "The user declined: the code of the change goes through stops. " + PairingInstructions.Continue
@@ -197,7 +197,8 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
                     continue;
                 }
 
-                Post(() => _conversation.Session.Value?.Store.MarkDisconnected($"{_label} stopped calling the pairing tools."));
+                if (idle >= IdleTurnLimit)
+                    Post(() => _conversation.Session.Value?.Store.MarkDisconnected($"{_label} stopped giving you stops or replies."));
             }
 
             idle = 0;
@@ -229,14 +230,6 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         }
     }
 
-    private int ToolCallCount
-    {
-        get
-        {
-            lock (_toolCalls) return _toolCalls.Count;
-        }
-    }
-
     private void OnUpdate(AcpSessionUpdate update)
     {
         switch (update)
@@ -244,8 +237,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
             case AcpSessionUpdate.MessageChunk chunk:
                 if (chunk.Text.Length > 0) Post(() => _conversation.Transcript.AppendNarration(chunk.Text));
                 break;
-            case AcpSessionUpdate.ToolCall call:
-                lock (_toolCalls) _toolCalls.Add(call.Id);
+            case AcpSessionUpdate.ToolCall:
                 Post(() => _conversation.Transcript.BreakNarration());
                 break;
             case AcpSessionUpdate.ThoughtChunk:

@@ -144,7 +144,7 @@ Pairing reuses the walkthrough store over the editor:
 |---|---|
 | `pairing_roadmap { milestones }` | Replaces the roadmap. |
 | `pairing_stop { path, symbol, after?, title, reason, kind }` | Opens a stop. Fails while one is open. `after` places a symbol that doesn't exist yet. |
-| `pairing_wait` | Blocks until Done, a question, or cancel. Same timeout and re-wait behaviour as `walkthrough_wait`. |
+| ~~`pairing_wait`~~ | Removed (see Implementation notes): the user's moves reach the agent as its next turn. |
 | `pairing_state` | Goal, roadmap, the open stop, the file and line you're on, your selection. |
 | `pairing_end { summary }` | Ends the session. |
 
@@ -255,6 +255,12 @@ this says so and why.
   over its own model, and the review walkthrough is untouched. One difference on purpose: the
   user's moves **queue** while no wait is attached instead of latching latest-wins, so a Done is
   never lost behind a question asked after it.
+- **Later: `pairing_wait` was removed; the user's moves are pushed.** A bounded wait kept the
+  agent's turn alive by re-calling every 45 seconds, and each re-call was a model round-trip, so
+  an agent paid while the user was away. Every session runs in a conversation whose driver can
+  start a turn (ACP's inbox, or a prompt file pasted into the terminal), so the agent now ends its
+  turn after a stop and each move (Done, a message, Skip, End) arrives as its next turn, in the
+  order made. The ACP driver nudges only a turn that left the user neither a stop nor a reply.
 - **Sessions are per repository.** The pairing tools take `repo` like every other exported tool and
   find the repository's live session; there is no separate session id on the wire.
 - **ACP agents reach the app through the Agent connections server**, which a session turns on if

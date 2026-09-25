@@ -31,7 +31,7 @@ public sealed class AgentChatTests : IAsyncDisposable
         _preferences = new PreferencesService(new Preferences(), Path.Combine(_dir.Path, "prefs.json"));
         _sessions = new PairingSessions(_registry, (repo, harness, opening) =>
         {
-            var conversation = new AgentConversation(repo, harness, (_, _) => throw new InvalidOperationException("No sessions here."), _dispatcher);
+            var conversation = new AgentConversation(repo, harness, (_, _, _) => throw new InvalidOperationException("No sessions here."), _dispatcher);
             _opened.Add((harness, opening, conversation));
             return conversation;
         });

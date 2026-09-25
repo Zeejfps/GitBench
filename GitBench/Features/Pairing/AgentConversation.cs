@@ -62,7 +62,7 @@ internal interface IAgentDriver : IAsyncDisposable
 /// </summary>
 internal sealed class AgentConversation : IAsyncDisposable
 {
-    private readonly Func<string, AgentTranscript, PairingSession> _newSession;
+    private readonly Func<string, AgentTranscript, Action<PairingAction>, PairingSession> _newSession;
     private readonly IUiDispatcher _dispatcher;
     private readonly State<AgentPhase> _phase = new(new AgentPhase.Starting());
     private readonly State<PairingSession?> _session = new(null);
@@ -73,7 +73,7 @@ internal sealed class AgentConversation : IAsyncDisposable
     private bool _toldOpening = true;
     private bool _disposed;
 
-    public AgentConversation(Repo repo, PairingHarness harness, Func<string, AgentTranscript, PairingSession> newSession, IUiDispatcher dispatcher)
+    public AgentConversation(Repo repo, PairingHarness harness, Func<string, AgentTranscript, Action<PairingAction>, PairingSession> newSession, IUiDispatcher dispatcher)
     {
         Repo = repo;
         Harness = harness;
@@ -105,7 +105,7 @@ internal sealed class AgentConversation : IAsyncDisposable
     public bool IsGone => _phase.Value is AgentPhase.Gone;
 
     /// <summary>Whether what the user types in the panel reaches the agent: always during a session,
-    /// through the loop's wait; between sessions only for an agent the app talks to itself.</summary>
+    /// as the agent's next turn; between sessions only for an agent the app talks to itself.</summary>
     public IReadable<bool> TakesChat => _takesChat;
 
     public void Attach(IAgentDriver driver) => _driver = driver;
@@ -119,17 +119,21 @@ internal sealed class AgentConversation : IAsyncDisposable
     {
         if (IsPairing) throw new InvalidOperationException("A pairing session is already running.");
         Transcript.Add(new PairingMessage.SessionStarted(goal));
-        var session = _newSession(goal, Transcript);
+        var session = _newSession(goal, Transcript, Deliver);
         _sessionWatch?.Dispose();
         _session.Value = session;
         if (_phase.Value is AgentPhase.Running) session.Store.MarkRunning();
-        // Posted: the store answers its waiter after the phase changes, and must still be whole then.
+        // Posted: the store tells the agent the session ended after the phase changes, and must still be whole then.
         _sessionWatch = session.Store.Phase.Subscribe(_ =>
         {
             if (!session.Store.IsLive) _dispatcher.Post(() => Retire(session));
         });
         return session;
     }
+
+    // What the user did in the session reaches the agent as its next turn, queued behind one in flight.
+    private void Deliver(PairingAction action) =>
+        _driver?.Tell(new AgentPrompt(PairingInstructions.Move(action, path => AgentPrompt.RepoRelative(Repo.Path, path))));
 
     /// <summary>The user starts a session in a conversation already under way: the agent is told.</summary>
     public PairingSession BeginSession(string goal)
@@ -182,12 +186,14 @@ internal sealed class AgentConversation : IAsyncDisposable
     public void BeginTurn()
     {
         if (_phase.Value is AgentPhase.Running) _phase.Value = new AgentPhase.Running(true);
+        _session.Value?.Store.MarkTurnStarted();
     }
 
     public void EndTurn()
     {
         Transcript.CloseNarration();
         if (_phase.Value is AgentPhase.Running) _phase.Value = new AgentPhase.Running(false);
+        _session.Value?.Store.MarkTurnEnded();
     }
 
     /// <summary>The agent could not be started, or died; a live session fails with it.</summary>

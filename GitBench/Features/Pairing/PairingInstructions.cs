@@ -1,3 +1,5 @@
+using GitBench.Features.FileBrowser;
+
 namespace GitBench.Features.Pairing;
 
 /// <summary>
@@ -26,7 +28,10 @@ internal static class PairingInstructions
         + "shown in the editor where it goes; the user accepts it or types it themselves. Exactly one "
         + "code block per stop: one function or one small edit, never several places at once. For a "
         + "small change inside a large declaration, pass lines or after_line so the block covers only "
-        + "what changes. Then call pairing_wait.\n"
+        + "what changes. Then end your turn.\n"
+        + "- Nothing waits on the user: each thing they do comes to you as your next message, starting "
+        + "with \"" + MoveHeading + "\" — they finished a stop (with their diff), said something, "
+        + "skipped the stop, or ended the session. Until then, don't check on them or poll anything.\n"
         + "- A new file is built up in blocks too: its stop creates it empty, and its code is only the "
         + "skeleton — imports and the type's outline with no members. Each member comes at a later "
         + "stop, where the code that needs it is written.\n"
@@ -35,8 +40,8 @@ internal static class PairingInstructions
         + "open a stop for a type, interface or helper ahead of the code that uses it. The user writes "
         + "the call first, using names that don't exist yet; the next stops create those, one at a "
         + "time. Order the roadmap the same way, from the outside in.\n"
-        + "- When pairing_wait returns done, read the diff: it is exactly what the user changed at the "
-        + "stop, and draft says whether they accepted your code as it was, accepted it and then "
+        + "- When they finish a stop, read the diff: it is exactly what the user changed at the "
+        + "stop, and the message says whether they accepted your code as it was, accepted it and then "
         + "changed it, or wrote their own. When they changed it, take their version as the style to "
         + "follow at later stops. A call to something that doesn't exist yet is not a mistake: it is what the next stops "
         + "create, so the code not compiling in between is expected. If the diff is wrong or "
@@ -49,10 +54,9 @@ internal static class PairingInstructions
         + "- When the user asks to see something — the test you wrote, a caller, where a name is "
         + "used — open it with pairing_show. It only moves the editor: the stop stays open, so never "
         + "open a stop just to show the user a place.\n"
-        + "- When it returns message, the user is talking to you: a question, or what they did "
-        + "differently. Answer with pairing_say, keep it in mind for the next diff, then call "
-        + "pairing_wait again. "
-        + "pending means call pairing_wait again. ended means the user stopped the session: stop.\n"
+        + "- When they say something, it is a question or what they did differently. Answer with "
+        + "pairing_say, keep it in mind for the next diff, then end your turn. When they skip a stop, "
+        + "move on without it. When they end the session, stop calling the pairing tools.\n"
         + "- When the user asks for different code at the open stop, send pairing_stop again with "
         + "replace: true and the new code.\n"
         + "- Run the tests yourself, with the command the repository uses. Prefer a test first where one "
@@ -70,12 +74,14 @@ internal static class PairingInstructions
         + "pairing_start with the goal. " + Tooling + " Git works through your shell; a push is put to "
         + "the user before it runs.";
 
-    private const string Begin = "Begin: read what you need, send the roadmap, then the first stop, then wait.";
+    private const string Begin = "Begin: read what you need, send the roadmap, then the first stop, then end your turn.";
+
+    private const string MoveHeading = "DiffDino pairing:";
 
     /// <summary>The first turn of an agent the app started for a session.</summary>
     public static string Opening(string goal, string repoPath) =>
         "We are pairing in DiffDino. You navigate me through the change one stop at a time and propose "
-        + "the code for each, and I accept it or write it myself. Use the DiffDino MCP tools (pairing_roadmap, pairing_stop, pairing_wait, pairing_say, "
+        + "the code for each, and I accept it or write it myself. Use the DiffDino MCP tools (pairing_roadmap, pairing_stop, pairing_say, "
         + "pairing_show, pairing_state, pairing_end, pairing_start).\n"
         + $"Pass repo: \"{repoPath}\" on every DiffDino call.\n\n"
         + $"The goal:\n{goal}\n\n"
@@ -105,8 +111,54 @@ internal static class PairingInstructions
     public static readonly string Started =
         "The session is open in DiffDino's Pairing panel.\n\n" + Protocol + "\n\n" + Begin;
 
-    /// <summary>What an agent whose turn ended mid-session is told.</summary>
+    /// <summary>What an agent whose turn ended mid-session, leaving the user nothing, is told.</summary>
     public const string Continue =
-        "The pairing session is still running. Continue: if a stop is open, call pairing_wait; if not, "
-        + "send the next pairing_stop or finish with pairing_end.";
+        "The pairing session is still running, and your turn ended without giving the user a stop or a "
+        + "reply. Send the next pairing_stop, answer with pairing_say, or finish with pairing_end.";
+
+    /// <summary>The turn that hands the agent something the user did in the session.</summary>
+    public static string Move(PairingAction action, Func<string, string?> relative) => MoveHeading + " " + action switch
+    {
+        PairingAction.Done done => DoneMove(done),
+        PairingAction.Message message => $"the user says{(message.Stop > 0 ? $", at stop {message.Stop}" : "")}{Where(message.Caret, relative)}:\n\n{message.Text}",
+        PairingAction.Skipped skipped => $"the user skipped stop {skipped.Stop} without changing anything for it.",
+        PairingAction.Ended => "the user ended the session. Stop calling the pairing tools; the conversation goes on.",
+        _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown action."),
+    };
+
+    private static string DoneMove(PairingAction.Done done)
+    {
+        var draft = done.Draft switch
+        {
+            DraftOutcome.NotAccepted => "they wrote it themselves rather than accepting your code",
+            DraftOutcome.AcceptedAsIs => "they accepted your code as it was",
+            DraftOutcome.AcceptedThenEdited => "they accepted your code and then changed it: that is how they want it",
+            _ => throw new ArgumentOutOfRangeException(nameof(done), done.Draft, "Unknown draft outcome."),
+        };
+        var text = $"the user finished stop {done.Stop}; {draft}. What they changed since the stop was shown:\n\n"
+            + (done.Diff.Length == 0 ? "(no changes)" : Fenced(done.Diff, "diff"));
+        return done.Problems.Count == 0 ? text : text + "\n\nProblems:\n- " + string.Join("\n- ", done.Problems);
+    }
+
+    private static string Where(EditorCaret? caret, Func<string, string?> relative)
+    {
+        if (caret is null) return string.Empty;
+        var at = $" with the caret at {relative(caret.Path) ?? caret.Path}:{caret.At.Line.Value}:{caret.At.Column.Value + 1}";
+        return caret.SelectedText.Length == 0 ? at : at + " and this selected:\n\n" + Fenced(caret.SelectedText, "");
+    }
+
+    // A fence longer than any run of backticks inside, so the text can't close it early.
+    private static string Fenced(string text, string language)
+    {
+        var longest = 0;
+        var run = 0;
+        foreach (var c in text)
+        {
+            run = c == '`' ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+        }
+
+        var fence = new string('`', Math.Max(3, longest + 1));
+        return fence + language + "\n" + text.TrimEnd('\n') + "\n" + fence;
+    }
 }

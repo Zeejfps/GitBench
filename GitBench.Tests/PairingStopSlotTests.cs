@@ -45,7 +45,7 @@ public sealed class PairingStopSlotTests : IDisposable
 
     public PairingStopSlotTests()
     {
-        _store = new PairingStore("Add a retry", "Claude Code", new AgentTranscript(), _presentation, _workspace, _dispatcher, new ManualTimeProvider());
+        _store = new PairingStore("Add a retry", "Claude Code", new AgentTranscript(), _presentation, _workspace, _dispatcher, _ => { });
         _store.MarkRunning();
         _harness = GuiTestHarness.Create(
             ctx => new Box

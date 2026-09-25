@@ -6,21 +6,21 @@ using Xunit;
 
 namespace GitBench.Tests;
 
-/// <summary>The pairing loop's hand-off: one open stop at a time, Done returning the user's diff
-/// since the stop was shown, moves queued while the agent isn't waiting, and the wait bounded the
-/// way the walkthrough's is.</summary>
+/// <summary>The pairing loop's hand-off: one open stop at a time, Done handing the agent the user's
+/// diff since the stop was shown, and every move going to the agent in the order it was made, with
+/// nothing waiting on the user in between.</summary>
 public sealed class PairingStoreTests : IDisposable
 {
     private readonly RecordingPairingPresentation _presentation = new();
     private readonly ScriptedWorkspace _workspace = new();
     private readonly QueuedDispatcher _dispatcher = new();
-    private readonly ManualTimeProvider _clock = new();
     private readonly AgentTranscript _transcript = new();
+    private readonly List<PairingAction> _moves = new();
     private readonly PairingStore _store;
 
     public PairingStoreTests()
     {
-        _store = new PairingStore("Add a retry", "Claude Code", _transcript, _presentation, _workspace, _dispatcher, _clock);
+        _store = new PairingStore("Add a retry", "Claude Code", _transcript, _presentation, _workspace, _dispatcher, _moves.Add);
         _store.MarkRunning();
     }
 
@@ -119,12 +119,11 @@ public sealed class PairingStoreTests : IDisposable
         Open();
         _workspace.Current = "after";
         _workspace.Diffs[("before", "after")] = "+ retry";
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         var done = _store.DoneAsync();
-        Pump.WaitFor(_dispatcher, () => done.IsCompleted && wait.IsCompleted, "Done to reach the agent");
+        Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to reach the agent");
 
-        var action = Assert.IsType<PairingAction.Done>(wait.Result);
+        var action = Assert.IsType<PairingAction.Done>(Assert.Single(_moves));
         Assert.Equal(1, action.Stop);
         Assert.Equal("+ retry", action.Diff);
         Assert.Contains("save", _presentation.Calls);
@@ -132,29 +131,16 @@ public sealed class PairingStoreTests : IDisposable
     }
 
     [Fact]
-    public void Done_WithNoWaitAttached_IsHeldForTheNextWait()
-    {
-        Open();
-        var done = _store.DoneAsync();
-        Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to finish");
-
-        var wait = _store.WaitAsync(CancellationToken.None);
-
-        Assert.True(wait.IsCompleted);
-        Assert.IsType<PairingAction.Done>(wait.Result);
-    }
-
-    [Fact]
-    public void QueuedMoves_ComeOutInOrder_SoAMessageNeverHidesADone()
+    public void Moves_GoOutInOrder_SoAMessageNeverHidesADone()
     {
         Open();
         var done = _store.DoneAsync();
         Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to finish");
         _store.Say("Why a loop?");
 
-        Assert.IsType<PairingAction.Done>(_store.WaitAsync(CancellationToken.None).Result);
-        var ask = Assert.IsType<PairingAction.Message>(_store.WaitAsync(CancellationToken.None).Result);
-        Assert.Equal("Why a loop?", ask.Text);
+        Assert.Equal(2, _moves.Count);
+        Assert.IsType<PairingAction.Done>(_moves[0]);
+        Assert.Equal("Why a loop?", Assert.IsType<PairingAction.Message>(_moves[1]).Text);
     }
 
     [Fact]
@@ -162,72 +148,86 @@ public sealed class PairingStoreTests : IDisposable
     {
         Open();
         _presentation.CaretState.Value = new EditorCaret("C:/repo/src/Client.cs", TextPosition.At(12, 3), "retries");
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         _store.Say("Is this the right place?");
 
-        var ask = Assert.IsType<PairingAction.Message>(wait.Result);
+        var ask = Assert.IsType<PairingAction.Message>(Assert.Single(_moves));
         Assert.Equal("retries", ask.Caret!.SelectedText);
         Assert.Contains(_transcript.Messages, m => m is PairingMessage.FromUser { Text: "Is this the right place?" });
     }
 
     [Fact]
-    public void Wait_RunsOutAsPending()
-    {
-        var wait = _store.WaitAsync(CancellationToken.None);
-
-        _clock.Advance(PairingStore.WaitTimeout);
-        _dispatcher.Drain();
-
-        Assert.IsType<PairingAction.Pending>(wait.Result);
-    }
-
-    [Fact]
-    public void ANewerWait_CancelsTheOlder()
-    {
-        var first = _store.WaitAsync(CancellationToken.None);
-        var second = _store.WaitAsync(CancellationToken.None);
-
-        Assert.IsType<PairingAction.Cancelled>(first.Result);
-        Assert.False(second.IsCompleted);
-    }
-
-    [Fact]
-    public void Waiting_IsVisibleInThePhase()
+    public void ATurnEnding_HandsTheMoveToTheUser_AndTheirMoveHandsItBack()
     {
         Assert.Equal(new PairingPhase.Running(false), _store.Phase.Value);
-        var wait = _store.WaitAsync(CancellationToken.None);
+        _store.MarkTurnStarted();
+        _store.MarkTurnEnded();
         Assert.Equal(new PairingPhase.Running(true), _store.Phase.Value);
 
         _store.Say("?");
 
-        Assert.True(wait.IsCompleted);
         Assert.Equal(new PairingPhase.Running(false), _store.Phase.Value);
     }
 
     [Fact]
-    public void EndByUser_AnswersTheWaitWithEnded()
+    public void WhileATurnRuns_AStopDoesNotHandOverUntilTheTurnEnds()
+    {
+        _store.MarkTurnStarted();
+
+        Open();
+
+        Assert.Equal(new PairingPhase.Running(false), _store.Phase.Value);
+        Assert.True(_store.HasHandedOver);
+    }
+
+    [Fact]
+    public void AnAgentWhoseTurnsAreNotSeen_HandsOverWithAStopOrAReply()
     {
         Open();
-        var wait = _store.WaitAsync(CancellationToken.None);
+        Assert.Equal(new PairingPhase.Running(true), _store.Phase.Value);
+
+        _store.Skip();
+        Assert.Equal(new PairingPhase.Running(false), _store.Phase.Value);
+
+        _store.AddReply("Fair enough.");
+        Assert.Equal(new PairingPhase.Running(true), _store.Phase.Value);
+    }
+
+    [Fact]
+    public void ATurnThatLeavesNeitherAStopNorAReply_HasNotHandedOver()
+    {
+        _store.MarkTurnStarted();
+        _store.SetRoadmap([new Milestone("Model", false)]);
+        _store.MarkTurnEnded();
+        Assert.False(_store.HasHandedOver);
+
+        _store.MarkTurnStarted();
+        _store.AddReply("Where should the retry live?");
+
+        Assert.True(_store.HasHandedOver);
+    }
+
+    [Fact]
+    public void EndByUser_TellsTheAgentOnce()
+    {
+        Open();
 
         _store.EndByUser();
+        _store.EndByUser();
 
-        Assert.IsType<PairingAction.Ended>(wait.Result);
+        Assert.IsType<PairingAction.Ended>(Assert.Single(_moves));
         Assert.IsType<PairingPhase.Ended>(_store.Phase.Value);
         Assert.Null(_store.Stop.Value);
-        Assert.IsType<PairingAction.Ended>(_store.WaitAsync(CancellationToken.None).Result);
     }
 
     [Fact]
     public void Skip_ClosesTheStopWithoutADiff()
     {
         Open();
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         _store.Skip();
 
-        Assert.IsType<PairingAction.Skipped>(wait.Result);
+        Assert.IsType<PairingAction.Skipped>(Assert.Single(_moves));
         Assert.Null(_store.Stop.Value);
         Assert.Equal(1, _workspace.Captures);
     }
@@ -236,11 +236,10 @@ public sealed class PairingStoreTests : IDisposable
     public void Accept_PutsTheAgentsCodeIn_AndStaysOnTheStop()
     {
         Open();
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         Assert.True(Await(_store.AcceptAsync(), "Accept"));
 
-        Assert.False(wait.IsCompleted);
+        Assert.Empty(_moves);
         Assert.IsType<DraftState.Taken>(_store.Stop.Value!.DraftState);
         Assert.Contains("take draft", _presentation.Calls);
         Assert.Contains("clear draft", _presentation.Calls);
@@ -252,13 +251,12 @@ public sealed class PairingStoreTests : IDisposable
         _workspace.Current = "before";
         Open();
         _presentation.Calls.Clear();
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         _workspace.Current = "after";
         var go = _store.AcceptAndNextAsync();
-        Pump.WaitFor(_dispatcher, () => go.IsCompleted && wait.IsCompleted, "Accept & next to reach the agent");
+        Pump.WaitFor(_dispatcher, () => go.IsCompleted, "Accept & next to reach the agent");
 
-        var done = Assert.IsType<PairingAction.Done>(wait.Result);
+        var done = Assert.IsType<PairingAction.Done>(Assert.Single(_moves));
         Assert.Equal(DraftOutcome.AcceptedAsIs, done.Draft);
         Assert.Equal("diff before..after", done.Diff);
         Assert.True(_presentation.Calls.IndexOf("take draft") < _presentation.Calls.IndexOf("save"));
@@ -271,24 +269,22 @@ public sealed class PairingStoreTests : IDisposable
         Open();
         Await(_store.AcceptAsync(), "Accept");
         _presentation.FileText = "file, changed by hand";
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         var next = _store.DoneAsync();
-        Pump.WaitFor(_dispatcher, () => next.IsCompleted && wait.IsCompleted, "Next to reach the agent");
+        Pump.WaitFor(_dispatcher, () => next.IsCompleted, "Next to reach the agent");
 
-        Assert.Equal(DraftOutcome.AcceptedThenEdited, Assert.IsType<PairingAction.Done>(wait.Result).Draft);
+        Assert.Equal(DraftOutcome.AcceptedThenEdited, Assert.IsType<PairingAction.Done>(Assert.Single(_moves)).Draft);
     }
 
     [Fact]
     public void TheEditorsPills_AcceptOrAcceptAndMoveOn()
     {
         Open();
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         _presentation.Actions!.AcceptAndNext();
-        Pump.WaitFor(_dispatcher, () => wait.IsCompleted, "the pill to reach the agent");
+        Pump.WaitFor(_dispatcher, () => _moves.Count > 0, "the pill to reach the agent");
 
-        Assert.Equal(DraftOutcome.AcceptedAsIs, Assert.IsType<PairingAction.Done>(wait.Result).Draft);
+        Assert.Equal(DraftOutcome.AcceptedAsIs, Assert.IsType<PairingAction.Done>(Assert.Single(_moves)).Draft);
     }
 
     [Fact]
@@ -296,11 +292,10 @@ public sealed class PairingStoreTests : IDisposable
     {
         Open();
         _presentation.TakeSucceeds = false;
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         Await(_store.AcceptAsync().ContinueWith(_ => true), "Accept to give up");
 
-        Assert.False(wait.IsCompleted);
+        Assert.Empty(_moves);
         Assert.NotNull(_store.Stop.Value);
         Assert.Equal(StopActivity.Idle, _store.Activity.Value);
         Assert.Equal(NoticeTone.Error, Assert.IsType<PairingMessage.Notice>(Assert.Single(_transcript.Messages)).Tone);
@@ -345,12 +340,11 @@ public sealed class PairingStoreTests : IDisposable
     public void Done_WithoutAccepting_SaysTheUserTypedIt()
     {
         Open();
-        var wait = _store.WaitAsync(CancellationToken.None);
 
         var done = _store.DoneAsync();
-        Pump.WaitFor(_dispatcher, () => done.IsCompleted && wait.IsCompleted, "Done to reach the agent");
+        Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to reach the agent");
 
-        Assert.Equal(DraftOutcome.NotAccepted, Assert.IsType<PairingAction.Done>(wait.Result).Draft);
+        Assert.Equal(DraftOutcome.NotAccepted, Assert.IsType<PairingAction.Done>(Assert.Single(_moves)).Draft);
         Assert.Contains("clear draft", _presentation.Calls);
     }
 
@@ -391,9 +385,9 @@ public sealed class PairingStoreTests : IDisposable
         var done = _store.DoneAsync();
         Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to finish");
 
-        var said = Assert.IsType<PairingAction.Message>(_store.WaitAsync(CancellationToken.None).Result);
-        Assert.Equal("I went with an event instead of a callback", said.Text);
-        Assert.IsType<PairingAction.Done>(_store.WaitAsync(CancellationToken.None).Result);
+        Assert.Equal(2, _moves.Count);
+        Assert.Equal("I went with an event instead of a callback", Assert.IsType<PairingAction.Message>(_moves[0]).Text);
+        Assert.IsType<PairingAction.Done>(_moves[1]);
     }
 
     [Fact]
