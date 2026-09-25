@@ -25,9 +25,9 @@ internal sealed class GuiAppMcpServerHost : IMcpServerHost
 }
 
 /// <summary>
-/// Keeps the agent-connections server in step with its preference: on, on the chosen port, behind
-/// the stored token — generating that token the first time the preference is enabled — and off
-/// otherwise. Publishes what it is doing, with the open session count, for the settings card and
+/// Keeps the agent-connections server in step with its preference: on, on the chosen port or the
+/// next free one after it, behind the stored token — generating that token the first time the
+/// preference is enabled — and off otherwise. Publishes what it is doing, with the open session count, for the settings card and
 /// the status bar. UI thread only.
 /// </summary>
 /// <remarks>
@@ -39,6 +39,7 @@ internal sealed class GuiAppMcpServerHost : IMcpServerHost
 internal sealed class AgentConnectionService : IDisposable
 {
     public const string ServerName = "DiffDino";
+    public const int PortAttempts = 20;
 
     private readonly State<AgentConnectionSettings> _settings;
     private readonly State<AgentConnectionState> _state;
@@ -89,32 +90,44 @@ internal sealed class AgentConnectionService : IDisposable
             return;
 
         StopIfRunning();
-        var options = new McpServerOptions
+        _state.Value = Start(settings.Port, token);
+    }
+
+    // A port another instance holds moves the server up to the next free one; the preference keeps
+    // the chosen port, and the state reports where the server actually listens.
+    private AgentConnectionState Start(int port, McpPathToken token)
+    {
+        McpServerStart.Failed? firstFailure = null;
+        var last = Math.Min(port + PortAttempts - 1, 65535);
+        for (var candidate = port; candidate <= last; candidate++)
         {
-            ServerName = ServerName,
-            Port = settings.Port,
-            PathToken = token,
-            Instructions = AgentConnectionInstructions.Text,
-            Prompts = _prompts,
-            ToolSources = [_source],
-            IncludeGuiTools = false,
-        };
-        switch (_host.Start(options))
-        {
-            case McpServerStart.Started started:
-                _server = new Server.Running(settings.Port, token);
-                _state.Value = new AgentConnectionState.Listening(started.Endpoint, _source.OpenSessions.Value);
-                break;
-            case McpServerStart.AlreadyRunning already:
-                _state.Value = new AgentConnectionState.Failed(
-                    $"Another MCP server is already listening at {already.Endpoint}. Agent connections are off while it runs.");
-                break;
-            case McpServerStart.Failed failed:
-                _state.Value = new AgentConnectionState.Failed(failed.Message);
-                break;
-            default:
-                throw new InvalidOperationException("Unhandled server start outcome.");
+            var options = new McpServerOptions
+            {
+                ServerName = ServerName,
+                Port = candidate,
+                PathToken = token,
+                Instructions = AgentConnectionInstructions.Text,
+                Prompts = _prompts,
+                ToolSources = [_source],
+                IncludeGuiTools = false,
+            };
+            switch (_host.Start(options))
+            {
+                case McpServerStart.Started started:
+                    _server = new Server.Running(port, token);
+                    return new AgentConnectionState.Listening(started.Endpoint, _source.OpenSessions.Value);
+                case McpServerStart.AlreadyRunning already:
+                    return new AgentConnectionState.Failed(
+                        $"Another MCP server is already listening at {already.Endpoint}. Agent connections are off while it runs.");
+                case McpServerStart.Failed failed:
+                    firstFailure ??= failed;
+                    break;
+                default:
+                    throw new InvalidOperationException("Unhandled server start outcome.");
+            }
         }
+
+        return new AgentConnectionState.Failed(firstFailure!.Message);
     }
 
     private void StopIfRunning()
