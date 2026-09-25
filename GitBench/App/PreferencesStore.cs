@@ -44,6 +44,7 @@ public static class PreferencesStore
         public bool? RepoBarCollapsed { get; set; } = false;
         public float? BranchesWidth { get; set; } = 220f;
         public float? PairingPanelWidth { get; set; }
+        public float? PairingChatSplitFraction { get; set; }
         public string? PairingTerminalCommand { get; set; }
         public string? ChatAgent { get; set; }
         public float? CommitDetailsWidth { get; set; } = 380f;
@@ -138,6 +139,7 @@ public static class PreferencesStore
                 RepoBarCollapsed = file.RepoBarCollapsed ?? defaults.RepoBarCollapsed,
                 BranchesWidth = file.BranchesWidth is > 0 ? file.BranchesWidth.Value : defaults.BranchesWidth,
                 PairingPanelWidth = file.PairingPanelWidth is > 0 ? file.PairingPanelWidth.Value : defaults.PairingPanelWidth,
+                PairingChatSplitFraction = file.PairingChatSplitFraction is > 0 ? file.PairingChatSplitFraction.Value : defaults.PairingChatSplitFraction,
                 PairingTerminalCommand = string.IsNullOrWhiteSpace(file.PairingTerminalCommand)
                                          || file.PairingTerminalCommand == Features.Pairing.TerminalAgentCommand.LegacyClaudeCode
                     ? defaults.PairingTerminalCommand
@@ -188,6 +190,7 @@ public static class PreferencesStore
             RepoBarCollapsed = preferences.RepoBarCollapsed,
             BranchesWidth = preferences.BranchesWidth,
             PairingPanelWidth = preferences.PairingPanelWidth,
+            PairingChatSplitFraction = preferences.PairingChatSplitFraction,
             PairingTerminalCommand = preferences.PairingTerminalCommand,
             ChatAgent = preferences.ChatAgent,
             CommitDetailsWidth = preferences.CommitDetailsWidth,

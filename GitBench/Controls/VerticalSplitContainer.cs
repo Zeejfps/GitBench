@@ -19,6 +19,7 @@ internal sealed class VerticalSplitContainer : ContainerView
     private readonly View _top;
     private readonly View _bottom;
     private readonly View _splitter;
+    private bool _topVisible = true;
     private bool _bottomVisible;
     private bool _bottomCollapsed;
     private float _collapsedBottomHeight;
@@ -37,6 +38,18 @@ internal sealed class VerticalSplitContainer : ContainerView
         AddChildToSelf(_top);
     }
 
+    public bool TopVisible
+    {
+        get => _topVisible;
+        set
+        {
+            if (_topVisible == value) return;
+            _topVisible = value;
+            SyncChildren();
+            SetDirty();
+        }
+    }
+
     public bool BottomVisible
     {
         get => _bottomVisible;
@@ -44,7 +57,7 @@ internal sealed class VerticalSplitContainer : ContainerView
         {
             if (_bottomVisible == value) return;
             _bottomVisible = value;
-            SyncBottomChildren();
+            SyncChildren();
             SetDirty();
         }
     }
@@ -58,7 +71,7 @@ internal sealed class VerticalSplitContainer : ContainerView
         if (_bottomCollapsed == collapsed && !heightChanged) return;
         _bottomCollapsed = collapsed;
         _collapsedBottomHeight = collapsedHeight;
-        SyncBottomChildren();
+        SyncChildren();
         SetDirty();
     }
 
@@ -75,7 +88,7 @@ internal sealed class VerticalSplitContainer : ContainerView
     // smaller bottom. Clamped so neither side can collapse to zero.
     public void AdjustBottomFractionByPixels(float dy)
     {
-        if (!_bottomVisible || _bottomCollapsed) return;
+        if (!_topVisible || !_bottomVisible || _bottomCollapsed) return;
         var available = Position.Height - SplitterThickness;
         if (available <= 0f) return;
         var next = Math.Clamp(_bottomFraction + dy / available, MinFraction, MaxFraction);
@@ -85,13 +98,17 @@ internal sealed class VerticalSplitContainer : ContainerView
         FractionChanged?.Invoke(_bottomFraction);
     }
 
-    private void SyncBottomChildren()
+    private void SyncChildren()
     {
-        var wantSplitter = _bottomVisible && !_bottomCollapsed;
+        var wantSplitter = _topVisible && _bottomVisible && !_bottomCollapsed;
         var wantBottom = _bottomVisible;
 
+        var hasTop = ReferenceEquals(_top.Parent, this);
         var hasSplitter = ReferenceEquals(_splitter.Parent, this);
         var hasBottom = ReferenceEquals(_bottom.Parent, this);
+
+        if (_topVisible && !hasTop) AddChildToSelf(_top);
+        else if (!_topVisible && hasTop) RemoveChildFromSelf(_top);
 
         if (wantSplitter && !hasSplitter) AddChildToSelf(_splitter);
         else if (!wantSplitter && hasSplitter) RemoveChildFromSelf(_splitter);
@@ -104,6 +121,12 @@ internal sealed class VerticalSplitContainer : ContainerView
     {
         var pos = Position;
         if (pos.Width <= 0f || pos.Height <= 0f) return;
+
+        if (!_topVisible)
+        {
+            if (_bottomVisible) LayoutSlice(_bottom, pos.Left, pos.Bottom, pos.Width, pos.Height);
+            return;
+        }
 
         if (!_bottomVisible)
         {

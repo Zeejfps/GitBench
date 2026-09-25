@@ -41,7 +41,7 @@ internal sealed record PairingPanelSlot : Widget
 /// <summary>
 /// The conversation with a repository's agent, the way the user follows it: who drives and whose
 /// turn it is; while a pairing session runs, the stop they are on and the goal and roadmap with what
-/// the agent last changed in it; and the conversation under it with a field to talk to the agent,
+/// the agent last changed in it, in a pane of their own; and the conversation under it with a field to talk to the agent,
 /// which stays once the session is over.
 /// </summary>
 internal sealed record PairingPanel : Widget
@@ -53,7 +53,9 @@ internal sealed record PairingPanel : Widget
     protected override IWidget Build(Context ctx)
     {
         var conversation = Conversation;
+        var preferences = ctx.Require<PreferencesService>();
         var scroll = new ScrollRegionHandle();
+        var pairing = new Derived<bool>(() => conversation.Session.Value is not null);
         IWidget panel = new Box
         {
             Id = PanelId,
@@ -68,41 +70,27 @@ internal sealed record PairingPanel : Widget
                         new PairingHeader { Conversation = conversation },
                         new Grow
                         {
-                            Child = new ScrollRegion
+                            Child = new VerticalSplit
                             {
-                                FillParent = true,
-                                Handle = scroll,
-                                Content = new Padding
+                                TopVisible = pairing,
+                                BottomFraction = preferences.Current.PairingChatSplitFraction,
+                                OnFractionChanged = f => preferences.Update(p => p with { PairingChatSplitFraction = f }),
+                                Top = new Switch<PairingSession?>
                                 {
-                                    Amount = PaddingStyle.All(Spacing.Lg),
-                                    Children =
-                                    [
-                                        new Column
-                                        {
-                                            Gap = Spacing.Lg,
-                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                            Children =
-                                            [
-                                                new Switch<PairingSession?>
-                                                {
-                                                    Value = conversation.Session,
-                                                    Case = session => session is null
-                                                        ? Empty.Widget
-                                                        : new Column
-                                                        {
-                                                            Gap = Spacing.Lg,
-                                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                                            Children =
-                                                            [
-                                                                new PairingStopSlot { Store = session.Store },
-                                                                new PairingGoalAndRoadmap { Store = session.Store },
-                                                            ],
-                                                        },
-                                                },
-                                                new PairingConversation { Conversation = conversation },
-                                            ],
-                                        },
-                                    ],
+                                    Value = conversation.Session,
+                                    Case = session => session is null
+                                        ? Empty.Widget
+                                        : new PairingSessionPane { Store = session.Store },
+                                },
+                                Bottom = new ScrollRegion
+                                {
+                                    FillParent = true,
+                                    Handle = scroll,
+                                    Content = new Padding
+                                    {
+                                        Amount = PaddingStyle.All(Spacing.Lg),
+                                        Children = [new PairingConversation { Conversation = conversation }],
+                                    },
                                 },
                             },
                         },
@@ -123,34 +111,79 @@ internal sealed record PairingPanel : Widget
             ],
         };
 
-        return panel.Use(_ => Follow(conversation, scroll, ctx.Require<IUiDispatcher>()));
+        return panel.Use(_ =>
+        {
+            var owned = new SubscriptionGroup();
+            owned.Add(pairing);
+            owned.Add(Follow(conversation, scroll));
+            return owned;
+        });
     }
 
-    // What the user says pins the panel to the end of the conversation, which then keeps up with
-    // the reply as it streams in; a new stop takes the panel back to the top, where its card is.
-    private static IDisposable Follow(AgentConversation conversation, ScrollRegionHandle scroll, IUiDispatcher dispatcher)
+    // What the user says pins the conversation to its end, which then keeps up with the reply as it
+    // streams in.
+    private static IDisposable Follow(AgentConversation conversation, ScrollRegionHandle scroll)
     {
-        var subscriptions = new SubscriptionGroup();
         var messages = conversation.Transcript.Messages;
         var count = messages.Count;
-        subscriptions.Add(messages.Subscribe(_ =>
+        return messages.Subscribe(_ =>
         {
             var grew = messages.Count > count;
             count = messages.Count;
             if (grew && messages[^1] is PairingMessage.FromUser or PairingMessage.SessionOver) scroll.FollowBottom();
-        }));
+        });
+    }
+}
 
-        var stop = new Derived<int>(() => conversation.Session.Value?.Store.Stop.Value?.Stop.Number ?? 0);
-        subscriptions.Add(stop);
-        var stopNumber = stop.Value;
-        subscriptions.Add(stop.Subscribe(number =>
+/// <summary>The session's pane over the conversation: the stop the user is on, then the goal and
+/// roadmap. It scrolls on its own, and a new stop takes it back to the top, where its card is.</summary>
+internal sealed record PairingSessionPane : Widget
+{
+    public required PairingStore Store { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        var store = Store;
+        var scroll = new ScrollRegionHandle();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+        IWidget pane = new ScrollRegion
         {
-            if (number == stopNumber) return;
-            stopNumber = number;
-            // Posted, so the card is in the tree before the region goes to it.
-            if (number != 0) dispatcher.Post(scroll.ScrollToTop);
-        }));
-        return subscriptions;
+            FillParent = true,
+            Handle = scroll,
+            Content = new Padding
+            {
+                Amount = PaddingStyle.All(Spacing.Lg),
+                Children =
+                [
+                    new Column
+                    {
+                        Gap = Spacing.Lg,
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                        Children =
+                        [
+                            new PairingStopSlot { Store = store },
+                            new PairingGoalAndRoadmap { Store = store },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        return pane.Use(_ =>
+        {
+            var stop = new Derived<int>(() => store.Stop.Value?.Stop.Number ?? 0);
+            var stopNumber = stop.Value;
+            var subscriptions = new SubscriptionGroup();
+            subscriptions.Add(stop);
+            subscriptions.Add(stop.Subscribe(number =>
+            {
+                if (number == stopNumber) return;
+                stopNumber = number;
+                // Posted, so the card is in the tree before the region goes to it.
+                if (number != 0) dispatcher.Post(scroll.ScrollToTop);
+            }));
+            return subscriptions;
+        });
     }
 }
 
@@ -464,7 +497,7 @@ internal sealed record PairingConversation : Widget
                 new Each<PairingMessage>
                 {
                     Items = conversation.Transcript.Messages,
-                    Template = new PairingMessageRow { Speaker = conversation.Harness.Label, RepoPath = conversation.Repo.Path },
+                    Template = new PairingMessageRow { Conversation = conversation },
                     Gap = Spacing.Lg,
                     CrossAxis = CrossAxisAlignment.Stretch,
                 },
@@ -520,29 +553,31 @@ internal sealed record PairingChatFooter : Widget
     }
 }
 
-/// <summary>One entry of the conversation in the transcript row for its kind.</summary>
+/// <summary>One entry of the conversation in the transcript row for its kind. The live session's
+/// start is left out: its goal is in the session's pane.</summary>
 internal sealed record PairingMessageRow : Widget
 {
-    /// <summary>The agent's name, over its prose.</summary>
-    public required string Speaker { get; init; }
-
-    /// <summary>The repository, whose paths quotes are shown relative to.</summary>
-    public required string RepoPath { get; init; }
+    public required AgentConversation Conversation { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
+        var conversation = Conversation;
         var message = ctx.Require<PairingMessage>();
         var loc = ctx.Localization();
 
         IWidget content = message switch
         {
-            PairingMessage.SessionStarted started => new Text
+            PairingMessage.SessionStarted started => new Show
             {
-                Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingSessionStarted(started.Goal)),
-                FontSize = FontSize.Caption,
-                Weight = FontWeight.Bold,
-                Wrap = TextWrap.Wrap,
-                Color = Theme.Color(s => s.Palette.TextSecondary),
+                When = new Derived<bool>(() => !IsLiveStart(conversation, started)),
+                Then = () => new Text
+                {
+                    Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingSessionStarted(started.Goal)),
+                    FontSize = FontSize.Caption,
+                    Weight = FontWeight.Bold,
+                    Wrap = TextWrap.Wrap,
+                    Color = Theme.Color(s => s.Palette.TextSecondary),
+                },
             },
             PairingMessage.SessionOver over => new PairingOutcome { Outcome = over.Outcome },
             PairingMessage.FromUser { Quote: null } said => new TranscriptMessageRow
@@ -563,10 +598,10 @@ internal sealed record PairingMessageRow : Widget
                         Label = L.T(s => s.AssistantYou),
                         LabelColor = static s => s.Palette.TextSecondary,
                     },
-                    new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(RepoPath, path)) },
+                    new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(conversation.Repo.Path, path)) },
                 ],
             },
-            PairingMessage.Narration narration => new TranscriptReplyRow { Text = narration.Text, Speaker = Speaker },
+            PairingMessage.Narration narration => new TranscriptReplyRow { Text = narration.Text, Speaker = conversation.Harness.Label },
             PairingMessage.Notice notice => new TranscriptNoticeRow
             {
                 Text = new State<string>(notice.Text),
@@ -583,6 +618,10 @@ internal sealed record PairingMessageRow : Widget
 
         return new FadeIn { Child = content };
     }
+
+    private static bool IsLiveStart(AgentConversation conversation, PairingMessage.SessionStarted started) =>
+        conversation.Session.Value is not null
+        && ReferenceEquals(conversation.Transcript.Messages.LastOrDefault(m => m is PairingMessage.SessionStarted), started);
 }
 
 /// <summary>A tool call the write guard left to the user: what it is, and Deny / Approve.</summary>

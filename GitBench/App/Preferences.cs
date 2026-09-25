@@ -38,6 +38,7 @@ public sealed record Preferences
     public bool RepoBarCollapsed { get; init; }
     public float BranchesWidth { get; init; } = 220f;
     public float PairingPanelWidth { get; init; } = 380f;
+    public float PairingChatSplitFraction { get; init; } = 0.6f;
 
     /// <summary>The command a terminal pairing session starts its agent with.</summary>
     public string PairingTerminalCommand { get; init; } = Features.Pairing.TerminalAgentCommand.ClaudeCode;
