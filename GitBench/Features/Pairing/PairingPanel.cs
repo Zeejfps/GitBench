@@ -153,11 +153,10 @@ internal sealed record PairingPanel : Widget
     }
 }
 
-/// <summary>The panel's top band: the agent, whose turn it is, End while a session runs, Close,
-/// which ends the conversation and stops the agent, and Hide, which leaves it running.</summary>
+/// <summary>The panel's top band: the agent, whose turn it is, End while a session runs, and Close,
+/// which ends the conversation and stops the agent.</summary>
 internal sealed record PairingHeader : Widget
 {
-    public const string HideId = "pairing-hide";
     public const string EndId = "pairing-end";
     public const string CloseId = "pairing-close";
 
@@ -223,19 +222,11 @@ internal sealed record PairingHeader : Widget
                                 new ButtonWidget
                                 {
                                     Id = CloseId,
-                                    Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                    Command = new Command(() => sessions.Close(conversation.Repo.Id)),
-                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingClose) }],
-                                }.WithController<KbmController>(),
-                                new ButtonWidget
-                                {
-                                    Id = HideId,
-                                    Style = ButtonStyle.Bare(_ => Theme.Color(s => s.Palette.TextSecondary)),
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
-                                    Command = new Command(() => sessions.HidePanel(conversation.Repo.Id)),
-                                    Children = [new ButtonIcon { Value = LucideIcons.PanelRightClose }],
+                                    Command = new Command(() => sessions.Close(conversation.Repo.Id)),
+                                    Children = [new ButtonIcon { Value = LucideIcons.X }],
                                 }
-                                .WithTooltip(L.T(s => s.PairingHide))
+                                .WithTooltip(L.T(s => s.PairingClose))
                                 .WithController<KbmController>(),
                             ],
                         },

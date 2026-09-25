@@ -1020,7 +1020,6 @@
   "agent.send_continues": "{agent} との会話に送られます。",
   "pairing.end": "終了",
   "pairing.close": "閉じる",
-  "pairing.hide": "非表示",
   "agent_chat.open": "エージェントとチャット",
   "agent_chat.pick_hint": "右クリックでエージェントを選択",
   "agent_chat.connections_on": "エージェント接続が有効になりました。エージェントはこれを通じて DiffDino にアクセスします。",

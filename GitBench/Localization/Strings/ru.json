@@ -1136,7 +1136,6 @@
   "agent.send_continues": "Уйдёт в ваш разговор с {agent}.",
   "pairing.end": "Завершить",
   "pairing.close": "Закрыть",
-  "pairing.hide": "Скрыть",
   "agent_chat.open": "Чат с агентом",
   "agent_chat.pick_hint": "Правый клик — выбрать агента",
   "agent_chat.connections_on": "Подключения агентов включены: через них агент обращается к DiffDino.",

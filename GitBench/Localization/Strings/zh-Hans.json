@@ -1020,7 +1020,6 @@
   "agent.send_continues": "将发送到你与 {agent} 的对话中。",
   "pairing.end": "结束",
   "pairing.close": "关闭",
-  "pairing.hide": "隐藏",
   "agent_chat.open": "与代理聊天",
   "agent_chat.pick_hint": "右键单击以选择代理",
   "agent_chat.connections_on": "代理连接已开启：代理通过它访问 DiffDino。",

@@ -1163,7 +1163,6 @@
   "agent.send_continues": "يُرسل إلى محادثتك مع {agent}.",
   "pairing.end": "إنهاء",
   "pairing.close": "إغلاق",
-  "pairing.hide": "إخفاء",
   "agent_chat.open": "الدردشة مع وكيل",
   "agent_chat.pick_hint": "انقر بزر الفأرة الأيمن لاختيار الوكيل",
   "agent_chat.connections_on": "اتصالات الوكلاء قيد التشغيل الآن: يصل الوكيل إلى DiffDino من خلالها.",

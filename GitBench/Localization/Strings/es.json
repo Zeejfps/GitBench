@@ -1022,7 +1022,6 @@
   "agent.send_continues": "Va a tu conversación con {agent}.",
   "pairing.end": "Terminar",
   "pairing.close": "Cerrar",
-  "pairing.hide": "Ocultar",
   "agent_chat.open": "Chatear con un agente",
   "agent_chat.pick_hint": "Clic derecho para elegir el agente",
   "agent_chat.connections_on": "Las conexiones de agentes están activadas: el agente llega a DiffDino a través de ellas.",

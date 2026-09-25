@@ -1020,7 +1020,6 @@
   "agent.send_continues": "{agent}와(과)의 대화로 보냅니다.",
   "pairing.end": "종료",
   "pairing.close": "닫기",
-  "pairing.hide": "숨기기",
   "agent_chat.open": "에이전트와 채팅",
   "agent_chat.pick_hint": "마우스 오른쪽 버튼으로 에이전트 선택",
   "agent_chat.connections_on": "에이전트 연결이 켜졌습니다. 에이전트는 이를 통해 DiffDino에 접근합니다.",

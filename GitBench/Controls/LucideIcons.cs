@@ -60,7 +60,6 @@ internal static class LucideIcons
     public const string ScrollText = "";   // scroll-text (Changes: every diff in one stacked scroll)
     public const string PanelLeftClose = ""; // panel-left-close (collapse the repo bar)
     public const string PanelLeftOpen = "";  // panel-left-open (expand the repo bar)
-    public const string PanelRightClose = ""; // panel-right-close (hide the agent panel)
     public const string Sparkles = "";        // sparkles (the agent chat)
 
     public const string CircleCheck = "";  // check-circle (empty state: working tree clean)
