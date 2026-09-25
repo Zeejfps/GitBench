@@ -401,8 +401,8 @@ internal sealed class PairingSayTool(PairingTarget target) : IAssistantTool
 
     public string Description =>
         "Says something to the user in the Pairing panel's conversation: the answer to a message, or "
-        + "a short remark about their diff. The user reads only what you send here — prose outside the "
-        + "tools may never reach them. Markdown; keep it brief: the stop's code goes in pairing_stop, "
+        + "a short remark about their diff. Say it here, and only here: prose outside the tools may never "
+        + "reach the user, and where it does, repeating it there shows them the same answer twice. Markdown; keep it brief: the stop's code goes in pairing_stop, "
         + "not here. Returns at once; end your turn once you have nothing more to do, and the user's answer comes to you as your next message.";
 
     public string JsonSchema =>
