@@ -586,7 +586,7 @@ internal sealed record PairingMessageRow : Widget
                     _ => throw new ArgumentOutOfRangeException(nameof(message), notice.Tone, "Unknown tone."),
                 },
             },
-            PairingMessage.Approval approval => new PairingApprovalCard { Pending = approval.Pending },
+            PairingMessage.Approval approval => new PairingApprovalCard { Approval = approval },
             _ => throw new ArgumentOutOfRangeException(nameof(message), message, "Unknown message."),
         };
 
@@ -598,15 +598,17 @@ internal sealed record PairingMessageRow : Widget
         && ReferenceEquals(conversation.Transcript.Messages.LastOrDefault(m => m is PairingMessage.SessionStarted), started);
 }
 
-/// <summary>A tool call the write guard left to the user: what it is, and Deny / Approve.</summary>
+/// <summary>A tool call the write guard left to the user: what it is, what an edit would change,
+/// and Deny / Approve, with Allow this file for an edit.</summary>
 internal sealed record PairingApprovalCard : Widget
 {
-    public required PendingToolApproval Pending { get; init; }
+    public required PairingMessage.Approval Approval { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var pending = Pending;
+        var pending = Approval.Pending;
         var loc = ctx.Localization();
+        IWidget[] preview = Approval.Preview.Count > 0 ? [new EditPreviewBlock { Lines = Approval.Preview }] : [];
         return new Box
         {
             Background = Theme.Color(s => s.Palette.SurfaceRaised),
@@ -642,7 +644,10 @@ internal sealed record PairingApprovalCard : Widget
                                     Wrap = TextWrap.Wrap,
                                     Color = Theme.Color(s => s.Palette.TextSecondary),
                                 },
-                                new ToolApprovalActions { Pending = pending },
+                                .. preview,
+                                Approval.Allowance is { } allowance
+                                    ? new FileAllowanceActions { Pending = pending, Allowance = allowance }
+                                    : new ToolApprovalActions { Pending = pending },
                             ],
                         },
                     ],

@@ -68,10 +68,13 @@ internal sealed class AgentTranscript
     public void AddNotice(string text, NoticeTone tone) => Add(new PairingMessage.Notice(text, tone));
 
     /// <summary>Puts a tool call the write guard has no rule for in front of the user.</summary>
-    public PendingToolApproval AskPermission(string title, string details)
+    /// <remarks><paramref name="allowFiles"/>, where given, is what answering "this file" grants on
+    /// top of approving.</remarks>
+    public PendingToolApproval AskPermission(
+        string title, string details, IReadOnlyList<EditPreviewLine>? preview = null, Action? allowFiles = null)
     {
         var pending = new PendingToolApproval(title, details);
-        Add(new PairingMessage.Approval(pending));
+        Add(new PairingMessage.Approval(pending, preview ?? [], allowFiles is null ? null : new FileAllowance(pending, allowFiles)));
         return pending;
     }
 

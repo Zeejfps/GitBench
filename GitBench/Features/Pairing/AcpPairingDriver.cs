@@ -2,6 +2,7 @@ using System.Threading.Channels;
 using GitBench.Features.Editor;
 using GitBench.Features.AgentConnections;
 using GitBench.Features.AgentConnections.Acp;
+using GitBench.Features.Assistant;
 using GitBench.Git;
 using GitBench.Lsp.Lifecycle;
 using ZGF.Observable;
@@ -34,6 +35,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
     private readonly CancellationTokenSource _stop = new();
     private readonly HashSet<string> _toolCalls = new();
     private readonly Channel<AgentPrompt> _inbox = Channel.CreateUnbounded<AgentPrompt>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly EditAllowances _allowedEdits;
     private AcpAgentConnection? _connection;
     private Task _run = Task.CompletedTask;
     private int _refusedThisTurn;
@@ -49,6 +51,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
         _endpoints = endpoints;
         _environment = environment;
         _dispatcher = dispatcher;
+        _allowedEdits = new EditAllowances(conversation.Repo.Path);
     }
 
     /// <summary>Starts the agent for a conversation, with <paramref name="opening"/> as its first
@@ -280,8 +283,8 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
 
     async Task<string?> IAcpPermissionPrompt.AskAsync(AcpPermissionRequest request, CancellationToken ct)
     {
-        var pending = await OnUi(() => Task.FromResult(_conversation.Transcript.AskPermission(request.Title, request.Command ?? request.Kind.ToString())))
-            .ConfigureAwait(false);
+        var pending = await OnUi(() => Task.FromResult(Ask(request))).ConfigureAwait(false);
+        if (pending is null) return OptionFor(request, approved: true);
         bool approved;
         try
         {
@@ -293,6 +296,30 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
             return null;
         }
 
+        return OptionFor(request, approved);
+    }
+
+    /// <summary>Puts the request in front of the user, or answers it here with none when it is an
+    /// edit to files they already allowed. UI thread.</summary>
+    private PendingToolApproval? Ask(AcpPermissionRequest request)
+    {
+        var isEdit = request.Kind == AcpToolKind.Edit && request.Paths.Count > 0;
+        if (isEdit && _allowedEdits.Cover(request.Paths))
+        {
+            var what = request.Title.Length > 0 ? request.Title : string.Join(", ", request.Paths);
+            _conversation.Transcript.AddNotice($"Allowed {what}: the file is allowed for this session.", NoticeTone.Info);
+            return null;
+        }
+
+        return _conversation.Transcript.AskPermission(
+            request.Title,
+            request.Command ?? request.Kind.ToString(),
+            EditPreview.Of(request.Edits, _conversation.Repo.Path),
+            isEdit ? () => _allowedEdits.Grant(request.Paths) : null);
+    }
+
+    private static string? OptionFor(AcpPermissionRequest request, bool approved)
+    {
         foreach (var wanted in approved
                      ? new[] { AcpPermissionOptionKind.AllowOnce, AcpPermissionOptionKind.AllowAlways }
                      : [AcpPermissionOptionKind.RejectOnce, AcpPermissionOptionKind.RejectAlways])

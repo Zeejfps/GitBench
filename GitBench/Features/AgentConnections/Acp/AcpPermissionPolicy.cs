@@ -35,7 +35,8 @@ internal enum AcpToolKind
 /// Adapters name that differently — Claude on the tool call, Codex on the earlier
 /// <c>tool_call</c> update, Gemini only in its "Always Allow &lt;server&gt;" option — so the parse
 /// collects every marker into <see cref="McpServer"/>. <see cref="Command"/> is the command line
-/// of a shell call, where the adapter passes it in the tool call's input.
+/// of a shell call, where the adapter passes it in the tool call's input. <see cref="Edits"/> are
+/// the changes a file edit would make, and <see cref="Paths"/> every file the call names.
 /// </summary>
 internal sealed record AcpPermissionRequest(
     string ToolCallId,
@@ -44,7 +45,16 @@ internal sealed record AcpPermissionRequest(
     string? McpServer,
     bool IsMcpApproval,
     IReadOnlyList<AcpPermissionOption> Options,
-    string? Command = null);
+    string? Command = null)
+{
+    public IReadOnlyList<AcpFileEdit> Edits { get; init; } = [];
+
+    public IReadOnlyList<string> Paths { get; init; } = [];
+}
+
+/// <summary>One change an edit would make to a file: the text it replaces, none when it writes the
+/// whole file, and the text it puts there.</summary>
+internal sealed record AcpFileEdit(string Path, string? OldText, string NewText);
 
 /// <summary>What the client answers a permission request with.</summary>
 internal abstract record AcpPermissionDecision
@@ -131,6 +141,11 @@ internal static partial class AcpPermissionPolicy
                      ?? GeminiServer(root["options"]);
         var isMcpApproval = root["_meta"]?["is_mcp_tool_approval"] is JsonValue flag && flag.TryGetValue<bool>(out var set) && set;
 
+        var edits = EditsOf(toolCall);
+        var paths = edits.Select(e => e.Path).ToList();
+        if (toolCall["locations"] is JsonArray locations)
+            paths.AddRange(locations.Select(l => Text(l?["path"])).OfType<string>());
+
         return new AcpPermissionRequest(
             id,
             Text(toolCall["title"]) ?? string.Empty,
@@ -138,7 +153,35 @@ internal static partial class AcpPermissionPolicy
             server,
             isMcpApproval,
             options,
-            CommandOf(toolCall["rawInput"]));
+            CommandOf(toolCall["rawInput"]))
+        {
+            Edits = edits,
+            Paths = paths.Distinct().ToList(),
+        };
+    }
+
+    // ACP's diff content where the adapter sends it; Claude Code's own Edit, MultiEdit and Write
+    // input where it doesn't.
+    private static IReadOnlyList<AcpFileEdit> EditsOf(JsonObject toolCall)
+    {
+        var edits = new List<AcpFileEdit>();
+        if (toolCall["content"] is JsonArray content)
+        {
+            foreach (var node in content)
+            {
+                if (Text(node?["type"]) != "diff" || Text(node?["path"]) is not { } path || Text(node?["newText"]) is not { } newText) continue;
+                edits.Add(new AcpFileEdit(path, Text(node?["oldText"]), newText));
+            }
+        }
+
+        if (edits.Count > 0 || toolCall["rawInput"] is not JsonObject input || Text(input["file_path"]) is not { } file) return edits;
+        if (Text(input["new_string"]) is { } replacement) edits.Add(new AcpFileEdit(file, Text(input["old_string"]) ?? string.Empty, replacement));
+        else if (Text(input["content"]) is { } written) edits.Add(new AcpFileEdit(file, null, written));
+        else if (input["edits"] is JsonArray many)
+            foreach (var edit in many)
+                if (Text(edit?["new_string"]) is { } each)
+                    edits.Add(new AcpFileEdit(file, Text(edit?["old_string"]) ?? string.Empty, each));
+        return edits;
     }
 
     // Claude and Gemini pass the command as a string; Codex as an argv array, which may be a shell

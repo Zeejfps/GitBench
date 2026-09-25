@@ -204,4 +204,59 @@ public sealed class AcpPermissionPolicyTests
     [InlineData("legit push", false)]
     public void Pushes_FindsGitPush(string command, bool pushes) =>
         Assert.Equal(pushes, AcpPermissionPolicy.Pushes(command));
+
+    private static AcpPermissionRequest Parse(string toolCall)
+    {
+        var request = AcpPermissionPolicy.Parse(JsonNode.Parse("""{"sessionId":"s","toolCall":""" + toolCall + ""","options":[]}"""), NoneAnnounced);
+        Assert.NotNull(request);
+        return request;
+    }
+
+    [Fact]
+    public void DiffContent_IsTheEdit()
+    {
+        var request = Parse("""
+            {"toolCallId":"t1","title":"Edit a.md","kind":"edit","locations":[{"path":"C:/r/a.md"}],
+             "content":[{"type":"diff","path":"C:/r/a.md","oldText":"x","newText":"y"}]}
+            """);
+        Assert.Equal([new AcpFileEdit("C:/r/a.md", "x", "y")], request.Edits);
+        Assert.Equal(["C:/r/a.md"], request.Paths);
+    }
+
+    [Fact]
+    public void ClaudeEditInput_IsTheEdit_WhereNoDiffIsSent()
+    {
+        var request = Parse("""
+            {"toolCallId":"t1","title":"Edit a.md","kind":"edit","rawInput":{"file_path":"C:/r/a.md","old_string":"x","new_string":"y"}}
+            """);
+        Assert.Equal([new AcpFileEdit("C:/r/a.md", "x", "y")], request.Edits);
+        Assert.Equal(["C:/r/a.md"], request.Paths);
+    }
+
+    [Fact]
+    public void ClaudeWriteInput_ReplacesTheWholeFile()
+    {
+        var request = Parse("""
+            {"toolCallId":"t1","title":"Write a.md","kind":"edit","rawInput":{"file_path":"C:/r/a.md","content":"all"}}
+            """);
+        Assert.Equal([new AcpFileEdit("C:/r/a.md", null, "all")], request.Edits);
+    }
+
+    [Fact]
+    public void ClaudeMultiEditInput_IsEachEdit()
+    {
+        var request = Parse("""
+            {"toolCallId":"t1","title":"Edit a.md","kind":"edit","rawInput":{"file_path":"a.md",
+             "edits":[{"old_string":"1","new_string":"2"},{"old_string":"3","new_string":"4"}]}}
+            """);
+        Assert.Equal([new AcpFileEdit("a.md", "1", "2"), new AcpFileEdit("a.md", "3", "4")], request.Edits);
+    }
+
+    [Fact]
+    public void ShellCall_HasNoEdits()
+    {
+        var request = Parse("""{"toolCallId":"t1","title":"ls","kind":"execute","rawInput":{"command":"ls"}}""");
+        Assert.Empty(request.Edits);
+        Assert.Empty(request.Paths);
+    }
 }

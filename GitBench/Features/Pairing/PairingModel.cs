@@ -185,8 +185,9 @@ internal abstract record PairingMessage
     /// <summary>Something the app did or refused on the session's behalf.</summary>
     public sealed record Notice(string Text, NoticeTone Tone) : PairingMessage;
 
-    /// <summary>A tool call the write guard left to the user, waiting on their answer.</summary>
-    public sealed record Approval(PendingToolApproval Pending) : PairingMessage;
+    /// <summary>A tool call the write guard left to the user, waiting on their answer: what an edit
+    /// would change, and the answer that covers its files from then on, where it has any.</summary>
+    public sealed record Approval(PendingToolApproval Pending, IReadOnlyList<EditPreviewLine> Preview, FileAllowance? Allowance) : PairingMessage;
 
 }
 
