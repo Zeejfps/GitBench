@@ -83,14 +83,4 @@ internal sealed class AgentTranscript
         CloseNarration();
         _messages.Add(message);
     }
-
-    /// <summary>Drops everything from <paramref name="start"/> on, except a question still waiting
-    /// on the user: the agent is blocked on the answer.</summary>
-    public void ClearFrom(int start)
-    {
-        CloseNarration();
-        for (var i = _messages.Count - 1; i >= start; i--)
-            if (_messages[i] is not PairingMessage.Approval { Pending.IsPending.Value: true })
-                _messages.RemoveAt(i);
-    }
 }

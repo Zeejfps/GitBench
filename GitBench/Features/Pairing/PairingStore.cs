@@ -124,7 +124,6 @@ internal sealed class PairingStore : IDisposable
     private readonly State<OpenStop?> _stop = new(null);
     private readonly State<StopActivity> _activity = new(StopActivity.Idle);
     private readonly AgentTranscript _transcript;
-    private readonly int _transcriptStart;
     private readonly Queue<PairingAction> _queued = new();
 
     private IReadOnlyList<Milestone> _milestones = Array.Empty<Milestone>();
@@ -153,7 +152,6 @@ internal sealed class PairingStore : IDisposable
         _dispatcher = dispatcher;
         _clock = clock;
         _transcript = transcript;
-        _transcriptStart = transcript.Count;
     }
 
     public string Goal { get; }
@@ -363,10 +361,6 @@ internal sealed class PairingStore : IDisposable
         if (!_disposed) _transcript.AddReply(markdown);
     }
 
-    // Moving on from a stop starts the session's part of the conversation afresh: what was said
-    // about one stop is noise under the next. The agent keeps its own memory of it.
-    private void ClearConversation() => _transcript.ClearFrom(_transcriptStart);
-
     public void AddNotice(string text, NoticeTone tone)
     {
         if (!_disposed) _transcript.AddNotice(text, tone);
@@ -471,7 +465,6 @@ internal sealed class PairingStore : IDisposable
         _activity.Value = StopActivity.Idle;
         _stop.Value = null;
         _presentation.ClearDraft();
-        ClearConversation();
         Deliver(new PairingAction.Done(number, diff, outcome, problems));
     }
 
@@ -494,7 +487,6 @@ internal sealed class PairingStore : IDisposable
         _stop.Value = null;
         _presentation.ClearDraft();
         TakeBack(open.CreatedFile);
-        ClearConversation();
         Deliver(new PairingAction.Skipped(open.Stop.Number));
     }
 

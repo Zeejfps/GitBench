@@ -397,32 +397,28 @@ public sealed class PairingStoreTests : IDisposable
     }
 
     [Fact]
-    public void MovingOnFromAStop_StartsTheConversationAfresh()
+    public void MovingOnFromAStop_KeepsTheConversation()
     {
         Open();
         _store.Say("Why here?");
         _transcript.AppendNarration("Because it's the entry point.");
-        Assert.Equal(2, _transcript.Messages.Count);
 
         var done = _store.DoneAsync();
         Pump.WaitFor(_dispatcher, () => done.IsCompleted, "Done to finish");
 
-        Assert.Empty(_transcript.Messages);
-        _transcript.AppendNarration("Next, the caller.");
-        Assert.Single(_transcript.Messages);
+        Assert.Contains(_transcript.Messages, m => m is PairingMessage.FromUser { Text: "Why here?" });
+        Assert.Contains(_transcript.Messages, m => m is PairingMessage.Narration { Text.Value: "Because it's the entry point." });
     }
 
     [Fact]
-    public void Skip_StartsTheConversationAfresh_ButKeepsAQuestionStillWaiting()
+    public void Skip_KeepsTheConversation()
     {
         Open();
         _store.Say("Skip this one");
-        var approval = _transcript.AskPermission("Switch mode", "SwitchMode");
 
         _store.Skip();
 
-        var kept = Assert.Single(_transcript.Messages);
-        Assert.Same(approval, Assert.IsType<PairingMessage.Approval>(kept).Pending);
+        Assert.Contains(_transcript.Messages, m => m is PairingMessage.FromUser { Text: "Skip this one" });
     }
 
     [Fact]
