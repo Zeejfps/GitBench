@@ -307,8 +307,11 @@ internal sealed record TabChrome : Widget
             ],
         };
 
-        return pill.WithController(input, view =>
-            new TabClickController(hover, OnActivate, OnClose, OnContextMenu, Drag, view, input));
+        var isActive = IsActive;
+        return pill
+            .WithController(input, view =>
+                new TabClickController(hover, OnActivate, OnClose, OnContextMenu, Drag, view, input))
+            .Use(view => new RevealWhenActive(view, isActive));
     }
 
     // Painted on every closable tab rather than only the one being looked at. The space is reserved
@@ -322,6 +325,32 @@ internal sealed record TabChrome : Widget
         Command = new Command(onClose),
         Children = [new ButtonIcon { Value = LucideIcons.X, FontSize = FontSize.Caption }],
     }.WithTooltip(L.T(s => s.CommonClose)).WithController<KbmController>();
+}
+
+/// <summary>
+/// Scrolls the strip to a tab whenever it becomes the active one, so a tab opened past the right
+/// edge of an overflowing strip is not left out of sight.
+/// </summary>
+internal sealed class RevealWhenActive : IDisposable
+{
+    private readonly Derived<bool> _active;
+    private readonly IDisposable _subscription;
+
+    public RevealWhenActive(View tab, Func<bool> isActive)
+    {
+        var scroller = tab.GetParentOfType<HorizontalScrollView>();
+        _active = new Derived<bool>(isActive);
+        _subscription = _active.Subscribe(active =>
+        {
+            if (active) scroller?.Reveal(tab);
+        });
+    }
+
+    public void Dispose()
+    {
+        _subscription.Dispose();
+        _active.Dispose();
+    }
 }
 
 // Hover tracking + left-click activation for a tab pill, plus middle-click to close (closable tabs
