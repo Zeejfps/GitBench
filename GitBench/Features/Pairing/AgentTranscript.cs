@@ -12,6 +12,7 @@ internal sealed class AgentTranscript
 {
     private readonly ObservableList<PairingMessage> _messages = new();
     private readonly State<State<string>?> _openNarration = new(null);
+    private bool _narrationBroken;
 
     public ObservableList<PairingMessage> Messages => _messages;
 
@@ -25,6 +26,13 @@ internal sealed class AgentTranscript
     {
         if (_openNarration.Value is { } open)
         {
+            if (_narrationBroken && text.Trim().Length > 0)
+            {
+                _narrationBroken = false;
+                open.Value = open.Value.TrimEnd() + "\n\n" + text.TrimStart();
+                return;
+            }
+
             open.Value += text;
             return;
         }
@@ -36,8 +44,17 @@ internal sealed class AgentTranscript
         _messages.Add(new PairingMessage.Narration(opened));
     }
 
+    /// <summary>The agent did something between two runs of prose, a tool call: the next run starts a
+    /// paragraph of its own, since the agent's pieces don't end in a line break and would otherwise
+    /// run together, closing a code fence onto the next sentence.</summary>
+    public void BreakNarration() => _narrationBroken = _openNarration.Value is not null;
+
     /// <summary>The agent's turn ended; its next prose is a message of its own.</summary>
-    public void CloseNarration() => _openNarration.Value = null;
+    public void CloseNarration()
+    {
+        _narrationBroken = false;
+        _openNarration.Value = null;
+    }
 
     /// <summary>A whole reply from the agent: a message of its own, whatever its turn streamed before it.</summary>
     public void AddReply(string markdown)

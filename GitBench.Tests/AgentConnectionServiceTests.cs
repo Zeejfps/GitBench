@@ -163,12 +163,32 @@ public sealed class AgentConnectionServiceTests : IDisposable
     }
 
     [Fact]
-    public void ABusyPort_ReportsTheFailure_AndDisablingStopsNothing()
+    public void ABusyPort_MovesUpToTheNextFreeOne_AndKeepsTheChosenPort()
+    {
+        _host.Answer = options => options.Port < AgentConnectionSettings.DefaultPort + 2
+            ? new McpServerStart.Failed("port in use")
+            : new McpServerStart.Started(new Uri($"http://127.0.0.1:{options.Port}/mcp/{options.PathToken?.Value}"));
+        using var service = Service();
+
+        _settings.Value = _settings.Value with { Enabled = true };
+
+        Assert.Equal(3, _host.Starts.Count);
+        var listening = Assert.IsType<AgentConnectionState.Listening>(_state.Value);
+        Assert.Contains($":{AgentConnectionSettings.DefaultPort + 2}/", listening.Endpoint.ToString());
+        Assert.Equal(AgentConnectionSettings.DefaultPort, _preferences.Current.AgentConnectionsPort);
+
+        _settings.Value = _settings.Value with { Enabled = false };
+        Assert.Equal(1, _host.Stops);
+    }
+
+    [Fact]
+    public void EveryPortBusy_ReportsTheFailure_AndDisablingStopsNothing()
     {
         _host.Answer = _ => new McpServerStart.Failed("port in use");
         using var service = Service();
 
         _settings.Value = _settings.Value with { Enabled = true };
+        Assert.Equal(AgentConnectionService.PortAttempts, _host.Starts.Count);
         Assert.Equal("port in use", Assert.IsType<AgentConnectionState.Failed>(_state.Value).Reason);
 
         _settings.Value = _settings.Value with { Enabled = false };

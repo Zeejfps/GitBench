@@ -17,11 +17,15 @@ internal sealed class Pulse : IDisposable
     private readonly IFrameTicker _ticker;
     private readonly Action<float> _tick;
     private readonly State<float> _value = new(0f);
+    private readonly State<float> _phase = new(0f);
     private bool _running;
-    private float _phase;
 
     /// <summary>The breathe in [0,1]; rest value is 0 (skeletons keep a faint floor alpha there).</summary>
     public IReadable<float> Value => _value;
+
+    /// <summary>Where in the period the breathe is, in [0,1), for staggering several things off one
+    /// pulse.</summary>
+    public IReadable<float> Phase => _phase;
 
     public Pulse(IFrameTicker ticker)
     {
@@ -45,9 +49,10 @@ internal sealed class Pulse : IDisposable
 
     private void Advance(float dt)
     {
-        _phase += dt / PeriodSeconds;
-        _phase -= MathF.Floor(_phase); // wrap to [0,1), robust to a long frame
-        _value.Value = 0.5f - 0.5f * MathF.Cos(_phase * MathF.Tau);
+        var phase = _phase.Value + dt / PeriodSeconds;
+        phase -= MathF.Floor(phase); // wrap to [0,1), robust to a long frame
+        _phase.Value = phase;
+        _value.Value = 0.5f - 0.5f * MathF.Cos(phase * MathF.Tau);
     }
 
     public void Dispose() => Stop();

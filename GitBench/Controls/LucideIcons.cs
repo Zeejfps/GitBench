@@ -60,7 +60,6 @@ internal static class LucideIcons
     public const string ScrollText = "";   // scroll-text (Changes: every diff in one stacked scroll)
     public const string PanelLeftClose = ""; // panel-left-close (collapse the repo bar)
     public const string PanelLeftOpen = "";  // panel-left-open (expand the repo bar)
-    public const string PanelRightClose = ""; // panel-right-close (hide the agent panel)
     public const string Sparkles = "";        // sparkles (the agent chat)
 
     public const string CircleCheck = "";  // check-circle (empty state: working tree clean)
@@ -75,6 +74,7 @@ internal static class LucideIcons
     public const string FileX = "";         // file-x (conflicted)
     public const string TriangleAlert = ""; // alert-triangle (merge conflict warning)
     public const string RefreshCw = ""; // refresh-cw (retry a failed status load)
+    public const string RotateCcw = ""; // rotate-ccw (restart the agent chat)
 
     // The file browser's declaration rows, one glyph per category rather than per SymbolKind:
     // a fourteen-icon legend is a thing to learn, and these four are the distinctions a reader

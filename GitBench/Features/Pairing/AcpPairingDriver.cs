@@ -243,6 +243,7 @@ internal sealed class AcpPairingDriver : IAcpPermissionPrompt, IAgentDriver
                 break;
             case AcpSessionUpdate.ToolCall call:
                 lock (_toolCalls) _toolCalls.Add(call.Id);
+                Post(() => _conversation.Transcript.BreakNarration());
                 break;
             case AcpSessionUpdate.ThoughtChunk:
             case AcpSessionUpdate.Plan:

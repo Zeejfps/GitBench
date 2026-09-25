@@ -119,10 +119,14 @@ internal sealed record TranscriptBodyText : Widget
     public required Prop<string> Value { get; init; }
     public required Prop<uint> Color { get; init; }
 
+    /// <summary>Fits the body's width to its text rather than to the space it is given.</summary>
+    public bool SizesToText { get; init; }
+
     protected override IWidget Build(Context ctx) =>
         new TextInput
         {
             ReadOnly = true,
+            SizesToText = SizesToText,
             Wrap = TextWrap.Wrap,
             Value = Value,
             Background = TransparentBackground,

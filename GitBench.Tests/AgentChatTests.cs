@@ -137,6 +137,30 @@ public sealed class AgentChatTests : IAsyncDisposable
     }
 
     [Fact]
+    public void Restarting_OpensABlankConversationWithTheSameAgent_InPlaceOfTheOldOne()
+    {
+        var first = _chat.Open(AcpHarness.ClaudeCode)!;
+        first.Say("remember this");
+        _sessions.HidePanel(RepoId);
+
+        var restarted = _sessions.Restart(RepoId);
+
+        Assert.NotNull(restarted);
+        Assert.NotSame(first, restarted);
+        Assert.Equal(first.Harness, restarted.Harness);
+        Assert.IsType<AgentOpening.Blank>(_opened[^1].Opening);
+        Assert.Empty(restarted.Transcript.Messages);
+        Assert.Same(restarted, _sessions.Shown.Value);
+    }
+
+    [Fact]
+    public void Restarting_WithNoConversation_OpensNothing()
+    {
+        Assert.Null(_sessions.Restart(RepoId));
+        Assert.Empty(_opened);
+    }
+
+    [Fact]
     public void AskingWithNoAgentPicked_AsksForOne_AndOpensNothing()
     {
         Assert.IsType<AgentChatAsk.NeedsAgent>(_chat.Ask("Explain this selection.", null));

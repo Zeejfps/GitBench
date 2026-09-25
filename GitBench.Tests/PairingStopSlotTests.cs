@@ -1,6 +1,7 @@
 using GitBench.Features.Pairing;
 using GitBench.Input;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -38,6 +39,7 @@ public sealed class PairingStopSlotTests : IDisposable
     private readonly RecordingPairingPresentation _presentation = new();
     private readonly ScriptedWorkspace _workspace = new();
     private readonly QueuedDispatcher _dispatcher = new();
+    private readonly MessageBus _bus = new();
     private readonly PairingStore _store;
     private readonly GuiTestHarness _harness;
 
@@ -77,6 +79,7 @@ public sealed class PairingStopSlotTests : IDisposable
                 ctx.AddService<IPlatformShell>(new FakeShell());
                 ctx.AddService<IUiDispatcher>(_dispatcher);
                 ctx.AddService<IKeyMap>(new KeyMap());
+                ctx.AddService<IMessageBus>(_bus);
             });
     }
 
@@ -145,5 +148,18 @@ public sealed class PairingStopSlotTests : IDisposable
         Assert.False(Has(PairingStopCard.CardId));
         Assert.False(Has(PairingStopPlaceholder.PlaceholderId));
         Assert.False(Has(PairingStopActions.BarId));
+    }
+
+    [Fact]
+    public void End_AsksFirst_AndLeavesTheSessionRunning()
+    {
+        var asked = new List<ShowDialogMessage>();
+        _bus.Subscribe<ShowDialogMessage>(asked.Add);
+        Open();
+
+        _harness.ClickOn(PairingStopActions.EndId);
+
+        Assert.Single(asked);
+        Assert.True(_store.IsLive);
     }
 }

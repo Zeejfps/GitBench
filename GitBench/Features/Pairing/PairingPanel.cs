@@ -3,6 +3,7 @@ using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -30,6 +31,8 @@ internal sealed record PairingPanelSlot : Widget
                     Edge = SidebarEdge.Trailing,
                     InitialWidth = preferences.Current.PairingPanelWidth,
                     MinResizeWidth = 280f,
+                    MaxResizeWidth = float.PositiveInfinity,
+                    MinRemainingWidth = 320f,
                     OnWidthChanged = w => preferences.Update(p => p with { PairingPanelWidth = w }),
                     Content = new PairingPanel { Conversation = conversation },
                 },
@@ -39,9 +42,9 @@ internal sealed record PairingPanelSlot : Widget
 
 /// <summary>
 /// The conversation with a repository's agent, the way the user follows it: who drives and whose
-/// turn it is; while a pairing session runs, the stop they are on and the goal and roadmap with what
-/// the agent last changed in it; and the conversation under it with a field to talk to the agent,
-/// which stays once the session is over.
+/// turn it is; while a pairing session runs, the goal and roadmap with what the agent last changed
+/// in it and the stop they are on, in a pane of their own; and the conversation under it with a
+/// field to talk to the agent, which stays once the session is over.
 /// </summary>
 internal sealed record PairingPanel : Widget
 {
@@ -52,7 +55,9 @@ internal sealed record PairingPanel : Widget
     protected override IWidget Build(Context ctx)
     {
         var conversation = Conversation;
+        var preferences = ctx.Require<PreferencesService>();
         var scroll = new ScrollRegionHandle();
+        var pairing = new Derived<bool>(() => conversation.Session.Value is not null);
         IWidget panel = new Box
         {
             Id = PanelId,
@@ -67,41 +72,27 @@ internal sealed record PairingPanel : Widget
                         new PairingHeader { Conversation = conversation },
                         new Grow
                         {
-                            Child = new ScrollRegion
+                            Child = new VerticalSplit
                             {
-                                FillParent = true,
-                                Handle = scroll,
-                                Content = new Padding
+                                TopVisible = pairing,
+                                BottomFraction = preferences.Current.PairingChatSplitFraction,
+                                OnFractionChanged = f => preferences.Update(p => p with { PairingChatSplitFraction = f }),
+                                Top = new Switch<PairingSession?>
                                 {
-                                    Amount = PaddingStyle.All(Spacing.Lg),
-                                    Children =
-                                    [
-                                        new Column
-                                        {
-                                            Gap = Spacing.Lg,
-                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                            Children =
-                                            [
-                                                new Switch<PairingSession?>
-                                                {
-                                                    Value = conversation.Session,
-                                                    Case = session => session is null
-                                                        ? Empty.Widget
-                                                        : new Column
-                                                        {
-                                                            Gap = Spacing.Lg,
-                                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                                            Children =
-                                                            [
-                                                                new PairingStopSlot { Store = session.Store },
-                                                                new PairingGoalAndRoadmap { Store = session.Store },
-                                                            ],
-                                                        },
-                                                },
-                                                new PairingConversation { Conversation = conversation },
-                                            ],
-                                        },
-                                    ],
+                                    Value = conversation.Session,
+                                    Case = session => session is null
+                                        ? Empty.Widget
+                                        : new PairingSessionPane { Store = session.Store },
+                                },
+                                Bottom = new ScrollRegion
+                                {
+                                    FillParent = true,
+                                    Handle = scroll,
+                                    Content = new Padding
+                                    {
+                                        Amount = PaddingStyle.All(Spacing.Lg),
+                                        Children = [new PairingConversation { Conversation = conversation }],
+                                    },
                                 },
                             },
                         },
@@ -122,43 +113,88 @@ internal sealed record PairingPanel : Widget
             ],
         };
 
-        return panel.Use(_ => Follow(conversation, scroll, ctx.Require<IUiDispatcher>()));
+        return panel.Use(_ =>
+        {
+            var owned = new SubscriptionGroup();
+            owned.Add(pairing);
+            owned.Add(Follow(conversation, scroll));
+            return owned;
+        });
     }
 
-    // What the user says pins the panel to the end of the conversation, which then keeps up with
-    // the reply as it streams in; a new stop takes the panel back to the top, where its card is.
-    private static IDisposable Follow(AgentConversation conversation, ScrollRegionHandle scroll, IUiDispatcher dispatcher)
+    // What the user says pins the conversation to its end, which then keeps up with the reply as it
+    // streams in.
+    private static IDisposable Follow(AgentConversation conversation, ScrollRegionHandle scroll)
     {
-        var subscriptions = new SubscriptionGroup();
         var messages = conversation.Transcript.Messages;
         var count = messages.Count;
-        subscriptions.Add(messages.Subscribe(_ =>
+        return messages.Subscribe(_ =>
         {
             var grew = messages.Count > count;
             count = messages.Count;
             if (grew && messages[^1] is PairingMessage.FromUser or PairingMessage.SessionOver) scroll.FollowBottom();
-        }));
-
-        var stop = new Derived<int>(() => conversation.Session.Value?.Store.Stop.Value?.Stop.Number ?? 0);
-        subscriptions.Add(stop);
-        var stopNumber = stop.Value;
-        subscriptions.Add(stop.Subscribe(number =>
-        {
-            if (number == stopNumber) return;
-            stopNumber = number;
-            // Posted, so the card is in the tree before the region goes to it.
-            if (number != 0) dispatcher.Post(scroll.ScrollToTop);
-        }));
-        return subscriptions;
+        });
     }
 }
 
-/// <summary>The panel's top band: the agent, whose turn it is, End while a session runs, Close,
-/// which ends the conversation and stops the agent, and Hide, which leaves it running.</summary>
+/// <summary>The session's pane over the conversation: the goal and roadmap, then the stop the user
+/// is on. It scrolls on its own, and a new stop takes it back to the top.</summary>
+internal sealed record PairingSessionPane : Widget
+{
+    public required PairingStore Store { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        var store = Store;
+        var scroll = new ScrollRegionHandle();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+        IWidget pane = new ScrollRegion
+        {
+            FillParent = true,
+            Handle = scroll,
+            Content = new Padding
+            {
+                Amount = PaddingStyle.All(Spacing.Lg),
+                Children =
+                [
+                    new Column
+                    {
+                        Gap = Spacing.Lg,
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                        Children =
+                        [
+                            new PairingGoalAndRoadmap { Store = store },
+                            new PairingStopSlot { Store = store },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        return pane.Use(_ =>
+        {
+            var stop = new Derived<int>(() => store.Stop.Value?.Stop.Number ?? 0);
+            var stopNumber = stop.Value;
+            var subscriptions = new SubscriptionGroup();
+            subscriptions.Add(stop);
+            subscriptions.Add(stop.Subscribe(number =>
+            {
+                if (number == stopNumber) return;
+                stopNumber = number;
+                // Posted, so the card is in the tree before the region goes to it.
+                if (number != 0) dispatcher.Post(scroll.ScrollToTop);
+            }));
+            return subscriptions;
+        });
+    }
+}
+
+/// <summary>The panel's top band: the agent, whose turn it is, Restart,
+/// which starts the conversation over with the same agent, and Close, which ends the conversation
+/// and stops the agent.</summary>
 internal sealed record PairingHeader : Widget
 {
-    public const string HideId = "pairing-hide";
-    public const string EndId = "pairing-end";
+    public const string RestartId = "pairing-restart";
     public const string CloseId = "pairing-close";
 
     public required AgentConversation Conversation { get; init; }
@@ -168,7 +204,19 @@ internal sealed record PairingHeader : Widget
         var loc = ctx.Localization();
         var conversation = Conversation;
         var sessions = ctx.Require<PairingSessions>();
-        var pairing = new Derived<bool>(() => conversation.IsPairing);
+        var bus = ctx.Require<IMessageBus>();
+        var canRestart = new Derived<bool>(() => PairingSessions.CanRestart(conversation));
+        var agent = conversation.Harness.Label;
+
+        void Confirm(string title, string body, string action, Action then) =>
+            bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmAgentChatDialog
+            {
+                Title = title,
+                Body = body,
+                ActionLabel = action,
+                OnClose = onClose,
+                OnConfirm = then,
+            }));
 
         return new Box
         {
@@ -211,38 +259,47 @@ internal sealed record PairingHeader : Widget
                                 },
                                 new Show
                                 {
-                                    When = pairing,
+                                    When = new Derived<bool>(() => conversation.Harness is PairingHarness.Acp),
                                     Then = () => new ButtonWidget
                                     {
-                                        Id = EndId,
-                                        Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                        Command = new Command(() => conversation.Session.Value?.Store.EndByUser()),
-                                        Children = [new ButtonLabel { Value = L.T(s => s.PairingEnd) }],
-                                    }.WithController<KbmController>(),
+                                        Id = RestartId,
+                                        ContentInset = ButtonStyle.Plain.IconOnlyInset,
+                                        Command = new Command(
+                                            () => Confirm(
+                                                loc.Strings.Value.PairingRestartTitle(agent),
+                                                loc.Strings.Value.PairingRestartBody,
+                                                loc.Strings.Value.PairingRestartAction,
+                                                () => sessions.Restart(conversation.Repo.Id)),
+                                            canRestart),
+                                        Children = [new ButtonIcon { Value = LucideIcons.RotateCcw }],
+                                    }
+                                    .WithTooltip(L.T(s => s.PairingRestart))
+                                    .WithController<KbmController>(),
                                 },
                                 new ButtonWidget
                                 {
                                     Id = CloseId,
-                                    Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                    Command = new Command(() => sessions.Close(conversation.Repo.Id)),
-                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingClose) }],
-                                }.WithController<KbmController>(),
-                                new ButtonWidget
-                                {
-                                    Id = HideId,
-                                    Style = ButtonStyle.Bare(_ => Theme.Color(s => s.Palette.TextSecondary)),
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
-                                    Command = new Command(() => sessions.HidePanel(conversation.Repo.Id)),
-                                    Children = [new ButtonIcon { Value = LucideIcons.PanelRightClose }],
+                                    Command = new Command(() => Confirm(
+                                        loc.Strings.Value.PairingCloseTitle(agent),
+                                        loc.Strings.Value.PairingCloseBody,
+                                        loc.Strings.Value.PairingClose,
+                                        () => sessions.Close(conversation.Repo.Id))),
+                                    Children = [new ButtonIcon { Value = LucideIcons.X }],
                                 }
-                                .WithTooltip(L.T(s => s.PairingHide))
+                                .WithTooltip(L.T(s => s.PairingClose))
                                 .WithController<KbmController>(),
                             ],
                         },
                     ],
                 },
             ],
-        }.Use(_ => pairing);
+        }.Use(_ =>
+        {
+            var owned = new SubscriptionGroup();
+            owned.Add(canRestart);
+            return owned;
+        });
     }
 
     private static bool IsTrouble(AgentConversation conversation) =>
@@ -409,8 +466,8 @@ internal sealed record PairingRoadmapRow : Widget
     }
 }
 
-/// <summary>The conversation with the agent, read as the assistant chat is, with the agent's
-/// thinking indicator while its next words are on the way.</summary>
+/// <summary>The conversation with the agent, with a typing bubble while its next words are on the
+/// way.</summary>
 internal sealed record PairingConversation : Widget
 {
     public required AgentConversation Conversation { get; init; }
@@ -418,7 +475,6 @@ internal sealed record PairingConversation : Widget
     protected override IWidget Build(Context ctx)
     {
         var conversation = Conversation;
-        var loc = ctx.Localization();
         return new Column
         {
             Gap = Spacing.Lg,
@@ -428,17 +484,14 @@ internal sealed record PairingConversation : Widget
                 new Each<PairingMessage>
                 {
                     Items = conversation.Transcript.Messages,
-                    Template = new PairingMessageRow { Speaker = conversation.Harness.Label, RepoPath = conversation.Repo.Path },
+                    Template = new PairingMessageRow { Conversation = conversation },
                     Gap = Spacing.Lg,
                     CrossAxis = CrossAxisAlignment.Stretch,
                 },
                 new Show
                 {
                     When = conversation.IsComposing,
-                    Then = () => new AssistantThinkingIndicator
-                    {
-                        Label = Prop.Bind<string?>(() => loc.Strings.Value.PairingStatusThinking(conversation.Harness.Label)),
-                    },
+                    Then = () => new AgentChatTypingBubble(),
                 },
             ],
         };
@@ -484,53 +537,45 @@ internal sealed record PairingChatFooter : Widget
     }
 }
 
-/// <summary>One entry of the conversation in the transcript row for its kind.</summary>
+/// <summary>One entry of the conversation in the transcript row for its kind. The live session's
+/// start is left out: its goal is in the session's pane.</summary>
 internal sealed record PairingMessageRow : Widget
 {
-    /// <summary>The agent's name, over its prose.</summary>
-    public required string Speaker { get; init; }
-
-    /// <summary>The repository, whose paths quotes are shown relative to.</summary>
-    public required string RepoPath { get; init; }
+    public required AgentConversation Conversation { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
+        var conversation = Conversation;
         var message = ctx.Require<PairingMessage>();
         var loc = ctx.Localization();
 
         IWidget content = message switch
         {
-            PairingMessage.SessionStarted started => new Text
+            PairingMessage.SessionStarted started => new Show
             {
-                Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingSessionStarted(started.Goal)),
-                FontSize = FontSize.Caption,
-                Weight = FontWeight.Bold,
-                Wrap = TextWrap.Wrap,
-                Color = Theme.Color(s => s.Palette.TextSecondary),
+                When = new Derived<bool>(() => !IsLiveStart(conversation, started)),
+                Then = () => new Text
+                {
+                    Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingSessionStarted(started.Goal)),
+                    FontSize = FontSize.Caption,
+                    Weight = FontWeight.Bold,
+                    Wrap = TextWrap.Wrap,
+                    Color = Theme.Color(s => s.Palette.TextSecondary),
+                },
             },
             PairingMessage.SessionOver over => new PairingOutcome { Outcome = over.Outcome },
-            PairingMessage.FromUser { Quote: null } said => new TranscriptMessageRow
+            PairingMessage.FromUser said => new AgentChatUserBubble
             {
                 Text = new State<string>(said.Text),
-                Label = L.T(s => s.AssistantYou),
-                LabelColor = static s => s.Palette.TextSecondary,
+                Attachment = said.Quote is { } quote
+                    ? new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(conversation.Repo.Path, path)) }
+                    : null,
             },
-            PairingMessage.FromUser { Quote: { } quote } said => new Column
+            PairingMessage.Narration narration => new AgentChatReply
             {
-                Gap = Spacing.Sm,
-                CrossAxis = CrossAxisAlignment.Stretch,
-                Children =
-                [
-                    new TranscriptMessageRow
-                    {
-                        Text = new State<string>(said.Text),
-                        Label = L.T(s => s.AssistantYou),
-                        LabelColor = static s => s.Palette.TextSecondary,
-                    },
-                    new PairingQuoteCard { Quote = quote, Location = quote.Location(path => AgentPrompt.RepoRelative(RepoPath, path)) },
-                ],
+                Text = narration.Text,
+                Streams = ReferenceEquals(conversation.Transcript.OpenNarration.Value, narration.Text),
             },
-            PairingMessage.Narration narration => new TranscriptReplyRow { Text = narration.Text, Speaker = Speaker },
             PairingMessage.Notice notice => new TranscriptNoticeRow
             {
                 Text = new State<string>(notice.Text),
@@ -547,6 +592,10 @@ internal sealed record PairingMessageRow : Widget
 
         return new FadeIn { Child = content };
     }
+
+    private static bool IsLiveStart(AgentConversation conversation, PairingMessage.SessionStarted started) =>
+        conversation.Session.Value is not null
+        && ReferenceEquals(conversation.Transcript.Messages.LastOrDefault(m => m is PairingMessage.SessionStarted), started);
 }
 
 /// <summary>A tool call the write guard left to the user: what it is, and Deny / Approve.</summary>

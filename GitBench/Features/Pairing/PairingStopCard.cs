@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Input;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -12,8 +13,8 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;
 
-/// <summary>The stop card's place at the top of what the panel scrolls: the open stop, a placeholder
-/// while the agent works out the next one, and nothing once the session is over.</summary>
+/// <summary>The stop card's place in the session's pane, under the goal and roadmap: the open stop,
+/// a placeholder while the agent works out the next one, and nothing once the session is over.</summary>
 internal sealed record PairingStopSlot : Widget
 {
     private const int Over = -1;
@@ -98,13 +99,14 @@ internal sealed record PairingStopPlaceholder : Widget
 }
 
 /// <summary>
-/// The stop the user is on, at the top of what the panel scrolls: its number, the title, where it
-/// is — a click goes back there — and why, then where the agent's code is.
+/// The stop the user is on, in the session's pane: its number and Show change, the title, its file and line — a
+/// click goes back there, the full path is in the tooltip — and what there, then why, then where the agent's code is.
 /// </summary>
 internal sealed record PairingStopCard : Widget
 {
     public const string CardId = "pairing-stop";
     public const string LocationId = "pairing-stop-location";
+    public const string ShowChangeId = "pairing-show-change";
 
     public required PairingStore Store { get; init; }
     public required OpenStop Stop { get; init; }
@@ -134,12 +136,32 @@ internal sealed record PairingStopCard : Widget
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                new Text
+                                new Row
                                 {
-                                    Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingStopNumber(stop.Number)),
-                                    FontSize = FontSize.Caption,
-                                    Weight = FontWeight.Bold,
-                                    Color = Theme.Color(s => s.Palette.Accent),
+                                    Gap = Spacing.Sm,
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children =
+                                    [
+                                        new Grow
+                                        {
+                                            Child = new Text
+                                            {
+                                                Value = Prop.Bind<string?>(() => loc.Strings.Value.PairingStopNumber(stop.Number)),
+                                                FontSize = FontSize.Caption,
+                                                Weight = FontWeight.Bold,
+                                                Color = Theme.Color(s => s.Palette.Accent),
+                                            },
+                                        },
+                                        new ButtonWidget
+                                        {
+                                            Id = ShowChangeId,
+                                            Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
+                                            Command = new Command(store.RevealStop),
+                                            Children = [new ButtonLabel { Value = L.T(s => s.PairingShowChange) }],
+                                        }
+                                        .WithTooltip(L.T(s => s.PairingGoToStop))
+                                        .WithController<KbmController>(),
+                                    ],
                                 },
                                 new Text
                                 {
@@ -149,27 +171,48 @@ internal sealed record PairingStopCard : Widget
                                     Wrap = TextWrap.Wrap,
                                     Color = Theme.Color(s => s.Palette.TextPrimary),
                                 },
-                                new ButtonWidget
+                                new Column
                                 {
-                                    Id = LocationId,
-                                    Style = ButtonStyle.Bare(_ => Theme.Color(s => s.Palette.TextBody)),
-                                    Command = new Command(store.RevealStop),
-                                    ContentInset = PaddingStyle.All(Spacing.None),
+                                    Gap = Spacing.Xs,
+                                    CrossAxis = CrossAxisAlignment.Start,
                                     Children =
                                     [
-                                        new PathText
+                                        new ButtonWidget
                                         {
-                                            Directory = PathText.Split(stop.Target.Path).Directory,
-                                            Name = Prop.Bind<string?>(() => Where(loc.Strings.Value, open)),
+                                            Id = LocationId,
+                                            Style = ButtonStyle.Bare(state => Theme.Color(s => state.Hovered.Value ? s.Palette.Accent : 0x00000000u)),
+                                            Command = new Command(store.RevealStop),
+                                            ContentInset = PaddingStyle.All(Spacing.None),
+                                            Children =
+                                            [
+                                                new Column
+                                                {
+                                                    CrossAxis = CrossAxisAlignment.Stretch,
+                                                    Children =
+                                                    [
+                                                        new Text
+                                                        {
+                                                            Value = FileAndLine(open),
+                                                            FontSize = FontSize.Caption,
+                                                            FontFamily = MonoFonts.Regular,
+                                                            Color = Theme.Color(s => s.Palette.Accent),
+                                                        },
+                                                        new Box { Height = 1f, Background = Foreground.Color },
+                                                    ],
+                                                },
+                                            ],
+                                        }
+                                        .WithTooltip(Prop.Bind<string?>(() => $"{loc.Strings.Value.PairingGoToStop}\n{stop.Target.Path}"))
+                                        .WithController<KbmController>(),
+                                        new Text
+                                        {
+                                            Value = Prop.Bind<string?>(() => Detail(loc.Strings.Value, open)),
                                             FontSize = FontSize.Caption,
-                                            FontFamily = MonoFonts.Regular,
-                                            DirectoryColor = Theme.Color(s => s.Palette.TextMuted),
-                                            NameColor = Theme.Color(s => s.Palette.Accent),
+                                            Wrap = TextWrap.Wrap,
+                                            Color = Theme.Color(s => s.Palette.TextMuted),
                                         },
                                     ],
-                                }
-                                .WithTooltip(Prop.Bind<string?>(() => $"{loc.Strings.Value.PairingGoToStop}\n{stop.Target.Path}"))
-                                .WithController<KbmController>(),
+                                },
                                 new MarkdownText { Text = new State<string>(stop.Reason) },
                                 new PairingDraftNote { Store = store, Draft = open.Draft },
                             ],
@@ -180,18 +223,19 @@ internal sealed record PairingStopCard : Widget
         };
     }
 
-    // The file's name and what follows it; the folder goes before it, apart, to be cut first.
-    private static string Where(Strings s, OpenStop open)
+    private static string FileAndLine(OpenStop open)
     {
         var name = PathText.Split(open.Stop.Target.Path).Name;
-        return open.Location switch
-        {
-            StopLocation.OnSymbol => $"{name}:{DraftLine(open.Draft)} · {open.Stop.Target.Symbol}",
-            StopLocation.Insertion insertion => $"{name}:{DraftLine(open.Draft)} · {s.PairingStopAfter(insertion.After)}",
-            StopLocation.NewFile => $"{name} · {s.PairingStopNewFile}",
-            _ => throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location."),
-        };
+        return open.Location is StopLocation.NewFile ? name : $"{name}:{DraftLine(open.Draft)}";
     }
+
+    private static string Detail(Strings s, OpenStop open) => open.Location switch
+    {
+        StopLocation.OnSymbol => open.Stop.Target.Symbol,
+        StopLocation.Insertion insertion => s.PairingStopAfter(insertion.After),
+        StopLocation.NewFile => s.PairingStopNewFile,
+        _ => throw new ArgumentOutOfRangeException(nameof(open), open.Location, "Unknown location."),
+    };
 
     private static int DraftLine(StopDraft draft) => draft.Place switch
     {
@@ -204,8 +248,8 @@ internal sealed record PairingStopCard : Widget
 /// <summary>
 /// The stop's controls, pinned under what the panel scrolls for the whole session: Accept &amp;
 /// next — which puts the agent's code into the file and moves on — Next, which moves on with the
-/// file as it is, and Skip. Once the code is in, Next is the one to press. Between stops they stay
-/// where they are, unavailable. Anything to tell the agent goes in the conversation below.
+/// file as it is, and Skip — and apart from them End, which asks first. Once the code is in, Next is
+/// the one to press. Between stops the stop's controls stay where they are, unavailable. Anything to tell the agent goes in the conversation below.
 /// </summary>
 internal sealed record PairingStopActions : Widget
 {
@@ -213,7 +257,7 @@ internal sealed record PairingStopActions : Widget
     public const string AcceptAndNextId = "pairing-accept-next";
     public const string NextId = "pairing-next";
     public const string SkipId = "pairing-skip";
-    public const string ShowChangeId = "pairing-show-change";
+    public const string EndId = "pairing-end";
 
     public required PairingStore Store { get; init; }
 
@@ -222,13 +266,22 @@ internal sealed record PairingStopActions : Widget
         var store = Store;
         var loc = ctx.Localization();
         var keys = ctx.KeyMap();
+        var bus = ctx.Require<IMessageBus>();
 
-        var open = new Derived<bool>(() => store.Stop.Value is not null);
         var idle = new Derived<bool>(() => store.Stop.Value is not null && store.Activity.Value == StopActivity.Idle);
         var accepted = new Derived<bool>(() => store.Stop.Value?.DraftState is DraftState.Taken);
 
         void AcceptAndNext() => _ = store.AcceptAndNextAsync();
         void Next() => _ = store.DoneAsync();
+        void ConfirmEnd() => bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmAgentChatDialog
+        {
+            Title = loc.Strings.Value.PairingEndTitle,
+            Body = loc.Strings.Value.PairingEndBody,
+            ActionLabel = loc.Strings.Value.PairingEnd,
+            CancelLabel = loc.Strings.Value.PairingKeepPairing,
+            OnClose = onClose,
+            OnConfirm = store.EndByUser,
+        }));
 
         Prop<string?> Tooltip(Func<Strings, string> text, KeyCommand command) =>
             Prop.Bind<string?>(() => $"{text(loc.Strings.Value)} ({keys.Display(command)})");
@@ -295,13 +348,11 @@ internal sealed record PairingStopActions : Widget
                                 new Grow { Child = Empty.Widget },
                                 new ButtonWidget
                                 {
-                                    Id = ShowChangeId,
-                                    Style = ButtonStyle.Outline(static s => s.Palette.TextBody),
-                                    Command = new Command(store.RevealStop, open),
-                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingShowChange) }],
-                                }
-                                .WithTooltip(L.T(s => s.PairingGoToStop))
-                                .WithController<KbmController>(),
+                                    Id = EndId,
+                                    Style = ButtonStyle.Outline(static s => s.Status.DangerText),
+                                    Command = new Command(ConfirmEnd),
+                                    Children = [new ButtonLabel { Value = L.T(s => s.PairingEnd) }],
+                                }.WithController<KbmController>(),
                             ],
                         },
                     ],
@@ -312,7 +363,6 @@ internal sealed record PairingStopActions : Widget
         return bar.Use(_ =>
         {
             var gates = new SubscriptionGroup();
-            gates.Add(open);
             gates.Add(idle);
             gates.Add(accepted);
             return gates;
