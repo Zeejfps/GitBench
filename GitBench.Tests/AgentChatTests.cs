@@ -139,7 +139,7 @@ public sealed class AgentChatTests : IAsyncDisposable
     [Fact]
     public void Restarting_OpensABlankConversationWithTheSameAgent_InPlaceOfTheOldOne()
     {
-        var first = _chat.Open(AcpHarness.ClaudeCode)!;
+        var first = _chat.Open(AgentPreset.ClaudeCode)!;
         first.Say("remember this");
         _sessions.HidePanel(RepoId);
 

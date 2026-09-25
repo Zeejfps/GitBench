@@ -165,7 +165,7 @@ internal sealed class PairingSessions : IPairingSessions, IDisposable
         _conversations.TryGetValue(repoId, out var conversation)
         && CanRestart(conversation)
         && conversation.Harness is PairingHarness.Acp acp
-            ? OpenChat(conversation.Repo, acp.Harness)
+            ? OpenChat(conversation.Repo, acp.Preset)
             : null;
 
     private AgentConversation Open(Repo repo, PairingHarness harness, AgentOpening opening)
