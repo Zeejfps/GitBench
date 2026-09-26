@@ -65,5 +65,6 @@ public class ConfirmCloseTerminalDialogLayoutTests
             Assert.Equal(settled, pane.Position);
             Assert.False(bar.IsVisible);
         }
+        harness.AssertSettledOnPixelGrid();
     }
 }

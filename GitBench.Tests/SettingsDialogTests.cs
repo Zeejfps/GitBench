@@ -379,6 +379,36 @@ public sealed class SettingsDialogTests : IDisposable
         AssertCategoryLabelsFit(h);
     }
 
+    public static TheoryData<float, string> ScaledTabs()
+    {
+        var data = new TheoryData<float, string>();
+        foreach (var scale in new[] { 1.25f, 1.5f, 1.75f })
+            foreach (var tab in new[] { SettingsDialog.GeneralTabId, SettingsDialog.KeyboardTabId, SettingsDialog.AgentTabId,
+                         SettingsDialog.ConnectionsTabId })
+                data.Add(scale, tab);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(ScaledTabs))]
+    public void EveryTabSettlesOnThePixelGridAtFractionalScales(float dpiScale, string tab)
+    {
+        using var fonts = new FreeTypeFontBackend();
+        var font = fonts.LoadFontFromMemory(
+            EmbeddedAssets.LoadBytes(typeof(Context).Assembly, "Inter-Regular.ttf"), (int)MathF.Round(16 * dpiScale));
+        using var h = GuiTestHarness.CreateRaster(
+            ctx => new Center { Child = _dialog }.BuildView(ctx), fonts, font,
+            width: 640, height: 480, configure: ctx =>
+            {
+                Configure(ctx);
+                Assert.IsType<RasterCanvas>(ctx.Canvas).UpdateDpiScale(dpiScale);
+            });
+        h.ClickOn(tab);
+        h.Layout();
+
+        h.AssertSettledOnPixelGrid();
+    }
+
     private static void AssertCategoryLabelsFit(GuiTestHarness h)
     {
         var drawn = new RecordingCanvas(new CanvasTextMeasurer(h.Context.Canvas));
