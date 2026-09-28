@@ -69,6 +69,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly State<CaretRequest?> _caretRequest = new(null);
     private readonly State<EditorCaret?> _caret = new(null);
     private readonly State<EditorHints?> _hints = new(null);
+    private readonly State<EditorSpotlights?> _spotlights = new(null);
     private readonly State<TakeGhostRequest?> _takeGhost = new(null);
 
     private readonly FileBrowserTabs _tabs;
@@ -340,6 +341,15 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     public void ShowHints(EditorHints? hints)
     {
         if (!_disposed) _hints.Value = hints;
+    }
+
+    /// <summary>Lines lit up in a file for the reader to look at. The body shows them while it
+    /// shows that file, and carries them along as the reader types.</summary>
+    public IReadable<EditorSpotlights?> Spotlights => _spotlights;
+
+    public void ShowSpotlights(EditorSpotlights? spotlights)
+    {
+        if (!_disposed) _spotlights.Value = spotlights;
     }
 
     /// <summary>A request to type the suggestion on screen into the file, for the body to carry out.</summary>

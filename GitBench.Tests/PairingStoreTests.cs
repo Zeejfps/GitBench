@@ -415,35 +415,6 @@ public sealed class PairingStoreTests : IDisposable
         Assert.Contains(_transcript.Messages, m => m is PairingMessage.FromUser { Text: "Skip this one" });
     }
 
-    [Fact]
-    public void Show_MovesTheEditor_AndLeavesTheOpenStopAlone()
-    {
-        var stop = Open();
-        _presentation.Calls.Clear();
-
-        var shown = Await(_store.ShowAsync("tests/ClientTests.cs", "RetriesOnce", null, CancellationToken.None), "the show");
-
-        Assert.Equal(10, Assert.IsType<Showing.Shown>(shown).Line);
-        Assert.Equal(["show tests/ClientTests.cs#RetriesOnce", "reveal"], _presentation.Calls);
-        Assert.Same(stop, _store.Stop.Value);
-    }
-
-    [Fact]
-    public void Show_WithoutASymbol_OpensTheFileAtTheLine()
-    {
-        var shown = Await(_store.ShowAsync("src/Client.cs", null, 42, CancellationToken.None), "the show");
-
-        Assert.Equal(42, Assert.IsType<Showing.Shown>(shown).Line);
-        Assert.Equal(["show file src/Client.cs:42"], _presentation.Calls);
-    }
-
-    [Fact]
-    public void Show_RefusesAFileThatIsNotThere()
-    {
-        var shown = Await(_store.ShowAsync("missing.cs", null, null, CancellationToken.None), "the show");
-
-        Assert.Contains("missing.cs", Assert.IsType<Showing.Refused>(shown).Message);
-    }
 }
 
 public sealed class DraftPlacingTests

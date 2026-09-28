@@ -1,5 +1,7 @@
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.CodeIntel;
+using GitBench.Features.FileBrowser;
+using GitBench.Features.LanguageServers;
 using GitBench.Features.Pairing;
 using GitBench.Features.Review;
 using GitBench.Git;
@@ -7,8 +9,8 @@ using GitBench.Git;
 namespace GitBench.Features.AgentConnections;
 
 /// <summary>What an exported tool touches, which decides what the bridge notes about the call:
-/// a repository read (or a Viewed mark), the review window's presentation, or the walkthrough
-/// a session narrates.</summary>
+/// a repository read (or a Viewed mark), what the review window or the Files pane shows, the
+/// walkthrough a session narrates, or the pairing loop.</summary>
 internal enum AgentToolRole
 {
     Repository,
@@ -22,7 +24,8 @@ internal sealed record ExportedTool(IAssistantTool Tool, AgentToolRole Role);
 
 /// <summary>
 /// The assistant tools a terminal agent reaches over MCP: the review reads, the Viewed mark, the
-/// presentation tools, the blocking walkthrough and the pairing loop. Never the repository-mutating
+/// presentation tools of the review window and the Files pane, the blocking walkthrough and the
+/// pairing loop. Never the repository-mutating
 /// writes — the agent has git of its own.
 /// </summary>
 internal sealed class AgentToolExport
@@ -33,6 +36,8 @@ internal sealed class AgentToolExport
     private readonly IReviewWindowRegistry _windows;
     private readonly AssistantWriteSurface _surface;
     private readonly IPairingSessions _pairing;
+    private readonly IFileBrowserStore _browsers;
+    private readonly IFileTextSource _texts;
 
     public AgentToolExport(
         IGitService git,
@@ -40,7 +45,9 @@ internal sealed class AgentToolExport
         IReviewProgressStore progress,
         IReviewWindowRegistry windows,
         AssistantWriteSurface surface,
-        IPairingSessions pairing)
+        IPairingSessions pairing,
+        IFileBrowserStore browsers,
+        IFileTextSource texts)
     {
         _git = git;
         _extractor = extractor;
@@ -48,6 +55,8 @@ internal sealed class AgentToolExport
         _windows = windows;
         _surface = surface;
         _pairing = pairing;
+        _browsers = browsers;
+        _texts = texts;
     }
 
     /// <summary>The tools bound to one repository. Cheap: each holds the services and the repo.</summary>
@@ -56,6 +65,7 @@ internal sealed class AgentToolExport
         .. ReviewTools.CreateReads(_git, repo, _extractor).Select(t => new ExportedTool(t, AgentToolRole.Repository)),
         .. ReviewTools.CreateWrites(_git, repo, _progress, _surface).Select(t => new ExportedTool(t, AgentToolRole.Repository)),
         .. ReviewPresentationTools.CreateAll(_git, repo, _windows, _surface).Select(t => new ExportedTool(t, AgentToolRole.Presentation)),
+        .. EditorPresentationTools.CreateAll(repo, _browsers, new RepoFilePlaces(repo, _texts, _extractor), _surface).Select(t => new ExportedTool(t, AgentToolRole.Presentation)),
         .. WalkthroughTools.CreateAll(repo, _windows, _surface.Dispatcher, WalkthroughNarratorMode.Blocking).Select(t => new ExportedTool(t, AgentToolRole.Walkthrough)),
         .. PairingTools.CreateAll(repo, _pairing, _surface.Dispatcher).Select(t => new ExportedTool(t, AgentToolRole.Pairing)),
     ];

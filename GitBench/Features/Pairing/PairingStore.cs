@@ -28,16 +28,13 @@ internal interface IPairingPresentation
     /// whether it went in.</summary>
     Task<bool> TakeDraftAsync(StopLocation location);
 
-    /// <summary>Puts the caret on a place a stop or <c>pairing_show</c> found.</summary>
+    /// <summary>Puts the caret on a place a stop found.</summary>
     void Reveal(StopLocation location);
 
     /// <summary>Puts the caret where the agent's code for a stop goes: the first line it replaces,
     /// or the end of the line it goes in after.</summary>
     void RevealDraft(StopLocation location, StopDraft draft);
 
-    /// <summary>Opens a repository file with the caret at the start of a line; false when there is
-    /// no such file.</summary>
-    bool ShowFile(string relativePath, int line);
 
     /// <summary>Where the user's caret is, and what they have selected.</summary>
     IReadable<EditorCaret?> Caret { get; }
@@ -88,13 +85,6 @@ internal abstract record StopOpening
 }
 
 /// <summary>How a request to show the user a place came out.</summary>
-internal abstract record Showing
-{
-    public sealed record Shown(int Line, string? LineText) : Showing;
-
-    public sealed record Refused(string Message) : Showing;
-}
-
 /// <summary>
 /// One pairing session's loop: the goal, the roadmap, the stop the user is on, its part of the conversation,
 /// and the hand-off between the agent and the user. The agent proposes a stop and ends its turn; the
@@ -249,7 +239,7 @@ internal sealed class PairingStore : IDisposable
                 location = placed.Location;
                 break;
             case StopPlacement.Missed missed:
-                return new StopOpening.Refused(Describe(missed.Miss));
+                return new StopOpening.Refused(StopMisses.Describe(missed.Miss));
             default:
                 throw new InvalidOperationException("Unhandled stop placement.");
         }
@@ -507,37 +497,6 @@ internal sealed class PairingStore : IDisposable
 
     /// <summary>Takes the user to a place the agent points at while they talk: a declaration, or a
     /// line. The open stop, its card and its draft stay as they are; the card brings the user back.</summary>
-    public async Task<Showing> ShowAsync(string path, string? symbol, int? line, CancellationToken ct)
-    {
-        ThrowIfDisposed();
-        if (!IsLive) return new Showing.Refused("The session has ended.");
-        if (symbol is not { Length: > 0 })
-        {
-            var at = Math.Max(1, line ?? 1);
-            return _presentation.ShowFile(path, at)
-                ? new Showing.Shown(at, null)
-                : new Showing.Refused($"{path} is not a file in the repository.");
-        }
-
-        var placement = await _presentation.LocateAsync(new StopTarget(path, symbol, null), ct);
-        await OnUi();
-        if (!IsLive) return new Showing.Refused("The session has ended.");
-        switch (placement)
-        {
-            case StopPlacement.Placed { Location: StopLocation.OnSymbol found }:
-                _presentation.Reveal(found);
-                return new Showing.Shown(found.At.Line.Value, found.LineText);
-            case StopPlacement.Placed { Location: StopLocation.NewFile }:
-                return new Showing.Refused($"{path} does not exist.");
-            case StopPlacement.Placed { Location: StopLocation.Insertion }:
-                throw new InvalidOperationException("A place to show has no insertion point.");
-            case StopPlacement.Missed missed:
-                return new Showing.Refused(Describe(missed.Miss));
-            default:
-                throw new InvalidOperationException("Unhandled placement.");
-        }
-    }
-
     /// <summary>Puts the caret back where the open stop's code goes.</summary>
     public void RevealStop()
     {
@@ -590,20 +549,6 @@ internal sealed class PairingStore : IDisposable
         if (_phase.Value is PairingPhase.Running running && running.Waiting != waiting)
             _phase.Value = running with { Waiting = waiting };
     }
-
-    private static string Describe(StopMiss miss) => miss switch
-    {
-        StopMiss.NoSuchSymbol none =>
-            $"'{none.Symbol}' is not declared in {none.Path}. Name a declaration that exists, or pass 'after' with the "
-            + $"declaration the new one goes after. Declared there: {Listed(none.Known)}",
-        StopMiss.NoSuchAfter after =>
-            $"'{after.After}' (the declaration to go after) is not declared in {after.Path}. Declared there: {Listed(after.Known)}",
-        StopMiss.OutsideRepository outside => $"{outside.Path} is outside the repository.",
-        StopMiss.Unreadable unreadable => $"{unreadable.Path} could not be read: {unreadable.Reason}",
-        _ => throw new ArgumentOutOfRangeException(nameof(miss), miss, "Unknown miss."),
-    };
-
-    private static string Listed(IReadOnlyList<string> known) => known.Count == 0 ? "(nothing found)" : string.Join(", ", known);
 
     private void ThrowIfDisposed()
     {

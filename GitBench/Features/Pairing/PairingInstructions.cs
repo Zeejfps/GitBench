@@ -53,7 +53,8 @@ internal static class PairingInstructions
         + "not reach them, and where it does, repeating it there shows them the same answer twice. "
         + "Your thinking never reaches them.\n"
         + "- When the user asks to see something — the test you wrote, a caller, where a name is "
-        + "used — open it with pairing_show. It only moves the editor: the stop stays open, so never "
+        + "used — open it with editor_show, or light the lines with editor_spotlight. They only move "
+        + "the editor: the stop stays open, so never "
         + "open a stop just to show the user a place.\n"
         + "- When they say something, it is a question or what they did differently. Answer with "
         + "pairing_say, keep it in mind for the next diff, then end your turn. When they skip a stop, "
@@ -71,9 +72,18 @@ internal static class PairingInstructions
         "Between sessions: when a session ends, the conversation goes on in DiffDino's panel. The user "
         + "may ask for anything there — commit what was done, push it, run the tests, explain code — "
         + "and you answer and do it with your own tools, in plain replies rather than pairing_say. "
+        + ShowingCode + " "
         + "When the code needs changing, offer to pair on it, and once the user agrees call "
         + "pairing_start with the goal. " + Tooling + " Git works through your shell; a push is put to "
         + "the user before it runs.";
+
+    /// <summary>How the agent points at code when the user asks where something is.</summary>
+    public const string ShowingCode =
+        "When the user asks where something happens or how something works, show them in DiffDino "
+        + "as well as telling them: editor_spotlight opens the file in its Files pane and lights up the "
+        + "lines that matter, a numbered pin and a short note on each run, and editor_show just opens a "
+        + "file on a declaration or line. Then explain in your reply, referring to the pins by number. "
+        + "Check the text each call returns is the code you meant.";
 
     private const string Begin = "Begin: read what you need, send the roadmap, then the first stop, then end your turn.";
 
@@ -83,7 +93,7 @@ internal static class PairingInstructions
     public static string Opening(string goal, string repoPath) =>
         "We are pairing in DiffDino. You navigate me through the change one stop at a time and propose "
         + "the code for each, and I accept it or write it myself. Use the DiffDino MCP tools (pairing_roadmap, pairing_stop, pairing_say, "
-        + "pairing_show, pairing_state, pairing_end, pairing_start).\n"
+        + "pairing_state, pairing_end, pairing_start, and editor_show / editor_spotlight to point at code).\n"
         + $"Pass repo: \"{repoPath}\" on every DiffDino call.\n\n"
         + $"The goal:\n{goal}\n\n"
         + Protocol + "\n\n"
@@ -96,6 +106,7 @@ internal static class PairingInstructions
         $"We are working together in DiffDino, a git client, on the repository at \"{repoPath}\". I talk to you "
         + "from its side panel and send you code I select in its editor. Answer in plain replies. Pass "
         + $"repo: \"{repoPath}\" on every DiffDino call.\n"
+        + ShowingCode + "\n"
         + "I write the code. When the code needs changing, offer to pair on it, and once I agree call "
         + "pairing_start with the goal: DiffDino then shows me each place to change and your code for "
         + "it. Read the code, run git and the tests with your own tools; a push is put to me before it "

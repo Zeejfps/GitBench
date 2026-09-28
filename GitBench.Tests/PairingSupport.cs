@@ -39,12 +39,6 @@ internal sealed class RecordingPairingPresentation : IPairingPresentation
 
     public void RevealDraft(StopLocation location, StopDraft draft) => Calls.Add("reveal draft");
 
-    public bool ShowFile(string relativePath, int line)
-    {
-        Calls.Add($"show file {relativePath}:{line}");
-        return relativePath != "missing.cs";
-    }
-
     public List<StopDraft> Drafts { get; } = new();
 
     /// <summary>The stop's file as the fake editor has it.</summary>

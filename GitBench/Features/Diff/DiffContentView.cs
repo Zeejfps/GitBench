@@ -220,6 +220,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private FileLine? _firstRemoved;
     private Features.Editor.EditorBuffer? _ghostBuffer;
     private bool _ghostRefreshPosted;
+
+    // Lines lit up for the reader, and where each run stands now that edits have moved it. The
+    // buffer is the one whose edits are being followed.
+    private Features.Editor.EditorSpotlights? _spotlights;
+    private Features.Editor.LineSpan[] _spotlitLines = [];
+    private Features.Editor.EditorBuffer? _spotlitBuffer;
     private FileSpan? _pendingSearchReveal;
     private FileLine? _lastTopLine;
     private bool _topLinePublished;
@@ -281,6 +287,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _selection.Changed += () => CaretMoved?.Invoke();
         // A view torn down with a suggestion up lets go of the buffer it drew it into.
         this.Use(() => new ActionDisposable(() => SetHints(null)));
+        this.Use(() => new ActionDisposable(() => SetSpotlights(null)));
 
         if (ctx.Get<IFrameTicker>() is { } ticker) UseCaretBlink(ticker);
 
@@ -352,6 +359,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         RefreshSearchScope();
         ApplyGhost();
+        FollowSpotlitBuffer();
         _list.ScrollPastEnd = _body is DiffBody.Edited;
         _list.ItemCount = RowSource.Rows.Count;
         _list.NotifyItemsChanged();
@@ -774,6 +782,55 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private static bool IsHinted(string documentPath, string hintedPath) =>
         PathKey.Comparer.Equals(PathKey.Normalize(documentPath), PathKey.Normalize(hintedPath));
 
+    /// <summary>Lights up runs of lines in a file, or takes them away. Only over the file it names;
+    /// the runs move with the lines as the reader types.</summary>
+    public void SetSpotlights(Features.Editor.EditorSpotlights? spotlights)
+    {
+        _spotlights = spotlights;
+        _spotlitLines = spotlights is null ? [] : spotlights.Runs.Select(run => run.Lines).ToArray();
+        FollowSpotlitBuffer();
+        SetDirty();
+    }
+
+    private void FollowSpotlitBuffer()
+    {
+        var target = Document is { } editor && _spotlights is { } spotlights && IsHinted(editor.Path, spotlights.Path)
+            ? editor
+            : null;
+        if (ReferenceEquals(_spotlitBuffer, target)) return;
+        if (_spotlitBuffer is { } previous) previous.Edited -= OnSpotlitEdit;
+        _spotlitBuffer = target;
+        if (target is not null) target.Edited += OnSpotlitEdit;
+    }
+
+    private void OnSpotlitEdit(Features.Editor.DocumentEdit edit)
+    {
+        for (var i = 0; i < _spotlitLines.Length; i++)
+        {
+            var lines = _spotlitLines[i];
+            var from = Features.Editor.GhostMatch.Shift(new FileLine(lines.From), edit.Inverse).Value;
+            var to = Features.Editor.GhostMatch.Shift(new FileLine(lines.To), edit.Inverse).Value;
+            _spotlitLines[i] = new Features.Editor.LineSpan(from, Math.Max(from, to));
+        }
+    }
+
+    private SpotlitLine? SpotlightOnRow(int rowIndex)
+    {
+        if (_spotlitLines.Length == 0 || _spotlights is not { } spotlights) return null;
+        if (Document is not { } editor || !IsHinted(editor.Path, spotlights.Path)) return null;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } line) return null;
+        SpotlitLine? lit = null;
+        for (var i = 0; i < _spotlitLines.Length; i++)
+        {
+            if (!_spotlitLines[i].Contains(line.Value)) continue;
+            if (line.Value == _spotlitLines[i].From) return new SpotlitLine(new SpotlightPin(i + 1, spotlights.Runs[i].Note));
+            lit = Lit;
+        }
+        return lit;
+    }
+
+    private static readonly SpotlitLine Lit = new(null);
+
     private ReplacedLine? ReplacedAt(int rowIndex)
     {
         if (_ghostFrom is not { } from || _hints is not { } hints) return null;
@@ -1003,6 +1060,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 Link = LinkOnRow(rowIndex),
                 Search = SearchOnRow(rowIndex),
                 Replaced = ReplacedAt(rowIndex),
+                Spotlight = SpotlightOnRow(rowIndex),
             };
         _surface.DrawRow(c, rowRect, rowIndex, z, composing?.Line ?? Recolored(rows[rowIndex]), paint);
 

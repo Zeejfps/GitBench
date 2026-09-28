@@ -35,11 +35,19 @@ internal readonly record struct DiffRowPaint(
     UsageLensState? Usages = null,
     bool LensHovered = false,
     IReadOnlyList<SearchMark>? Search = null,
-    ReplacedLine? Replaced = null);
+    ReplacedLine? Replaced = null,
+    SpotlitLine? Spotlight = null);
 
 /// <summary>A line that suggested code would replace, drawn as a removed line, with the characters
 /// that change, if the suggestion pairs with it.</summary>
 internal sealed record ReplacedLine(IReadOnlyList<CharRange>? Emphasis);
+
+/// <summary>A line inside a run someone pointed the reader at. The run's first line carries its
+/// numbered pin.</summary>
+internal sealed record SpotlitLine(SpotlightPin? Pin);
+
+/// <summary>The number a spotlit run goes by, and what it is, drawn after its first line.</summary>
+internal sealed record SpotlightPin(int Number, string? Note);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -433,6 +441,13 @@ internal sealed class DiffRowPainter
                 Style = SolidBgStyle(Styles.LineRemovedBackground),
                 ZIndex = p.Z,
             });
+        if (p.Spotlight is not null)
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
+                Style = SolidBgStyle(Styles.SpotlightBand),
+                ZIndex = p.Z,
+            });
         var textLeft = DrawGutterAndGlyph(c, l, p);
         if (l.Emphasis is { Count: > 0 } ranges)
             DrawIntraLineEmphasis(c, l.Text.Expanded, ranges, EmphasisOf(l.Kind), textLeft, p.Bottom, p.Z);
@@ -462,7 +477,38 @@ internal sealed class DiffRowPainter
         // the row's characters, so nothing selects it and nothing measures a caret against it.
         if (l.Fold is { Chip: { } chip })
             DrawFoldChip(c, l, chip, textLeft, p);
+
+        if (p.Spotlight is { Pin: { } pin })
+            DrawSpotlightPin(c, l, pin, textLeft, p);
     }
+
+    // Past the end of the line and any fold pill on it, so it never covers the code it points at.
+    private void DrawSpotlightPin(ICanvas c, DiffRow.Line l, SpotlightPin pin, float textLeft, in DiffRowPaint p)
+    {
+        var (chipLeft, chipWidth) = FoldChipBounds(l, textLeft);
+        var x = chipLeft + chipWidth + SpotlightPinGapCells * MonoAdvance;
+        var number = pin.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var width = (number.Length + 1) * MonoAdvance;
+        var height = LineHeight - SpotlightPinInsetY * 2;
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(x, p.Bottom + SpotlightPinInsetY, width, height),
+            Style = new RectStyle
+            {
+                BackgroundColor = Styles.SpotlightPinBackground,
+                BorderRadius = BorderRadiusStyle.All(height / 2f),
+            },
+            ZIndex = p.Z + 2,
+        });
+        DrawMonoText(c, number, x, p.Bottom, width, Styles.SpotlightPinText, TextAlignment.Center, p.Z + 3);
+
+        if (pin.Note is not { Length: > 0 } note) return;
+        var noteLeft = x + width + MonoAdvance;
+        DrawMonoText(c, note, noteLeft, p.Bottom, p.Left + p.Width - noteLeft, Styles.LineNumberText, TextAlignment.Start, p.Z + 2);
+    }
+
+    private const int SpotlightPinGapCells = 2;
+    private const float SpotlightPinInsetY = 1f;
 
     // A suggestion, not a line: no gutter number, drawn as an added line so a suggestion that
     // replaces lines reads as a diff against them.

@@ -74,6 +74,24 @@ internal abstract record StopMiss
     public sealed record Unreadable(string Path, string Reason) : StopMiss;
 }
 
+internal static class StopMisses
+{
+    /// <summary>A miss as the agent is told it, with what it could name instead.</summary>
+    public static string Describe(StopMiss miss) => miss switch
+    {
+        StopMiss.NoSuchSymbol none =>
+            $"'{none.Symbol}' is not declared in {none.Path}. Name a declaration that exists, or pass 'after' with the "
+            + $"declaration the new one goes after. Declared there: {Listed(none.Known)}",
+        StopMiss.NoSuchAfter after =>
+            $"'{after.After}' (the declaration to go after) is not declared in {after.Path}. Declared there: {Listed(after.Known)}",
+        StopMiss.OutsideRepository outside => $"{outside.Path} is outside the repository.",
+        StopMiss.Unreadable unreadable => $"{unreadable.Path} could not be read: {unreadable.Reason}",
+        _ => throw new ArgumentOutOfRangeException(nameof(miss), miss, "Unknown miss."),
+    };
+
+    private static string Listed(IReadOnlyList<string> known) => known.Count == 0 ? "(nothing found)" : string.Join(", ", known);
+}
+
 internal abstract record StopPlacement
 {
     public sealed record Placed(StopLocation Location) : StopPlacement;

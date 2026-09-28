@@ -135,6 +135,7 @@ internal sealed record FileBrowserTextBody : Widget
         content.Bind(browser.Folds, content.SetFoldState);
 
         content.Bind(browser.Hints, content.SetHints);
+        content.Bind(browser.Spotlights, content.SetSpotlights);
         content.Bind(browser.TakeGhostRequested, request =>
         {
             if (request is null) return;

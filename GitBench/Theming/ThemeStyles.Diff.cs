@@ -61,6 +61,9 @@ public sealed record DiffContentStyles(
     uint LinkUnderline,
     uint UsageLensText,
     uint UsageLensHoverText,
+    uint SpotlightBand,
+    uint SpotlightPinBackground,
+    uint SpotlightPinText,
     DiffSyntaxStyles Syntax);
 
 // Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
@@ -195,6 +198,11 @@ public partial record ThemeStyles
             // its own.
             UsageLensText: p.TextDim,
             UsageLensHoverText: p.Accent,
+            // Lines an agent points at in the editor: the review window's spotlight, so a place
+            // shown in the Files pane reads the same as one shown in a review.
+            SpotlightBand: WithAlpha(p.Accent, SpotlightBandAlpha),
+            SpotlightPinBackground: p.Accent,
+            SpotlightPinText: p.TextOnAccent,
             Syntax: new DiffSyntaxStyles(
                 Keyword: syntax.Keyword,
                 String: syntax.String,

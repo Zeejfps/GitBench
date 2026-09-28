@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using GitBench.App;
 using GitBench.Features.AgentConnections;
+using GitBench.Features.LanguageServers;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Branches;
 using GitBench.Features.Commits;
@@ -108,7 +109,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
 
         var surface = new AssistantWriteSurface(
             _dispatcher, _bus, _registry, new SilentCommitEditor(), new IdleRemoteOperations(), new TestDocuments.Empty());
-        _export = new AgentToolExport(_git, new UnparsedFiles(), new ReviewProgressStore(), _windows, surface, _pairing);
+        _export = new AgentToolExport(_git, new UnparsedFiles(), new ReviewProgressStore(), _windows, surface, _pairing, new NoFileBrowsers(), FilesOnDisk.Instance);
         _source = new AgentToolMcpSource(_export, _registry, _windows, surface, _clock);
 
         _server = new GuiMcpServer(

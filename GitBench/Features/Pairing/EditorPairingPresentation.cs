@@ -24,7 +24,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
     private readonly IRepoRegistry _repos;
     private readonly IFileBrowserStore _browsers;
     private readonly IFileTextSource _texts;
-    private readonly ISymbolExtractor _extractor;
+    private readonly RepoFilePlaces _places;
     private readonly RepoDocumentSaver _saver;
     private readonly ISyntaxHighlighter _highlighter;
     private readonly IUiDispatcher _dispatcher;
@@ -50,7 +50,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
         _repos = repos;
         _browsers = browsers;
         _texts = texts;
-        _extractor = extractor;
+        _places = new RepoFilePlaces(repo, texts, extractor);
         _saver = saver;
         _highlighter = highlighter;
         _dispatcher = dispatcher;
@@ -62,33 +62,7 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
 
     public IReadable<IReadOnlyList<string>> DraftNeeds => _draftNeeds;
 
-    public async Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct)
-    {
-        if (Absolute(target.Path) is not { } path)
-            return new StopPlacement.Missed(new StopMiss.OutsideRepository(target.Path));
-
-        string? text;
-        switch (await _texts.ReadAsync(path, ct).ConfigureAwait(false))
-        {
-            case CurrentText.Complete complete:
-                text = complete.Text.Replace("\r\n", "\n");
-                break;
-            case CurrentText.CutShort:
-                return new StopPlacement.Missed(new StopMiss.Unreadable(target.Path, "the file is too large to open"));
-            case CurrentText.Unavailable:
-                if (Directory.Exists(path))
-                    return new StopPlacement.Missed(new StopMiss.Unreadable(target.Path, "it is a directory"));
-                text = null;
-                break;
-            default:
-                throw new InvalidOperationException("Unhandled file text.");
-        }
-
-        var outline = text is not null && CodeLanguages.Detect(path) is { } language
-            ? await Task.Run(() => _extractor.Extract(text, language), ct).ConfigureAwait(false)
-            : null;
-        return StopResolver.Resolve(path, text, outline, target);
-    }
+    public Task<StopPlacement> LocateAsync(StopTarget target, CancellationToken ct) => _places.LocateAsync(target, ct);
 
     public void Reveal(StopLocation location)
     {
@@ -122,13 +96,6 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
             default:
                 throw new ArgumentOutOfRangeException(nameof(draft), draft.Place, "Unknown draft place.");
         }
-    }
-
-    public bool ShowFile(string relativePath, int line)
-    {
-        if (Absolute(relativePath) is not { } path || !File.Exists(path) || Browser() is not { } browser) return false;
-        browser.PlaceCaret(path, TextPosition.At(line, 0));
-        return true;
     }
 
     public void ShowDraft(StopLocation location, StopDraft draft, SuggestionActions actions)
@@ -234,24 +201,11 @@ internal sealed class EditorPairingPresentation : IPairingPresentation, IDisposa
 
     public IReadOnlyList<string> SaveUnsaved() => _saver.SaveUnsaved(_repo.Id);
 
-    public string? Relative(string absolutePath)
-    {
-        var root = PathKey.Normalize(_repo.Path);
-        var full = PathKey.Normalize(absolutePath);
-        if (!full.StartsWith(root, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-            return null;
-        var rest = full[root.Length..];
-        if (rest.Length > 0 && rest[0] != Path.DirectorySeparatorChar && rest[0] != Path.AltDirectorySeparatorChar) return null;
-        return rest.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
-    }
+    public string? Relative(string absolutePath) => _places.Relative(absolutePath);
 
     private FileBrowserViewModel? Browser() => _browsers.For(_repo.Id);
 
-    private string? Absolute(string relative)
-    {
-        var full = PathKey.Normalize(Path.Combine(_repo.Path, relative));
-        return Relative(full) is null ? null : full;
-    }
+    private string? Absolute(string relative) => _places.Absolute(relative);
 
     // The caret is read off whichever browser is on screen, and only while it is this repository's.
     private void Follow(FileBrowserViewModel? browser)

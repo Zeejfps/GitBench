@@ -33,7 +33,6 @@ internal static class PairingTools
             new PairingStopTool(target),
             new PairingStateTool(target),
             new PairingSayTool(target),
-            new PairingShowTool(target),
             new PairingEndTool(target),
         ];
     }
@@ -420,53 +419,6 @@ internal sealed class PairingSayTool(PairingTarget target) : IAssistantTool
         {
             store.AddReply(text);
             return ToolInvocation.Ok(ToolJson.Write(writer => writer.WriteBoolean("ok", true)));
-        }, ct);
-    }
-}
-
-/// <summary>Shows the user a place in the code while they talk, without opening a stop.</summary>
-internal sealed class PairingShowTool(PairingTarget target) : IAssistantTool
-{
-    public string Name => "pairing_show";
-
-    public string Description =>
-        "Opens a file in DiffDino's editor for the user to look at, with the caret on a declaration "
-        + "or a line: a test, a caller, where something is used — whatever they asked to "
-        + "see. It is not a stop: the open stop stays open, and nothing is asked of the user. Name a "
-        + "declaration in symbol, or pass line; with neither, the file opens at its top. Returns "
-        + "where it landed; then answer with pairing_say.";
-
-    public string JsonSchema =>
-        """
-        {"type":"object","properties":{"path":{"type":"string","description":"Repo-relative path of the file."},"symbol":{"type":"string","description":"The declaration to put the caret on, e.g. Client.Fetch."},"line":{"type":"integer","minimum":1,"description":"The 1-based line to put the caret on, when no symbol is named."}},"required":["path"],"additionalProperties":false}
-        """;
-
-    public bool IsWrite => false;
-
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        if (ToolJson.String(args, "path") is not { Length: > 0 } rawPath)
-            return Task.FromResult(ToolInvocation.Error("path must be a non-empty string."));
-        var path = rawPath.Trim().Replace('\\', '/').TrimStart('/');
-        var symbol = ToolJson.String(args, "symbol")?.Trim();
-        int? line = args.TryGetProperty("line", out var lineArg) && lineArg.TryGetInt32(out var number) ? number : null;
-
-        return target.OnStoreAsync(async store =>
-        {
-            switch (await store.ShowAsync(path, symbol, line, ct))
-            {
-                case Showing.Shown shown:
-                    return ToolInvocation.Ok(ToolJson.Write(writer =>
-                    {
-                        writer.WriteString("path", path);
-                        writer.WriteNumber("line", shown.Line);
-                        if (shown.LineText is { } text) writer.WriteString("line_text", text);
-                    }));
-                case Showing.Refused refused:
-                    return ToolInvocation.Error(refused.Message);
-                default:
-                    throw new InvalidOperationException("Unhandled showing.");
-            }
         }, ct);
     }
 }
