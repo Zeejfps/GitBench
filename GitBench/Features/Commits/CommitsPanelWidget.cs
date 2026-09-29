@@ -19,6 +19,7 @@ public sealed record CommitsPanelWidget : Widget
 
         var commits = new CommitsView.Core(ctx);
         var scrollBar = ScrollBars.CreateVertical(ctx);
+        var hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
         return new BorderLayout
         {
@@ -28,7 +29,11 @@ public sealed record CommitsPanelWidget : Widget
                 RemoteFilterActive = commits.RemoteFilterActive,
                 OnToggleRemoteFilter = commits.ToggleRemoteFilter,
             },
-            Center = new Raw { View = commits },
+            Center = new BorderLayout
+            {
+                Center = new Raw { View = commits },
+                South = new Raw { View = hScrollBar },
+            },
             East = new Raw { View = scrollBar },
             South = new Box
             {
@@ -51,7 +56,7 @@ public sealed record CommitsPanelWidget : Widget
                 ],
             },
         }
-        .Use(_ => new ScrollSyncController(commits.Scroll, scrollBar))
+        .Use(_ => new ScrollSyncController(commits.Scroll, scrollBar, hScrollBar))
         .Use(_ => new TruncationBanner(commits, showBanner));
     }
 }

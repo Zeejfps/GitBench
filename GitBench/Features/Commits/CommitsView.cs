@@ -1,5 +1,6 @@
 using ZGF.Gui.Views;
 using GitBench.Controls;
+using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Input;
 using GitBench.Localization;
@@ -30,7 +31,7 @@ internal sealed record CommitsView : Widget
         Date,
     }
 
-    internal sealed class Core : ContainerView
+    internal sealed class Core : ContainerView, IScrollableContent
     {
         private const float HeaderHeight = 28f;
         private const float RowHeight = 36f;
@@ -42,6 +43,8 @@ internal sealed record CommitsView : Widget
         private const float MinColumnWidth = 40f;
         private const float MaxColumnWidth = 600f;
         private const float MinSummaryWidth = 180f;
+        // Below this the table stops squeezing and scrolls horizontally instead.
+        private const float MinTableWidth = MinSummaryWidth + MinColumnWidth * 3f + ColumnGap * 4f;
         private const float DividerThickness = 1f;
         internal const float DividerHitWidth = 6f;
         private const float BadgePaddingX = 6f;
@@ -62,6 +65,7 @@ internal sealed record CommitsView : Widget
         private readonly IKeyMap _keys;
         private readonly CommitsViewModel _vm;
         private readonly VirtualRowListView _list;
+        private readonly DiffListScroll _hScroll;
         private readonly ListArrowKbmController _arrowController;
 
         private string? _selectedSha;
@@ -84,7 +88,31 @@ internal sealed record CommitsView : Widget
         // Repaints the relative dates ("3m ago"), which go stale with no state change to dirty us.
         private const int DateRefreshMs = 30_000;
 
-        public IScrollableContent Scroll => _list;
+        public IScrollableContent Scroll => this;
+
+        public event Action<float>? VerticalScrollPositionChanged
+        {
+            add => _list.VerticalScrollPositionChanged += value;
+            remove => _list.VerticalScrollPositionChanged -= value;
+        }
+        public event Action<float>? HorizontalScrollPositionChanged
+        {
+            add => _hScroll.HorizontalScrollPositionChanged += value;
+            remove => _hScroll.HorizontalScrollPositionChanged -= value;
+        }
+        public float VerticalScale => _list.VerticalScale;
+        public float HorizontalScale => _hScroll.HorizontalScale;
+        public void SetVerticalNormalizedScrollPosition(float normalized) => _list.SetVerticalNormalizedScrollPosition(normalized);
+
+        public void SetHorizontalNormalizedScrollPosition(float normalized)
+        {
+            _hScroll.SetNormalizedX(normalized);
+            SetDirty();
+        }
+
+        private float TableWidth() => Math.Max(Position.Width, MinTableWidth);
+        private float TableLeft => Position.Left - _hScroll.X;
+        private float TableRight => TableLeft + TableWidth();
 
         private readonly TextStyle _rowTextStyle = TextStyles.Row(0u);
         private readonly TextStyle _rowTextActiveStyle = TextStyles.Row(0u);
@@ -148,6 +176,11 @@ internal sealed record CommitsView : Widget
                 ItemBuilder = DrawCommitRowAt,
                 SelectionOverlayBuilder = DrawSelectionOverlay,
                 ScrollWheelStep = Scrolling.WheelStep,
+            };
+            _hScroll = new DiffListScroll(_list, TableWidth, () => Position.Width);
+            _list.HorizontalWheelHandler = deltaX =>
+            {
+                if (_hScroll.ScrollXBy(-deltaX * _list.ScrollWheelStep)) SetDirty();
             };
             _list.RowClicked += OnRowClicked;
             _list.RowContextRequested += OnRowContextRequested;
@@ -284,6 +317,8 @@ internal sealed record CommitsView : Widget
         protected override void OnLayoutChildren()
         {
             base.OnLayoutChildren();
+            _hScroll.ClampX();
+            _hScroll.PublishX();
             // Reconcile a selection scroll that couldn't land yet (no viewport, or the scrollbar
             // thumb's first-layout reset undid it).
             ApplyPendingScroll();
@@ -425,10 +460,10 @@ internal sealed record CommitsView : Widget
                     break;
             }
 
-            var cols = LayoutColumns(pos.Right);
-            if (cols.AuthorW > 0f) DrawColumnDivider(c, cols.AuthorX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Author, z + 100);
-            if (cols.HashW > 0f) DrawColumnDivider(c, cols.HashX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Hash, z + 100);
-            if (cols.DateW > 0f) DrawColumnDivider(c, cols.DateX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Date, z + 100);
+            var cols = LayoutColumns();
+            DrawColumnDivider(c, cols.AuthorX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Author, z + 100);
+            DrawColumnDivider(c, cols.HashX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Hash, z + 100);
+            DrawColumnDivider(c, cols.DateX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Date, z + 100);
 
             c.PopClip();
         }
@@ -444,8 +479,8 @@ internal sealed record CommitsView : Widget
                 ZIndex = z,
             });
 
-            var cols = LayoutColumns(pos.Right);
-            var commitLeft = pos.Left + CommitGraphRenderer.PaddingLeft;
+            var cols = LayoutColumns();
+            var commitLeft = TableLeft + CommitGraphRenderer.PaddingLeft;
             var graphWidth = Math.Min(ComputeGraphColumnWidth(), cols.SummaryRight - commitLeft);
 
             var strings = _loc.Strings.Value;
@@ -515,55 +550,36 @@ internal sealed record CommitsView : Widget
         // The summary (commit message) column has the highest priority: it keeps at least
         // MinSummaryWidth. When the view is too narrow to honor every metadata column at its
         // set width, they shrink to make room — Date first, then Hash, then Author — each
-        // down to MinColumnWidth. If even that doesn't fit, whole columns drop (width 0) —
-        // Hash first, then Author, then Date. The set widths (from divider drags) are the upper bound.
+        // down to MinColumnWidth, below which the table scrolls horizontally. The set widths (from
+        // divider drags) are the upper bound.
         private void GetEffectiveColumnWidths(out float author, out float hash, out float date)
         {
             author = _authorColumnWidth;
             hash = _hashColumnWidth;
             date = _dateColumnWidth;
 
-            var totalWidth = Position.Width;
-            if (totalWidth <= 0f) return;
+            if (Position.Width <= 0f) return;
 
-            var available = totalWidth - MinSummaryWidth - ColumnGap * 4f;
+            var available = TableWidth() - MinSummaryWidth - ColumnGap * 4f;
             var deficit = author + hash + date - available;
             if (deficit <= 0f) return;
 
             ShrinkColumn(ref date, ref deficit);
             ShrinkColumn(ref hash, ref deficit);
             ShrinkColumn(ref author, ref deficit);
-
-            DropColumn(ref hash, ref deficit);
-            DropColumn(ref author, ref deficit);
-            DropColumn(ref date, ref deficit);
-        }
-
-        private static void DropColumn(ref float width, ref float deficit)
-        {
-            if (deficit <= 0f) return;
-            deficit -= width + ColumnGap;
-            width = 0f;
         }
 
         private readonly record struct ColumnLayout(
             float AuthorX, float AuthorW, float HashX, float HashW, float DateX, float DateW, float SummaryRight);
 
-        // Metadata columns packed leftward from `right` (LTR space); a dropped column takes no room.
-        private ColumnLayout LayoutColumns(float right)
+        // Metadata columns packed leftward from the table's right edge, in LTR space.
+        private ColumnLayout LayoutColumns()
         {
             GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
-            var x = right;
-            var dateX = PackColumn(ref x, dateW);
-            var hashX = PackColumn(ref x, hashW);
-            var authorX = PackColumn(ref x, authorW);
-            return new ColumnLayout(authorX, authorW, hashX, hashW, dateX, dateW, x - ColumnGap);
-        }
-
-        private static float PackColumn(ref float x, float width)
-        {
-            if (width > 0f) x -= width + ColumnGap;
-            return x;
+            var dateX = TableRight - dateW - ColumnGap;
+            var hashX = dateX - hashW - ColumnGap;
+            var authorX = hashX - authorW - ColumnGap;
+            return new ColumnLayout(authorX, authorW, hashX, hashW, dateX, dateW, authorX - ColumnGap);
         }
 
         private static void ShrinkColumn(ref float width, ref float deficit)
@@ -577,8 +593,9 @@ internal sealed record CommitsView : Widget
 
         private RectF ComputeCommitsColumnRect(RectF body)
         {
-            var width = Math.Max(0f, LayoutColumns(body.Right).SummaryRight - body.Left);
-            return new RectF(body.Left, body.Bottom, width, body.Height);
+            var left = TableLeft;
+            var width = Math.Max(0f, LayoutColumns().SummaryRight - left);
+            return new RectF(left, body.Bottom, width, body.Height);
         }
 
         // Reflects an element's horizontal extent within the view when the UI is right-to-left, so the
@@ -599,8 +616,8 @@ internal sealed record CommitsView : Widget
             var body = rowRect; // share names with the original DrawCommits for arithmetic clarity
             var rowBottom = rowRect.Bottom;
 
-            var cols = LayoutColumns(body.Right);
-            var graphStartX = body.Left + CommitGraphRenderer.PaddingLeft;
+            var cols = LayoutColumns();
+            var graphStartX = TableLeft + CommitGraphRenderer.PaddingLeft;
             var authorPanelLeft = cols.SummaryRight;
 
             var isSelected = node.Sha == _selectedSha;
@@ -638,9 +655,9 @@ internal sealed record CommitsView : Widget
             var summaryDraw = Math.Max(0, authorPanelLeft - refsEndX);
             DrawText(c, node.Summary, refsEndX, textTop, summaryDraw, isHighlighted, z + 2);
 
-            if (cols.AuthorW > 0f) DrawText(c, node.Author, cols.AuthorX, textTop, cols.AuthorW, isHighlighted, z + 2);
-            if (cols.HashW > 0f) DrawHashText(c, ShortSha(node.Sha), cols.HashX, textTop, cols.HashW, isHighlighted, z + 2);
-            if (cols.DateW > 0f) DrawText(c, FormatRelative(node.When), cols.DateX, textTop, cols.DateW, isHighlighted, z + 2);
+            DrawText(c, node.Author, cols.AuthorX, textTop, cols.AuthorW, isHighlighted, z + 2);
+            DrawHashText(c, ShortSha(node.Sha), cols.HashX, textTop, cols.HashW, isHighlighted, z + 2);
+            DrawText(c, FormatRelative(node.When), cols.DateX, textTop, cols.DateW, isHighlighted, z + 2);
         }
 
         private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
@@ -799,10 +816,10 @@ internal sealed record CommitsView : Widget
             // space to test against the same math.
             var px = IsRtl ? pos.Left + pos.Right - point.X : point.X;
 
-            var cols = LayoutColumns(pos.Right);
-            if (cols.DateW > 0f && Math.Abs(px - (cols.DateX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Date;
-            if (cols.HashW > 0f && Math.Abs(px - (cols.HashX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Hash;
-            if (cols.AuthorW > 0f && Math.Abs(px - (cols.AuthorX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Author;
+            var cols = LayoutColumns();
+            if (Math.Abs(px - (cols.DateX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Date;
+            if (Math.Abs(px - (cols.HashX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Hash;
+            if (Math.Abs(px - (cols.AuthorX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Author;
             return DividerKind.None;
         }
 
@@ -860,12 +877,12 @@ internal sealed record CommitsView : Widget
             var badgeY = rowRect.Bottom + (RowHeight - BadgeHeight) * 0.5f;
             if (point.Y < badgeY || point.Y > badgeY + BadgeHeight) return null;
 
-            var authorPanelLeft = LayoutColumns(rowRect.Right).SummaryRight;
+            var authorPanelLeft = LayoutColumns().SummaryRight;
 
             var px = IsRtl ? Position.Left + Position.Right - point.X : point.X;
             if (px >= authorPanelLeft) return null;
 
-            var graphStartX = rowRect.Left + CommitGraphRenderer.PaddingLeft;
+            var graphStartX = TableLeft + CommitGraphRenderer.PaddingLeft;
             var x = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
             for (var i = 0; i < node.Refs.Count; i++)
             {
