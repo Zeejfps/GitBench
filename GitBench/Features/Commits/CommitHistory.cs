@@ -26,6 +26,7 @@ internal sealed class HistoryView : ContainerView
     private const float MinDetailsWidth = 240f;
     private const float MinCenterWidth = 320f;
     private const float DefaultDetailsWidth = 380f;
+    private const float SqueezedMinShare = 0.35f;
 
     private readonly View _commits;
     private readonly CommitDetailsView _details;
@@ -64,22 +65,29 @@ internal sealed class HistoryView : ContainerView
             _detailsWidth = _preferences.Current.CommitDetailsWidth;
     }
 
-    // The details panel may grow until the commits list reaches its minimum — no fixed upper cap, so a
-    // wide window can give the details panel as much room as the user drags for.
-    private float MaxDetailsWidthForLayout() =>
-        Math.Max(MinDetailsWidth, Position.Width - SplitterThickness - MinCenterWidth);
+    // Each side keeps its minimum while there's room for both; in a pane too narrow for that, the
+    // minimums shrink to a share of the width so the split still fits and the splitter stays draggable.
+    private (float Min, float Max) DetailsWidthRange(float available)
+    {
+        var minDetails = Math.Min(MinDetailsWidth, available * SqueezedMinShare);
+        var minCenter = Math.Min(MinCenterWidth, available * SqueezedMinShare);
+        return (minDetails, Math.Max(minDetails, available - minCenter));
+    }
+
+    private float AvailableWidth => Math.Max(0f, Position.Width - SplitterThickness);
+
+    private float EffectiveDetailsWidth(float available)
+    {
+        var (min, max) = DetailsWidthRange(available);
+        return Math.Clamp(_detailsWidth, min, max);
+    }
 
     protected override void OnLayoutChildren()
     {
         var pos = Position;
-        var available = Math.Max(0f, pos.Width - SplitterThickness);
-        var detailsWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
-        var centerWidth = Math.Max(MinCenterWidth, available - detailsWidth);
-        if (centerWidth + detailsWidth > available)
-        {
-            detailsWidth = Math.Max(MinDetailsWidth, available - centerWidth);
-        }
-        _detailsWidth = detailsWidth;
+        var available = AvailableWidth;
+        var detailsWidth = EffectiveDetailsWidth(available);
+        var centerWidth = available - detailsWidth;
 
         // Under RTL the details panel moves to the left and the commits list to the right.
         var rtl = IsRtl;
@@ -112,8 +120,11 @@ internal sealed class HistoryView : ContainerView
         // Dragging right (positive delta) shrinks the right panel and grows the center; under RTL the
         // details panel is on the left, so the drag direction flips.
         if (IsRtl) mouseDeltaX = -mouseDeltaX;
-        var newWidth = Math.Clamp(_detailsWidth - mouseDeltaX, MinDetailsWidth, MaxDetailsWidthForLayout());
-        if (Math.Abs(newWidth - _detailsWidth) < 0.0001f) return;
+        var available = AvailableWidth;
+        var current = EffectiveDetailsWidth(available);
+        var (min, max) = DetailsWidthRange(available);
+        var newWidth = Math.Clamp(current - mouseDeltaX, min, max);
+        if (Math.Abs(newWidth - current) < 0.0001f) return;
         _detailsWidth = newWidth;
         _preferences?.Update(p => p with { CommitDetailsWidth = newWidth });
         SetDirty();

@@ -425,13 +425,10 @@ internal sealed record CommitsView : Widget
                     break;
             }
 
-            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
-            var dateXAll = pos.Right - dateW - ColumnGap;
-            var hashXAll = dateXAll - hashW - ColumnGap;
-            var authorXAll = hashXAll - authorW - ColumnGap;
-            DrawColumnDivider(c, authorXAll - ColumnGap, pos.Bottom, pos.Height, DividerKind.Author, z + 100);
-            DrawColumnDivider(c, hashXAll - ColumnGap, pos.Bottom, pos.Height, DividerKind.Hash, z + 100);
-            DrawColumnDivider(c, dateXAll - ColumnGap, pos.Bottom, pos.Height, DividerKind.Date, z + 100);
+            var cols = LayoutColumns(pos.Right);
+            if (cols.AuthorW > 0f) DrawColumnDivider(c, cols.AuthorX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Author, z + 100);
+            if (cols.HashW > 0f) DrawColumnDivider(c, cols.HashX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Hash, z + 100);
+            if (cols.DateW > 0f) DrawColumnDivider(c, cols.DateX - ColumnGap, pos.Bottom, pos.Height, DividerKind.Date, z + 100);
 
             c.PopClip();
         }
@@ -447,17 +444,15 @@ internal sealed record CommitsView : Widget
                 ZIndex = z,
             });
 
-            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
-            var graphWidth = ComputeGraphColumnWidth();
-            var dateX = pos.Right - dateW - ColumnGap;
-            var hashX = dateX - hashW - ColumnGap;
-            var authorX = hashX - authorW - ColumnGap;
+            var cols = LayoutColumns(pos.Right);
+            var commitLeft = pos.Left + CommitGraphRenderer.PaddingLeft;
+            var graphWidth = Math.Min(ComputeGraphColumnWidth(), cols.SummaryRight - commitLeft);
 
             var strings = _loc.Strings.Value;
-            DrawHeaderText(c, strings.CommitsHeaderCommit, pos.Left + CommitGraphRenderer.PaddingLeft, pos.Top - HeaderHeight, graphWidth, z + 1);
-            DrawHeaderText(c, strings.CommitsHeaderAuthor, authorX, pos.Top - HeaderHeight, authorW, z + 1);
-            DrawHeaderText(c, strings.CommitsHeaderHash, hashX, pos.Top - HeaderHeight, hashW, z + 1);
-            DrawHeaderText(c, strings.CommitsHeaderDate, dateX, pos.Top - HeaderHeight, dateW, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderCommit, commitLeft, pos.Top - HeaderHeight, graphWidth, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderAuthor, cols.AuthorX, pos.Top - HeaderHeight, cols.AuthorW, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderHash, cols.HashX, pos.Top - HeaderHeight, cols.HashW, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderDate, cols.DateX, pos.Top - HeaderHeight, cols.DateW, z + 1);
         }
 
         private void DrawColumnDivider(ICanvas c, float centerX, float bottom, float height, DividerKind kind, int z)
@@ -520,7 +515,8 @@ internal sealed record CommitsView : Widget
         // The summary (commit message) column has the highest priority: it keeps at least
         // MinSummaryWidth. When the view is too narrow to honor every metadata column at its
         // set width, they shrink to make room — Date first, then Hash, then Author — each
-        // down to MinColumnWidth. The set widths (from divider drags) are the upper bound.
+        // down to MinColumnWidth. If even that doesn't fit, whole columns drop (width 0) —
+        // Hash first, then Author, then Date. The set widths (from divider drags) are the upper bound.
         private void GetEffectiveColumnWidths(out float author, out float hash, out float date)
         {
             author = _authorColumnWidth;
@@ -537,6 +533,37 @@ internal sealed record CommitsView : Widget
             ShrinkColumn(ref date, ref deficit);
             ShrinkColumn(ref hash, ref deficit);
             ShrinkColumn(ref author, ref deficit);
+
+            DropColumn(ref hash, ref deficit);
+            DropColumn(ref author, ref deficit);
+            DropColumn(ref date, ref deficit);
+        }
+
+        private static void DropColumn(ref float width, ref float deficit)
+        {
+            if (deficit <= 0f) return;
+            deficit -= width + ColumnGap;
+            width = 0f;
+        }
+
+        private readonly record struct ColumnLayout(
+            float AuthorX, float AuthorW, float HashX, float HashW, float DateX, float DateW, float SummaryRight);
+
+        // Metadata columns packed leftward from `right` (LTR space); a dropped column takes no room.
+        private ColumnLayout LayoutColumns(float right)
+        {
+            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
+            var x = right;
+            var dateX = PackColumn(ref x, dateW);
+            var hashX = PackColumn(ref x, hashW);
+            var authorX = PackColumn(ref x, authorW);
+            return new ColumnLayout(authorX, authorW, hashX, hashW, dateX, dateW, x - ColumnGap);
+        }
+
+        private static float PackColumn(ref float x, float width)
+        {
+            if (width > 0f) x -= width + ColumnGap;
+            return x;
         }
 
         private static void ShrinkColumn(ref float width, ref float deficit)
@@ -550,12 +577,7 @@ internal sealed record CommitsView : Widget
 
         private RectF ComputeCommitsColumnRect(RectF body)
         {
-            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
-            var dateX = body.Right - dateW - ColumnGap;
-            var hashX = dateX - hashW - ColumnGap;
-            var authorX = hashX - authorW - ColumnGap;
-            var rightEdge = authorX - ColumnGap;
-            var width = Math.Max(0f, rightEdge - body.Left);
+            var width = Math.Max(0f, LayoutColumns(body.Right).SummaryRight - body.Left);
             return new RectF(body.Left, body.Bottom, width, body.Height);
         }
 
@@ -577,12 +599,9 @@ internal sealed record CommitsView : Widget
             var body = rowRect; // share names with the original DrawCommits for arithmetic clarity
             var rowBottom = rowRect.Bottom;
 
-            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
+            var cols = LayoutColumns(body.Right);
             var graphStartX = body.Left + CommitGraphRenderer.PaddingLeft;
-            var dateX = body.Right - dateW - ColumnGap;
-            var hashX = dateX - hashW - ColumnGap;
-            var authorX = hashX - authorW - ColumnGap;
-            var authorPanelLeft = authorX - ColumnGap;
+            var authorPanelLeft = cols.SummaryRight;
 
             var isSelected = node.Sha == _selectedSha;
             var hovered = state.IsHovered || state.IsContextHighlighted;
@@ -619,9 +638,9 @@ internal sealed record CommitsView : Widget
             var summaryDraw = Math.Max(0, authorPanelLeft - refsEndX);
             DrawText(c, node.Summary, refsEndX, textTop, summaryDraw, isHighlighted, z + 2);
 
-            DrawText(c, node.Author, authorX, textTop, authorW, isHighlighted, z + 2);
-            DrawHashText(c, ShortSha(node.Sha), hashX, textTop, hashW, isHighlighted, z + 2);
-            DrawText(c, FormatRelative(node.When), dateX, textTop, dateW, isHighlighted, z + 2);
+            if (cols.AuthorW > 0f) DrawText(c, node.Author, cols.AuthorX, textTop, cols.AuthorW, isHighlighted, z + 2);
+            if (cols.HashW > 0f) DrawHashText(c, ShortSha(node.Sha), cols.HashX, textTop, cols.HashW, isHighlighted, z + 2);
+            if (cols.DateW > 0f) DrawText(c, FormatRelative(node.When), cols.DateX, textTop, cols.DateW, isHighlighted, z + 2);
         }
 
         private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
@@ -780,17 +799,10 @@ internal sealed record CommitsView : Widget
             // space to test against the same math.
             var px = IsRtl ? pos.Left + pos.Right - point.X : point.X;
 
-            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
-            var dateX = pos.Right - dateW - ColumnGap;
-            var hashX = dateX - hashW - ColumnGap;
-            var authorX = hashX - authorW - ColumnGap;
-            var authorDividerX = authorX - ColumnGap;
-            var hashDividerX = hashX - ColumnGap;
-            var dateDividerX = dateX - ColumnGap;
-
-            if (Math.Abs(px - dateDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Date;
-            if (Math.Abs(px - hashDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Hash;
-            if (Math.Abs(px - authorDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Author;
+            var cols = LayoutColumns(pos.Right);
+            if (cols.DateW > 0f && Math.Abs(px - (cols.DateX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Date;
+            if (cols.HashW > 0f && Math.Abs(px - (cols.HashX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Hash;
+            if (cols.AuthorW > 0f && Math.Abs(px - (cols.AuthorX - ColumnGap)) <= DividerHitWidth * 0.5f) return DividerKind.Author;
             return DividerKind.None;
         }
 
@@ -848,9 +860,7 @@ internal sealed record CommitsView : Widget
             var badgeY = rowRect.Bottom + (RowHeight - BadgeHeight) * 0.5f;
             if (point.Y < badgeY || point.Y > badgeY + BadgeHeight) return null;
 
-            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
-            var hashX = rowRect.Right - dateW - hashW - ColumnGap * 2f;
-            var authorPanelLeft = hashX - authorW - ColumnGap * 2f;
+            var authorPanelLeft = LayoutColumns(rowRect.Right).SummaryRight;
 
             var px = IsRtl ? Position.Left + Position.Right - point.X : point.X;
             if (px >= authorPanelLeft) return null;
