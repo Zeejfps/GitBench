@@ -257,7 +257,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 RefreshWorkingTreeHunkStates();
             return;
         }
-        StartLoad();
+        StartLoad(refresh: true);
     }
 
     public void StageHunk(int hunkIndex)
@@ -715,7 +715,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         return true;
     }
 
-    private void StartLoad()
+    private void StartLoad(bool refresh = false)
     {
         if (State.Value.HunkStates != null)
             Update(s => s with { HunkStates = null });
@@ -731,7 +731,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var repo = ResolveRepo();
         if (repo == null) return;
 
-        if (State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile or DiffRenderState.Binary))
+        if (!refresh && State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile or DiffRenderState.Binary))
             Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingText) });
 
         // Everything the load depends on is read here, on the UI thread, and handed over as a
