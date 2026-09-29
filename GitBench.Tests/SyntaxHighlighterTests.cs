@@ -104,6 +104,26 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Ctx_StdConstructs_AreColored()
+    {
+        var src = string.Join("\n",
+            "const F64_MAX: f64 = 1.7976931348623157e308",
+            "defer list::free{ list = &events, .. }",
+            "list::push{ list = &events, item = Event::push{ value = i }, .. }",
+            "        full{ &v } => { return &v }",
+            "let nl = '\\x0a'");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.True(LineHasSlot(lines[0], TokenColorSlot.Keyword));   // const
+        Assert.True(LineHasSlot(lines[0], TokenColorSlot.Constant));  // F64_MAX
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Keyword));   // defer
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Variable));  // list =
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Constant));  // Event::push variant
+        Assert.True(LineHasSlot(lines[3], TokenColorSlot.Constant));  // full arm
+        Assert.True(LineHasSlot(lines[4], TokenColorSlot.String));    // '\x0a'
+    }
+
+    [Fact]
     public void Markdown_Constructs_AreColored()
     {
         // Markdown is a TextMateSharp-bundled grammar — this proves "markdown" resolves and that
