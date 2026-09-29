@@ -46,6 +46,8 @@
   "files.unstage": { "one": "스테이징 해제", "other": "파일 {count}개 스테이징 해제" },
   "files.discard": { "one": "폐기…", "other": "파일 {count}개 폐기…" },
   "files.stash": { "one": "스태시", "other": "파일 {count}개 스태시" },
+  "files.choose_mine": { "one": "내 변경 선택", "other": "파일 {count}개에 내 변경 선택" },
+  "files.choose_theirs": { "one": "상대방 변경 선택", "other": "파일 {count}개에 상대방 변경 선택" },
   "files.mark_resolved": { "one": "해결됨으로 표시", "other": "{count}개를 해결됨으로 표시" },
 
   "time.just_now": "방금 전",

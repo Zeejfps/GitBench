@@ -46,6 +46,8 @@
   "files.unstage": { "one": "ステージ解除", "other": "{count}個のファイルをステージ解除" },
   "files.discard": { "one": "破棄…", "other": "{count}個のファイルを破棄…" },
   "files.stash": { "one": "スタッシュ", "other": "{count}個のファイルをスタッシュ" },
+  "files.choose_mine": { "one": "自分側を採用", "other": "{count}個のファイルで自分側を採用" },
+  "files.choose_theirs": { "one": "相手側を採用", "other": "{count}個のファイルで相手側を採用" },
   "files.mark_resolved": { "one": "解決済みにする", "other": "{count}個を解決済みにする" },
 
   "time.just_now": "たった今",

@@ -709,7 +709,28 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
+        ResolveEach(repo, paths, _gitConflicts.MarkResolved, s => s.LocalchangesErrorMarkResolvedFailed);
+    }
 
+    // Bulk side-pick: each path takes that side's whole file and is staged. Overwrites the working
+    // copies, so open editor buffers for them go through the unsaved-edits guard first.
+    public void ResolveTakeOurs(IReadOnlyList<string> paths) => ResolveTakingSide(paths, _gitConflicts.TakeOurs);
+
+    public void ResolveTakeTheirs(IReadOnlyList<string> paths) => ResolveTakingSide(paths, _gitConflicts.TakeTheirs);
+
+    private void ResolveTakingSide(IReadOnlyList<string> paths, Func<Repo, string, GitOutcome> take)
+    {
+        if (paths.Count == 0) return;
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        var absolute = paths.Select(p => Path.Combine(repo.Path, p)).ToArray();
+        _unsavedEdits.Guard(new OverwriteScope.Files(repo.Id, absolute), () =>
+            ResolveEach(repo, paths, take, s => s.DiffErrorResolveFailed));
+    }
+
+    private void ResolveEach(
+        Repo repo, IReadOnlyList<string> paths, Func<Repo, string, GitOutcome> resolve, Func<Strings, string> failureTitle)
+    {
         _indexOps.Run(repo, paths, DiffSide.Staged,
             moved =>
             {
@@ -718,12 +739,12 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 GitOutcome.Failed? firstFailure = null;
                 foreach (var path in moved)
                 {
-                    if (_gitConflicts.MarkResolved(repo, path) is GitOutcome.Failed failed)
+                    if (resolve(repo, path) is GitOutcome.Failed failed)
                         firstFailure ??= failed;
                 }
                 return firstFailure ?? GitOutcome.Ok;
             },
-            s => s.LocalchangesErrorMarkResolvedFailed,
+            failureTitle,
             IndexMoveEffect.WorkingTree);
     }
 

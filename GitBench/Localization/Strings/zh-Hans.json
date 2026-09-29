@@ -46,6 +46,8 @@
   "files.unstage": { "one": "取消暂存", "other": "取消暂存 {count} 个文件" },
   "files.discard": { "one": "丢弃…", "other": "丢弃 {count} 个文件…" },
   "files.stash": { "one": "贮藏", "other": "贮藏 {count} 个文件" },
+  "files.choose_mine": { "one": "选择我的", "other": "为 {count} 个文件选择我的" },
+  "files.choose_theirs": { "one": "选择对方的", "other": "为 {count} 个文件选择对方的" },
   "files.mark_resolved": { "one": "标记为已解决", "other": "将 {count} 个标记为已解决" },
 
   "time.just_now": "刚刚",

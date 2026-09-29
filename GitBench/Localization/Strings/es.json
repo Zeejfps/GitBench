@@ -46,6 +46,8 @@
   "files.unstage": { "one": "Quitar de preparados", "other": "Quitar {count} archivos de preparados" },
   "files.discard": { "one": "Descartar…", "other": "Descartar {count} archivos…" },
   "files.stash": { "one": "Stash", "other": "Stash de {count} archivos" },
+  "files.choose_mine": { "one": "Elegir lo mío", "other": "Elegir lo mío en {count} archivos" },
+  "files.choose_theirs": { "one": "Elegir lo de ellos", "other": "Elegir lo de ellos en {count} archivos" },
   "files.mark_resolved": { "one": "Marcar como resuelto", "other": "Marcar {count} como resueltos" },
 
   "time.just_now": "ahora mismo",

@@ -24,7 +24,7 @@ internal sealed class FileOpsContextMenu
         _loc = loc;
     }
 
-    /// <summary>Mark-resolved / stage / unstage / discard / stash over the targets. Shortcut hints
+    /// <summary>Choose mine / choose theirs / mark-resolved / stage / unstage / discard / stash over the targets. Shortcut hints
     /// belong to the caller — only the list panels have side-scoped Enter/Delete gestures.</summary>
     public void AppendFileOps(
         List<RepoBarContextMenu.Item> items,
@@ -41,10 +41,20 @@ internal sealed class FileOpsContextMenu
 
         var conflicted = _vm.ConflictedAmong(targets);
         if (conflicted.Count > 0)
+        {
+            items.Add(new RepoBarContextMenu.Item(
+                s.FilesChooseMine(conflicted.Count),
+                () => _vm.ResolveTakeOurs(conflicted),
+                LucideIcons.Branch));
+            items.Add(new RepoBarContextMenu.Item(
+                s.FilesChooseTheirs(conflicted.Count),
+                () => _vm.ResolveTakeTheirs(conflicted),
+                LucideIcons.Branch));
             items.Add(new RepoBarContextMenu.Item(
                 s.FilesMarkResolved(conflicted.Count),
                 () => _vm.MarkResolved(conflicted),
                 LucideIcons.CheckSquare));
+        }
 
         if (toStage.Count > 0)
             items.Add(new RepoBarContextMenu.Item(

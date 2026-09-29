@@ -46,6 +46,8 @@
   "files.unstage": { "one": "Unstage", "other": "Unstage {count} Files" },
   "files.discard": { "one": "Discard…", "other": "Discard {count} Files…" },
   "files.stash": { "one": "Stash", "other": "Stash {count} Files" },
+  "files.choose_mine": { "one": "Choose Mine", "other": "Choose Mine for {count} Files" },
+  "files.choose_theirs": { "one": "Choose Theirs", "other": "Choose Theirs for {count} Files" },
   "files.mark_resolved": { "one": "Mark as Resolved", "other": "Mark {count} as Resolved" },
 
   "time.just_now": "just now",
