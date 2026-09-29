@@ -129,7 +129,6 @@ internal static class LanguageRegistry
         [".cbx"] = "tex",
         [".tex"] = "latex",
         [".ltx"] = "latex",
-        [".ctx"] = "latex",
         [".bib"] = "bibtex",
         [".less"] = "less",
         [".log"] = "log",
@@ -228,6 +227,9 @@ internal static class LanguageRegistry
         [".dsql"] = "sql",
         // Svelte isn't a TextMateSharp-bundled grammar; BundledGrammarRegistryOptions ships it.
         [".svelte"] = "svelte",
+        // Ctx is an in-house language, also shipped by BundledGrammarRegistryOptions. It takes
+        // .ctx from the ConTeXt files the latex grammar would otherwise claim.
+        [".ctx"] = "ctx",
         [".swift"] = "swift",
         [".ts"] = "typescript",
         [".mts"] = "typescript",

@@ -41,7 +41,7 @@ internal static class FileKinds
             or "c" or "h" or "cc" or "cpp" or "hpp" or "cxx" or "hxx" or "m" or "mm"
             or "php" or "lua" or "pl" or "r" or "scala" or "clj" or "ex" or "exs" or "erl"
             or "sh" or "bash" or "zsh" or "fish" or "ps1" or "psm1" or "bat" or "cmd"
-            or "sql" or "gradle" or "cmake" or "mk" or "nix" or "zig"
+            or "sql" or "gradle" or "cmake" or "mk" or "nix" or "zig" or "ctx"
             or "html" or "htm" or "css" or "scss" or "sass" or "less"
             or "vue" or "svelte" or "razor" or "cshtml" or "xaml" or "axaml" => FileKind.Code,
 

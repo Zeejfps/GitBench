@@ -8,7 +8,7 @@ namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Wraps TextMateSharp's default <see cref="RegistryOptions"/> and serves a few grammars VS Code
-/// (and therefore the bundled grammar set) doesn't ship — currently just Svelte. Every other
+/// (and therefore the bundled grammar set) doesn't ship — Svelte and the in-house Ctx language. Every other
 /// scope, including the embedded languages a Svelte block pulls in (<c>source.ts</c>,
 /// <c>source.css</c>, <c>source.js</c>, …), falls straight through to the inner options, so those
 /// resolve from the bundled set exactly as before.
@@ -25,6 +25,7 @@ internal sealed class BundledGrammarRegistryOptions : IRegistryOptions
     private static readonly (string LanguageId, string Scope, string Resource)[] Grammars =
     {
         ("svelte", "source.svelte", "svelte.tmLanguage.json"),
+        ("ctx", "source.ctx", "ctx.tmLanguage.json"),
     };
 
     private readonly RegistryOptions _inner;

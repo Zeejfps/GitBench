@@ -85,6 +85,25 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Ctx_Constructs_AreColored()
+    {
+        var src = string.Join("\n",
+            "// Bounds-checked pointer to element i.",
+            "fn at(T) { s: slice::Slice(T), i: usize } -> *T {",
+            "    if (i >= s.len) { @trap() }",
+            "    return slice::get{ s, i = 42 }",
+            "}");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.True(LineHasSlot(lines[0], TokenColorSlot.Comment));
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Keyword));   // fn
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Function));  // at
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Type));      // Slice, usize
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Function));  // @trap
+        Assert.True(LineHasSlot(lines[3], TokenColorSlot.Number));    // 42
+    }
+
+    [Fact]
     public void Markdown_Constructs_AreColored()
     {
         // Markdown is a TextMateSharp-bundled grammar — this proves "markdown" resolves and that

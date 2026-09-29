@@ -13,6 +13,7 @@ public class LanguageRegistryTests
     [InlineData("bundle.mts", "typescript")]
     [InlineData("styles.css", "css")]
     [InlineData("App.svelte", "svelte")]
+    [InlineData("list.ctx", "ctx")]
     [InlineData("README.md", "markdown")]
     [InlineData("docs/guide.markdown", "markdown")]
     public void DetectsSupportedExtensions(string path, string expected)
