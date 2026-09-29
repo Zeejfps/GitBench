@@ -35,6 +35,8 @@ public sealed record Preferences
     private int _reviewWindowHeight = 800;
     public int? ReviewWindowX { get; init; }
     public int? ReviewWindowY { get; init; }
+    public int? SettingsWindowWidth { get; init; }
+    public int? SettingsWindowHeight { get; init; }
     public float RepoBarWidth { get; init; } = 220f;
     public bool RepoBarCollapsed { get; init; }
     public float BranchesWidth { get; init; } = 220f;

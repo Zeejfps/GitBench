@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Localization;
@@ -33,6 +34,7 @@ internal sealed record SettingsWindowHost : Widget
     private sealed class Presenter(Context context) : IViewBehavior
     {
         private readonly IMessageBus _bus = context.Require<IMessageBus>();
+        private readonly PreferencesService _preferences = context.Require<PreferencesService>();
         private ISecondaryWindow? _window;
 
         public void Attach(View view) => _bus.Subscribe<OpenSettingsWindowMessage>(Open);
@@ -63,8 +65,8 @@ internal sealed record SettingsWindowHost : Widget
             opened = context.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
             {
                 Title = context.Localization().Strings.Value.SettingsTitle,
-                Width = size.Width,
-                Height = size.Height,
+                Width = _preferences.Current.SettingsWindowWidth ?? size.Width,
+                Height = _preferences.Current.SettingsWindowHeight ?? size.Height,
                 IsUndecorated = true,
                 IsModal = true,
                 CenterOnMainWindow = true,
@@ -95,6 +97,10 @@ internal sealed record SettingsWindowHost : Widget
                 }).BuildView(ctx),
             });
             _window = opened;
+            opened.Window.OnResize += (w, h) =>
+            {
+                if (w > 0 && h > 0) _preferences.Update(p => p with { SettingsWindowWidth = w, SettingsWindowHeight = h });
+            };
             opened.Closed += () =>
             {
                 if (ReferenceEquals(_window, opened)) _window = null;
