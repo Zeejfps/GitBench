@@ -19,6 +19,9 @@ internal sealed record SettingsWindowHost : Widget
 {
     // Leave transparent space for the dialog's blur beyond its rounded frame.
     private const int ShadowPadding = 48;
+    private const int ResizeGrip = 8;
+    private const float MinDialogWidth = 480f;
+    private const float MinDialogHeight = 360f;
 
     protected override View CreateView(Context ctx)
     {
@@ -50,9 +53,12 @@ internal sealed record SettingsWindowHost : Widget
                 return;
             }
 
-            var size = context.Require<IWindowCoordinates>().ToScreenPoints(
+            var coordinates = context.Require<IWindowCoordinates>();
+            var size = coordinates.ToScreenPoints(
                 new CanvasRect(0, 0, SettingsDialog.DialogWidth + ShadowPadding * 2,
                     SettingsDialog.DialogHeight + ShadowPadding * 2));
+            var minSize = coordinates.ToScreenPoints(
+                new CanvasRect(0, 0, MinDialogWidth + ShadowPadding * 2, MinDialogHeight + ShadowPadding * 2));
             ISecondaryWindow? opened = null;
             opened = context.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
             {
@@ -62,22 +68,29 @@ internal sealed record SettingsWindowHost : Widget
                 IsUndecorated = true,
                 IsModal = true,
                 CenterOnMainWindow = true,
-                BuildRoot = ctx => Direction.Wrap(new Padding
+                BuildRoot = ctx => Direction.Wrap(new Stack
                 {
-                    Amount = PaddingStyle.All(ShadowPadding),
                     Children =
                     [
-                        new SettingsDialog
+                        new Padding
                         {
-                            OnClose = () => opened?.Close(),
-                            HostedInWindow = true,
-                            InitialPage = message.Page,
-                        }.WithController<DialogKbmController>()
-                        .WithController((c, _) => new WindowDragController(c.Require<IWindow>(), c.Require<InputSystem>())
-                        {
-                            // Scroll viewports handle the wheel but their blank space can still move the window.
-                            IsBackgroundController = controller => controller is WheelScrollController,
-                        }),
+                            Amount = PaddingStyle.All(ShadowPadding),
+                            Children =
+                            [
+                                new SettingsDialog
+                                {
+                                    OnClose = () => opened?.Close(),
+                                    HostedInWindow = true,
+                                    InitialPage = message.Page,
+                                }.WithController<DialogKbmController>()
+                                .WithController((c, _) => new WindowDragController(c.Require<IWindow>(), c.Require<InputSystem>())
+                                {
+                                    // Scroll viewports handle the wheel but their blank space can still move the window.
+                                    IsBackgroundController = controller => controller is WheelScrollController,
+                                }),
+                            ],
+                        },
+                        ResizeGrips(minSize),
                     ],
                 }).BuildView(ctx),
             });
@@ -85,6 +98,45 @@ internal sealed record SettingsWindowHost : Widget
             opened.Closed += () =>
             {
                 if (ReferenceEquals(_window, opened)) _window = null;
+            };
+        }
+
+        private static IWidget ResizeGrips(ScreenRect minSize)
+        {
+            IWidget Grip(WindowEdges edges, int? width = null) => new Box
+            {
+                Width = width is { } w ? w : default(Prop<float>),
+            }.WithController((c, _) => new WindowResizeController(c.Require<IWindow>(), c.Require<InputSystem>(), edges)
+            {
+                MinWidth = minSize.Width,
+                MinHeight = minSize.Height,
+            });
+
+            IWidget EdgeRow(WindowEdges edge) => new Row
+            {
+                Height = ResizeGrip,
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children =
+                [
+                    Grip(edge | WindowEdges.Left, width: ResizeGrip),
+                    new Grow { Child = Grip(edge) },
+                    Grip(edge | WindowEdges.Right, width: ResizeGrip),
+                ],
+            };
+
+            return new Padding
+            {
+                Amount = PaddingStyle.All(ShadowPadding - ResizeGrip / 2),
+                Children =
+                [
+                    new BorderLayout
+                    {
+                        North = EdgeRow(WindowEdges.Top),
+                        South = EdgeRow(WindowEdges.Bottom),
+                        West = Grip(WindowEdges.Left, width: ResizeGrip),
+                        East = Grip(WindowEdges.Right, width: ResizeGrip),
+                    },
+                ],
             };
         }
     }
