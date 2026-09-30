@@ -18,6 +18,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     private readonly Dictionary<Guid, State<bool>> _expanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
     private readonly Dictionary<Guid, bool> _repoDirty = new();
+    private readonly Dictionary<Guid, bool> _showingFiles;
     private readonly Dictionary<int, Guid> _hotkeys;
 
     // Immutable lookups the resolver reads lock-free from background git threads (path→profile-id
@@ -38,6 +39,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         _expanded = new Dictionary<Guid, State<bool>>();
         foreach (var (repoId, expanded) in initial.WorktreesExpanded) _expanded[repoId] = new State<bool>(expanded);
         foreach (var (repoId, dirty) in initial.RepoDirty) _repoDirty[repoId] = dirty;
+        _showingFiles = new Dictionary<Guid, bool>(initial.ShowingFiles);
         _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
         _hotkeys = new Dictionary<int, Guid>(initial.Hotkeys);
 
@@ -468,6 +470,16 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         Save();
     }
 
+    public bool GetShowingFiles(Guid repoId) => _showingFiles.GetValueOrDefault(repoId);
+
+    public void SetShowingFiles(Guid repoId, bool showing)
+    {
+        if (_showingFiles.GetValueOrDefault(repoId) == showing) return;
+        if (showing) _showingFiles[repoId] = true;
+        else _showingFiles.Remove(repoId);
+        Save();
+    }
+
     public IEnumerable<Repo> GetWorktrees(Guid primaryId)
     {
         foreach (var r in Repos)
@@ -792,7 +804,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         // Serialize here (must read the live model on this thread); hand the finished text to the
         // background writer so the disk write — the slow, UI-thread-stalling part — runs off-thread.
         var json = RepoStateStore.Serialize(Repos, Groups.Select(g => g.ToState()).ToList(),
-            Active.Value?.Id, _branchesUi, _fileBrowserUi, collapsed, _identityOverride, _hotkeys, _repoDirty);
+            Active.Value?.Id, _branchesUi, _fileBrowserUi, collapsed, _identityOverride, _hotkeys, _repoDirty, _showingFiles);
         _writer.Schedule(json);
     }
 

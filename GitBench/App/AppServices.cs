@@ -60,9 +60,6 @@ internal static class AppServices
 
         context.AddSingleton<IMessageBus, MessageBus>();
         context.AddService(new State<MainViewMode>(MainViewMode.LocalChanges));
-        // Which of the sidebar's two lists is on screen. App-wide rather than per-repo: it is how
-        // you are navigating, not something a repository is.
-        context.AddService(new State<SidebarPane>(SidebarPane.Branches));
 
         // How the Changes tab presents the working tree. Shared: the toolbar toggles it, the pane
         // switches on it, and the commit bar shows staging progress only in the Diff layout.
@@ -108,6 +105,22 @@ internal static class AppServices
         context.AddSingleton(_ => new RepoRegistry(RepoStateStore.Load(statePath), statePath));
         context.AddAlias<IRepoRegistry, RepoRegistry>();
         context.AddAlias<IIdentityOverrides, RepoRegistry>();
+        // Which of the sidebar's two lists is on screen, remembered per repo: switching repos brings
+        // back whichever one you left that repo on.
+        context.AddSingleton(ctx =>
+        {
+            var registry = ctx.Require<RepoRegistry>();
+            var pane = new State<SidebarPane>(SidebarPane.Branches);
+            // Both live as long as the app.
+            _ = registry.Active.Subscribe(repo => pane.Value =
+                repo is not null && registry.GetShowingFiles(repo.Id) ? SidebarPane.Files : SidebarPane.Branches);
+            pane.Changed += p =>
+            {
+                if (registry.Active.Value is { } repo)
+                    registry.SetShowingFiles(repo.Id, p == SidebarPane.Files);
+            };
+            return pane;
+        });
         // Defers the all-repos startup sweeps (status / worktree / submodule) behind the active
         // repo's first load so they don't contend with it. Resolved by the stores/services below.
         context.AddSingleton<AppViewModel>();

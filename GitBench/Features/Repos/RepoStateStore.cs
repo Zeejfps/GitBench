@@ -9,7 +9,7 @@ namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 9;
+    private const int CurrentSchemaVersion = 10;
     private const string DefaultGroupName = "Ungrouped";
     // Pre-v5 default group name; renamed on load so it no longer duplicates the sidebar's panel title.
     private const string LegacyDefaultGroupName = "Repositories";
@@ -23,7 +23,8 @@ public static class RepoStateStore
         Dictionary<Guid, bool> WorktreesExpanded,
         Dictionary<Guid, Guid> RepoIdentityOverride,
         Dictionary<int, Guid> Hotkeys,
-        Dictionary<Guid, bool> RepoDirty);
+        Dictionary<Guid, bool> RepoDirty,
+        Dictionary<Guid, bool> ShowingFiles);
 
     internal sealed class FileShape
     {
@@ -39,6 +40,8 @@ public static class RepoStateStore
         // slot (1-9) → repo id for keyboard repo switching. Absent in pre-v6 files.
         public Dictionary<int, Guid>? Hotkeys { get; set; }
         public Dictionary<Guid, bool>? RepoDirty { get; set; }
+        // Repos whose sidebar was left on the files rather than the branches. Absent in pre-v10 files.
+        public Dictionary<Guid, bool>? ShowingFiles { get; set; }
     }
 
     public static State Load(string path)
@@ -66,7 +69,8 @@ public static class RepoStateStore
                 file.WorktreesExpanded ?? new Dictionary<Guid, bool>(),
                 file.RepoIdentityOverride ?? new Dictionary<Guid, Guid>(),
                 hotkeys,
-                KeepKnownRepos(file.RepoDirty, repos));
+                KeepKnownRepos(file.RepoDirty, repos),
+                KeepKnownRepos(file.ShowingFiles, repos));
         }
         catch (Exception ex)
         {
@@ -159,9 +163,10 @@ public static class RepoStateStore
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
         IReadOnlyDictionary<int, Guid> hotkeys,
-        IReadOnlyDictionary<Guid, bool> repoDirty)
+        IReadOnlyDictionary<Guid, bool> repoDirty,
+        IReadOnlyDictionary<Guid, bool> showingFiles)
         => AtomicFile.WriteAllText(path,
-            Serialize(repos, groups, activeId, branchesUi, fileBrowserUi, worktreesExpanded, repoIdentityOverride, hotkeys, repoDirty));
+            Serialize(repos, groups, activeId, branchesUi, fileBrowserUi, worktreesExpanded, repoIdentityOverride, hotkeys, repoDirty, showingFiles));
 
     // Snapshots the live model into the on-disk shape and serializes it. Runs on the caller's thread
     // (it reads the mutable model, so it must), producing an immutable string the disk write can take
@@ -175,7 +180,8 @@ public static class RepoStateStore
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
         IReadOnlyDictionary<int, Guid> hotkeys,
-        IReadOnlyDictionary<Guid, bool> repoDirty)
+        IReadOnlyDictionary<Guid, bool> repoDirty,
+        IReadOnlyDictionary<Guid, bool> showingFiles)
     {
         var file = new FileShape
         {
@@ -189,6 +195,7 @@ public static class RepoStateStore
             RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
             Hotkeys = hotkeys.ToDictionary(kv => kv.Key, kv => kv.Value),
             RepoDirty = repoDirty.Where(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value),
+            ShowingFiles = showingFiles.Where(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value),
         };
         return JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
     }
@@ -219,6 +226,7 @@ public static class RepoStateStore
             new Dictionary<Guid, bool>(),
             new Dictionary<Guid, Guid>(),
             new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>(),
             new Dictionary<Guid, bool>());
     }
 

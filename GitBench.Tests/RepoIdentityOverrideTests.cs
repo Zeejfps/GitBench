@@ -91,6 +91,7 @@ public class RepoIdentityOverrideTests
             new(), new(), new(),
             new Dictionary<Guid, Guid> { [repoId] = profileId },
             new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>(),
             new Dictionary<Guid, bool>());
         var registry = new RepoRegistry(state, statePath);
 
@@ -120,6 +121,7 @@ public class RepoIdentityOverrideTests
             new(), new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = profileId },
             new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>(),
             new Dictionary<Guid, bool>());
         var registry = new RepoRegistry(state, statePath);
 
@@ -147,6 +149,7 @@ public class RepoIdentityOverrideTests
             new(), new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = primaryProfile, [worktreeId] = worktreeProfile },
             new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>(),
             new Dictionary<Guid, bool>());
         var registry = new RepoRegistry(state, statePath);
 

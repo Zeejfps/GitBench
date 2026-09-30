@@ -76,6 +76,9 @@ public interface IRepoRegistry
     void SetBranchesUi(Guid repoId, BranchesUiState state);
     FileBrowserUiState GetFileBrowserUi(Guid repoId);
     void SetFileBrowserUi(Guid repoId, FileBrowserUiState state);
+    // Whether the sidebar was left on the files rather than the branches for this repo.
+    bool GetShowingFiles(Guid repoId);
+    void SetShowingFiles(Guid repoId, bool showing);
     IEnumerable<Repo> GetWorktrees(Guid primaryId);
     IEnumerable<Repo> GetSubmodules(Guid primaryId);
     // Shared fold for a row's children (worktrees AND submodules). A live observable so the
