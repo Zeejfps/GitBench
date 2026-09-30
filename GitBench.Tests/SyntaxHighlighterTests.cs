@@ -90,7 +90,7 @@ public class SyntaxHighlighterTests
         var src = string.Join("\n",
             "// Bounds-checked pointer to element i.",
             "fn at(T) { s: slice::Slice(T), i: usize } -> *T {",
-            "    if (i >= s.len) { @trap() }",
+            "    if i >= s.len { @panic() }",
             "    return slice::get{ s, i = 42 }",
             "}");
         var lines = HighlightOrFail(src, "ctx");
@@ -99,7 +99,7 @@ public class SyntaxHighlighterTests
         Assert.True(LineHasSlot(lines[1], TokenColorSlot.Keyword));   // fn
         Assert.True(LineHasSlot(lines[1], TokenColorSlot.Function));  // at
         Assert.True(LineHasSlot(lines[1], TokenColorSlot.Type));      // Slice, usize
-        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Function));  // @trap
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Function));  // @panic
         Assert.True(LineHasSlot(lines[3], TokenColorSlot.Number));    // 42
     }
 
@@ -121,6 +121,23 @@ public class SyntaxHighlighterTests
         Assert.True(LineHasSlot(lines[2], TokenColorSlot.Constant));  // Event::push variant
         Assert.True(LineHasSlot(lines[3], TokenColorSlot.Constant));  // full arm
         Assert.True(LineHasSlot(lines[4], TokenColorSlot.String));    // '\x0a'
+    }
+
+    [Fact]
+    public void Ctx_ControlFlow_AreColored()
+    {
+        var src = string.Join("\n",
+            "while done {",
+            "    match t {",
+            "        _ = f{ n = x << 2 } /* shifted */",
+            "    if done { break } else { continue }");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.False(LineHasSlot(lines[0], TokenColorSlot.Function)); // bare condition, not a call
+        Assert.False(LineHasSlot(lines[1], TokenColorSlot.Function)); // bare scrutinee, not a call
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Function));  // f{
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Comment));   // /* */
+        Assert.True(LineHasSlot(lines[3], TokenColorSlot.Keyword));   // break, continue
     }
 
     [Fact]
