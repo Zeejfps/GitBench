@@ -7,6 +7,7 @@
     { "include": "#strings" },
     { "include": "#numbers" },
     { "include": "#builtins" },
+    { "include": "#enum-declaration" },
     { "include": "#declarations" },
     { "include": "#keywords" },
     { "include": "#constants" },
@@ -83,6 +84,31 @@
         }
       ]
     },
+    "enum-declaration": {
+      "begin": "\\b(enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "beginCaptures": {
+        "1": { "name": "storage.type.ctx" },
+        "2": { "name": "entity.name.type.ctx" }
+      },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.bracket.ctx" } },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#numbers" },
+        { "include": "#builtins" },
+        { "include": "#constants" },
+        { "include": "#primitive-types" },
+        { "include": "#variant-paths" },
+        { "include": "#namespace-paths" },
+        { "include": "#types" },
+        {
+          "match": "(?:^|(?<=[{,]))\\s*([a-z_][A-Za-z0-9_]*)\\b",
+          "captures": { "1": { "name": "constant.other.enum-member.ctx" } }
+        },
+        { "include": "#operators" },
+        { "include": "#punctuation" }
+      ]
+    },
     "declarations": {
       "patterns": [
         {
@@ -93,7 +119,7 @@
           }
         },
         {
-          "match": "\\b(struct|union|type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "\\b(struct|union|enum|type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": { "name": "storage.type.ctx" },
             "2": { "name": "entity.name.type.ctx" }
@@ -119,7 +145,7 @@
       "patterns": [
         { "name": "keyword.control.ctx", "match": "\\b(?:if|else|while|match|return|break|continue|defer)\\b" },
         { "name": "keyword.other.logical.ctx", "match": "\\b(?:and|or|not)\\b" },
-        { "name": "storage.type.ctx", "match": "\\b(?:fn|struct|union|type|namespace|let|const)\\b" },
+        { "name": "storage.type.ctx", "match": "\\b(?:fn|struct|union|enum|type|namespace|let|const)\\b" },
         { "name": "storage.modifier.ctx", "match": "\\bmut\\b" }
       ]
     },
@@ -131,7 +157,7 @@
     },
     "primitive-types": {
       "patterns": [
-        { "name": "support.type.primitive.ctx", "match": "\\b(?:[iu](?:8|16|32|64|128|size)|f(?:32|64)|bool)\\b" }
+        { "name": "support.type.primitive.ctx", "match": "\\b(?:[iu](?:8|16|32|64)|usize|f(?:32|64)|bool)\\b" }
       ]
     },
     "variant-paths": {
@@ -204,7 +230,7 @@
     },
     "operators": {
       "patterns": [
-        { "name": "keyword.operator.ctx", "match": "=>|->|\\.\\*|\\.\\.|<<|>>|==|!=|<=|>=|[-+*/%<>=!&|^~?]" }
+        { "name": "keyword.operator.ctx", "match": "=>|->|\\.\\*|\\.\\.|<<|>>|==|!=|<=|>=|[-+*/%<>=&|^?]" }
       ]
     },
     "punctuation": {

@@ -141,6 +141,33 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Ctx_Enum_AreColored()
+    {
+        var src = string.Join("\n",
+            "enum Kind: u8 {",
+            "    ident,",
+            "    lbrace = 40,",
+            "}",
+            "let k = Kind::lbrace");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.True(LineHasSlot(lines[0], TokenColorSlot.Keyword));   // enum
+        Assert.True(LineHasSlot(lines[0], TokenColorSlot.Type));      // Kind, u8
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Constant));  // ident
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Constant));  // lbrace
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Number));    // 40
+        Assert.True(LineHasSlot(lines[4], TokenColorSlot.Constant));  // Kind::lbrace
+    }
+
+    [Fact]
+    public void Ctx_OffSpecPrimitives_AreNotTypes()
+    {
+        var lines = HighlightOrFail("let a = i128", "ctx");
+
+        Assert.False(LineHasSlot(lines[0], TokenColorSlot.Type));
+    }
+
+    [Fact]
     public void Markdown_Constructs_AreColored()
     {
         // Markdown is a TextMateSharp-bundled grammar — this proves "markdown" resolves and that
