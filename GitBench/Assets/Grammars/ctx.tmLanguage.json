@@ -7,6 +7,7 @@
     { "include": "#strings" },
     { "include": "#numbers" },
     { "include": "#builtins" },
+    { "include": "#attributes" },
     { "include": "#enum-declaration" },
     { "include": "#declarations" },
     { "include": "#keywords" },
@@ -84,6 +85,18 @@
         }
       ]
     },
+    "attributes": {
+      "patterns": [
+        {
+          "match": "(#)((?:[A-Za-z_][A-Za-z0-9_]*\\s*::\\s*)*)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "punctuation.definition.decorator.ctx" },
+            "2": { "patterns": [ { "include": "#namespace-paths" } ] },
+            "3": { "name": "entity.name.function.decorator.ctx" }
+          }
+        }
+      ]
+    },
     "enum-declaration": {
       "begin": "\\b(enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "beginCaptures": {
@@ -126,6 +139,13 @@
           }
         },
         {
+          "match": "\\b(capability)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.ctx" },
+            "2": { "name": "entity.name.type.ctx" }
+          }
+        },
+        {
           "match": "\\b(namespace)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": { "name": "storage.type.namespace.ctx" },
@@ -145,8 +165,8 @@
       "patterns": [
         { "name": "keyword.control.ctx", "match": "\\b(?:if|else|while|match|return|break|continue|defer)\\b" },
         { "name": "keyword.other.logical.ctx", "match": "\\b(?:and|or|not)\\b" },
-        { "name": "storage.type.ctx", "match": "\\b(?:fn|struct|union|enum|type|namespace|let|const)\\b" },
-        { "name": "storage.modifier.ctx", "match": "\\bmut\\b" }
+        { "name": "storage.type.ctx", "match": "\\b(?:fn|struct|union|enum|type|namespace|let|const|capability)\\b" },
+        { "name": "storage.modifier.ctx", "match": "\\b(?:mut|extern)\\b" }
       ]
     },
     "constants": {

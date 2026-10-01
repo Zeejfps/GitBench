@@ -20,6 +20,9 @@ public class SyntaxHighlighterTests
     private static bool LineHasSlot(IReadOnlyList<TokenSpan> spans, TokenColorSlot slot)
         => spans.Any(s => s.Slot == slot);
 
+    private static TokenColorSlot SlotAt(IReadOnlyList<TokenSpan> spans, int column)
+        => spans.Where(s => column >= s.Start && column < s.Start + s.Length).Select(s => s.Slot).FirstOrDefault();
+
     [Fact]
     public void MultiLineBlockComment_EveryInteriorLineIsComment()
     {
@@ -157,6 +160,25 @@ public class SyntaxHighlighterTests
         Assert.True(LineHasSlot(lines[2], TokenColorSlot.Constant));  // lbrace
         Assert.True(LineHasSlot(lines[2], TokenColorSlot.Number));    // 40
         Assert.True(LineHasSlot(lines[4], TokenColorSlot.Constant));  // Kind::lbrace
+    }
+
+    [Fact]
+    public void Ctx_ExternAndCapabilities_AreColored()
+    {
+        var src = string.Join("\n",
+            "capability Glfw",
+            "#c::symbol{ name = \"labs\" }",
+            "extern fn long_abs { mut glfw: Glfw, n: i64 } -> i64",
+            "#inline");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[0], 0));    // capability
+        Assert.Equal(TokenColorSlot.Type, SlotAt(lines[0], 11));      // Glfw
+        Assert.Equal(TokenColorSlot.Function, SlotAt(lines[1], 4));   // symbol
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.String));    // "labs"
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[2], 0));    // extern
+        Assert.Equal(TokenColorSlot.Function, SlotAt(lines[2], 10));  // long_abs
+        Assert.Equal(TokenColorSlot.Function, SlotAt(lines[3], 1));   // inline
     }
 
     [Fact]
