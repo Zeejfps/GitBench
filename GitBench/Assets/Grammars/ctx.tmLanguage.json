@@ -158,12 +158,19 @@
             "1": { "name": "storage.type.ctx" },
             "2": { "name": "constant.other.ctx" }
           }
+        },
+        {
+          "match": "^\\s*(error)\\s+([a-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.ctx" },
+            "2": { "name": "constant.other.enum-member.ctx" }
+          }
         }
       ]
     },
     "keywords": {
       "patterns": [
-        { "name": "keyword.control.ctx", "match": "\\b(?:if|else|while|match|return|break|continue|defer)\\b" },
+        { "name": "keyword.control.ctx", "match": "\\b(?:if|else|while|match|return|break|continue|defer|ifnull|iferr|try)\\b" },
         { "name": "keyword.other.logical.ctx", "match": "\\b(?:and|or|not)\\b" },
         { "name": "storage.type.ctx", "match": "\\b(?:fn|struct|union|enum|type|namespace|let|const|capability)\\b" },
         { "name": "storage.modifier.ctx", "match": "\\b(?:mut|extern)\\b" }
@@ -171,7 +178,7 @@
     },
     "constants": {
       "patterns": [
-        { "name": "constant.language.ctx", "match": "\\b(?:null|some|true|false)\\b" },
+        { "name": "constant.language.ctx", "match": "\\b(?:null|some|ok|err|true|false)\\b" },
         { "name": "constant.other.ctx", "match": "\\b[A-Z][A-Z0-9]*_[A-Z0-9_]*\\b" }
       ]
     },
@@ -250,7 +257,7 @@
     },
     "operators": {
       "patterns": [
-        { "name": "keyword.operator.ctx", "match": "=>|->|\\.\\*|\\.\\.|<<|>>|==|!=|<=|>=|[-+*/%<>=&|^?]" }
+        { "name": "keyword.operator.ctx", "match": "=>|->|\\.\\*|\\.\\.|<<|>>|==|!=|<=|>=|[-+*/%<>=&|^?!]" }
       ]
     },
     "punctuation": {

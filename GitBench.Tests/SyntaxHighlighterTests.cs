@@ -182,6 +182,33 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Ctx_ErrorsAndUnwraps_AreColored()
+    {
+        var src = string.Join("\n",
+            "    error not_found",
+            "fn load { mut fs: Fs } -> !Config {",
+            "    let f = try fs::open{ &fs, path }",
+            "    let n = parse{ s } ifnull 0",
+            "    let c = load{ &fs } iferr err{ error } { return 1 }",
+            "        ok{ value } => { value }",
+            "    return Result::err{ error }");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[0], 4));    // error
+        Assert.Equal(TokenColorSlot.Constant, SlotAt(lines[0], 10));  // not_found
+        Assert.Equal(TokenColorSlot.Operator, SlotAt(lines[1], 26));  // !
+        Assert.Equal(TokenColorSlot.Type, SlotAt(lines[1], 27));      // Config
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[2], 12));   // try
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[3], 23));   // ifnull
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[4], 24));   // iferr
+        Assert.Equal(TokenColorSlot.Constant, SlotAt(lines[4], 30));  // err
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[4], 35)); // error as a binder
+        Assert.Equal(TokenColorSlot.Constant, SlotAt(lines[5], 8));   // ok
+        Assert.Equal(TokenColorSlot.Type, SlotAt(lines[6], 11));      // Result
+        Assert.Equal(TokenColorSlot.Constant, SlotAt(lines[6], 19));  // err
+    }
+
+    [Fact]
     public void Ctx_OffSpecPrimitives_AreNotTypes()
     {
         var lines = HighlightOrFail("let a = i128", "ctx");
