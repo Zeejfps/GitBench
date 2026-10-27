@@ -84,7 +84,7 @@ internal sealed record SendToAgentDialog : Widget
                 Value = new OptionDropdown<AgentPreset>
                 {
                     Selected = agent,
-                    Options = [.. chat.Presets.Select(p => (p, p.Name, AgentKinds.Detail(p.Kind, s)))],
+                    Options = [.. chat.Presets.Select(p => (p, p.Name, AgentKindText.Detail(p.Kind, s)))],
                 },
             });
         if (ongoing is null && endpoints.WillEnable) body.Add(new DialogBodyText { Value = s.PairingEnablesConnections });

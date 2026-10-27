@@ -178,7 +178,7 @@ internal sealed record AgentPresetFields : Widget
                     Value = new OptionDropdown<AgentKind>
                     {
                         Selected = vm.Kind,
-                        Options = [.. AgentKinds.All.Select(k => (k, AgentKinds.Label(k), AgentKinds.Detail(k, s)))],
+                        Options = [.. AgentKinds.All.Select(k => (k, AgentKinds.Label(k), AgentKindText.Detail(k, s)))],
                     },
                 },
                 new LabeledRow

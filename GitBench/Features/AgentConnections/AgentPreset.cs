@@ -1,5 +1,3 @@
-using GitBench.Localization;
-
 namespace GitBench.Features.AgentConnections;
 
 /// <summary>Identifies an agent preset. The built-in presets keep the ids the agents had before
@@ -60,15 +58,6 @@ internal static class AgentKinds
         AgentKind.ClaudeCode => "Claude Code",
         AgentKind.Codex => "Codex",
         AgentKind.Gemini => "Gemini CLI",
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown agent."),
-    };
-
-    /// <summary>What running a <paramref name="kind"/> agent takes, in a line.</summary>
-    public static string Detail(AgentKind kind, Strings s) => kind switch
-    {
-        AgentKind.ClaudeCode => s.PairingAgentClaudeDetail,
-        AgentKind.Codex => s.PairingAgentCodexDetail,
-        AgentKind.Gemini => s.PairingAgentGeminiDetail,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown agent."),
     };
 }
