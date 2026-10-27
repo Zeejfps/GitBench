@@ -2,6 +2,7 @@ using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.Repos;
 

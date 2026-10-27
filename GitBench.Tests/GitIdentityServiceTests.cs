@@ -1,5 +1,5 @@
 using GitBench.Features.Identity;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using Xunit;
 
@@ -22,7 +22,7 @@ public class GitIdentityServiceTests
             => Urls.TryGetValue($"{repoPath}|{remoteName}", out var u) ? u : null;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath)
             => Local.TryGetValue(repoPath, out var v) ? v : (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
+        public void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs) { }
     }
 
     private sealed class FakeOverrides : IIdentityOverrides
@@ -298,7 +298,7 @@ public class GitIdentityServiceTests
         // The pin path writes every managed key, unsetting the ones the profile doesn't carry, so
         // re-pinning a keyless profile clears a previous profile's leftover SSH/signing config.
         var keyless = new IdentityProfile(Guid.NewGuid(), "Personal", "Me", "me@home.com");
-        var entries = LocalIdentityConfig.For(keyless).Entries().ToDictionary(e => e.Key, e => e.Value);
+        var entries = ProfileIdentityConfig.For(keyless).Entries().ToDictionary(e => e.Key, e => e.Value);
 
         Assert.Equal("Me", entries["user.name"]);
         Assert.Equal("me@home.com", entries["user.email"]);
@@ -315,7 +315,7 @@ public class GitIdentityServiceTests
         // must also be the config a pin writes.
         var p = new IdentityProfile(Guid.NewGuid(), "Work", "Work Dev", "dev@series.ai",
             SigningKey: "id_work.pub", SigningKeyFormat: "ssh");
-        var entries = LocalIdentityConfig.For(p).Entries().ToDictionary(e => e.Key, e => e.Value);
+        var entries = ProfileIdentityConfig.For(p).Entries().ToDictionary(e => e.Key, e => e.Value);
 
         Assert.Equal("id_work.pub", entries["user.signingKey"]);
         Assert.Equal("true", entries["commit.gpgsign"]);
@@ -359,6 +359,6 @@ public class GitIdentityServiceTests
         public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => throw new IOException("git remote: locked");
         public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
+        public void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs) { }
     }
 }

@@ -1,5 +1,5 @@
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 
 namespace GitBench.Features.Review;

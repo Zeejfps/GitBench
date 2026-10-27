@@ -5,7 +5,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Tests;
 

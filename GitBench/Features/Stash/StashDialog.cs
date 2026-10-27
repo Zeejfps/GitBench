@@ -1,7 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 using GitBench.Localization;
 using GitBench.Messages;

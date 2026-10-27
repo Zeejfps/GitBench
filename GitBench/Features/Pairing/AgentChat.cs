@@ -5,6 +5,7 @@ using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Localization;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.Pairing;
 

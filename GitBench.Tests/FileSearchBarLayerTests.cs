@@ -2,7 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Infrastructure;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Theming;
 using ZGF.Gui;

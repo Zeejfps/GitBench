@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using GitBench.Features.AgentConnections;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using Xunit;
 
 namespace GitBench.Tests;

@@ -1,5 +1,5 @@
 using GitBench.Features.Notifications;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;

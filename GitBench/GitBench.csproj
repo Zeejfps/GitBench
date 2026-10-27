@@ -80,8 +80,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
-        <ProjectReference Include="..\GitBench.Pty\GitBench.Pty.csproj" />
-        <ProjectReference Include="..\GitBench.Terminal.Vt\GitBench.Terminal.Vt.csproj" />
+        <ProjectReference Include="..\zdev\Zdev.Common\Zdev.Common.csproj" />
+        <ProjectReference Include="..\zdev\Zdev.Git\Zdev.Git.csproj" />
+        <ProjectReference Include="..\zdev\Zdev.Agents\Zdev.Agents.csproj" />
+        <ProjectReference Include="..\zdev\Zdev.Pty\Zdev.Pty.csproj" />
+        <ProjectReference Include="..\zdev\Zdev.Terminal.Vt\Zdev.Terminal.Vt.csproj" />
         <!-- Image codecs behind the diff view's image preview. PngSharp also arrives
              transitively through ZGF.Gui; referenced explicitly because the app decodes with it
              directly. -->
@@ -153,7 +156,7 @@
         <!--
             NStack.Core arrives transitively with the vendored engine and declares its own
             System.Rune, ambiguous with System.Text.Rune wherever the bare name is used. Same alias,
-            and for the same reason, as GitBench.Terminal.Vt.
+            and for the same reason, as Zdev.Terminal.Vt.
         -->
         <Using Include="System.Text.Rune" Alias="Rune" />
     </ItemGroup>

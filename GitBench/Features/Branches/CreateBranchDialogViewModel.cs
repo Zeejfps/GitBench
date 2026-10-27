@@ -1,7 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Editor;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -55,7 +55,7 @@ internal sealed class CreateBranchDialogViewModel
         NameStatus = new Derived<FieldStatus?>(() =>
         {
             var s = loc.Strings.Value;
-            return RefNameRules.Validate(Name.Value, s, s.RefnameNounBranch);
+            return RefNameMessages.Validate(Name.Value, s, s.RefnameNounBranch);
         });
 
         Create = AsyncCommand.ForOutcome(

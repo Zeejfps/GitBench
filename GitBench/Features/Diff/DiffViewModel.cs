@@ -4,12 +4,13 @@ using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Diff;
 

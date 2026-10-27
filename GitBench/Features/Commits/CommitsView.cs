@@ -16,6 +16,7 @@ using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Widgets;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.Commits;
 

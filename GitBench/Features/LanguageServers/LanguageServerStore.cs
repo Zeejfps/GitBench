@@ -4,7 +4,7 @@ using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
 using GitBench.Features.Search;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Lsp;
 using GitBench.Lsp.Configuration;
 using GitBench.Lsp.Documents;
@@ -13,6 +13,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.LanguageServers;
 

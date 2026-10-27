@@ -1,7 +1,7 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using ZGF.Observable;
 using Xunit;

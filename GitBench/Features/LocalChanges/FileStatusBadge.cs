@@ -2,6 +2,7 @@ using GitBench.Features.Commits;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
+using Zdev.Git;
 
 namespace GitBench.Features.LocalChanges;
 

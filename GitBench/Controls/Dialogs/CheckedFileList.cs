@@ -2,6 +2,7 @@ using GitBench.Features.Commits;
 using GitBench.Localization;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Controls.Dialogs;
 

@@ -1,6 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -40,7 +40,7 @@ internal sealed record RenameBranchDialog : Widget
         var nameStatus = new Derived<FieldStatus?>(() =>
         {
             var strings = loc.Strings.Value;
-            return RefNameRules.Validate(name.Value, strings, strings.RefnameNounBranch);
+            return RefNameMessages.Validate(name.Value, strings, strings.RefnameNounBranch);
         });
         var gate = new Derived<bool>(() =>
             name.Value.Length > 0 && name.Value != oldName && RefNameRules.IsValid(name.Value));

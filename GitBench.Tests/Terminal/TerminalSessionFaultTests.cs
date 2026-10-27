@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using GitBench.Features.Terminal;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using ZGF.Observable;
 using Xunit;
 

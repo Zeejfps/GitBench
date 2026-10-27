@@ -2,7 +2,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;

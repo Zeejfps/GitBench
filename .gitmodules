@@ -4,3 +4,6 @@
 [submodule "external/cs_tree_sitter"]
 	path = external/cs_tree_sitter
 	url = https://github.com/Zeejfps/cs_tree_sitter.git
+[submodule "zdev"]
+	path = zdev
+	url = git@github.com:Zeejfps/cs_zdev.git

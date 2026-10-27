@@ -1,4 +1,5 @@
 using GitBench.Features.Commits;
+using Zdev.Git;
 
 namespace GitBench.Theming;
 

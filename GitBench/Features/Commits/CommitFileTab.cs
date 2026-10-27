@@ -2,7 +2,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;

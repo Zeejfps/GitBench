@@ -1,6 +1,7 @@
 using GitBench.Features.Commits;
 using GitBench.Features.Review;
 using Xunit;
+using Zdev.Git;
 
 namespace GitBench.Tests;
 

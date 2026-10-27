@@ -1,6 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using Xunit;
+using Zdev.Git;
 
 namespace GitBench.Tests;
 

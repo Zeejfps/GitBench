@@ -2,10 +2,10 @@ using GitBench.App;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Terminal;
-using GitBench.Git;
-using GitBench.Pty;
-using GitBench.Terminal.Vt;
-using GitBench.Terminal.Vt.Adapters;
+using Zdev.Git;
+using Zdev.Pty;
+using Zdev.Terminal.Vt;
+using Zdev.Terminal.Vt.Adapters;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;
@@ -248,9 +248,9 @@ public sealed class ContentNavigatorTests(CodeIntelFixture fixture) : IDisposabl
 
         public IReadOnlyList<Guid> ReposWithLiveShells() => [];
 
-        public TerminalInstance StartIn(GitBench.Git.Repo repo, ITerminalLaunch launch) => throw new NotSupportedException();
+        public TerminalInstance StartIn(Zdev.Git.Repo repo, ITerminalLaunch launch) => throw new NotSupportedException();
 
-        public void CloseIn(GitBench.Git.Repo repo, TerminalInstance terminal) { }
+        public void CloseIn(Zdev.Git.Repo repo, TerminalInstance terminal) { }
     }
 
     /// <summary>A launch that never spawns: these tests are about the tabs, not the shells.</summary>

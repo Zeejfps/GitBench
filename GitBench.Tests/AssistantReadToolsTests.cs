@@ -3,9 +3,10 @@ using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

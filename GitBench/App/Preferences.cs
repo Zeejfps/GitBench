@@ -4,6 +4,7 @@ using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 using ZGF.Gui.Desktop;
+using Zdev.Agents;
 
 namespace GitBench.App;
 
@@ -44,7 +45,7 @@ public sealed record Preferences
     public float PairingChatSplitFraction { get; init; } = 0.6f;
 
     /// <summary>The command a terminal pairing session starts its agent with.</summary>
-    public string PairingTerminalCommand { get; init; } = Features.Pairing.TerminalAgentCommand.ClaudeCode;
+    public string PairingTerminalCommand { get; init; } = Zdev.Agents.TerminalAgentCommand.ClaudeCode;
 
     /// <summary>The id of the agent preset the chat button opens a conversation with; null until
     /// one is picked.</summary>

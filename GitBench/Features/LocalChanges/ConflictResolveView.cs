@@ -3,7 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;

@@ -4,6 +4,7 @@ using GitBench.Infrastructure;
 using GitBench.Localization;
 using ZGF.Gui;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Editor;
 

@@ -1,6 +1,7 @@
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.LocalChanges;
 

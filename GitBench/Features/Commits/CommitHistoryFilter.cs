@@ -1,3 +1,5 @@
+using Zdev.Git;
+
 namespace GitBench.Features.Commits;
 
 /// <summary>

@@ -1,7 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.Search;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Lsp;
 using GitBench.Lsp.Configuration;
 using GitBench.Lsp.Documents;

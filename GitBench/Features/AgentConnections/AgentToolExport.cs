@@ -4,7 +4,7 @@ using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Pairing;
 using GitBench.Features.Review;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Features.AgentConnections;
 

@@ -1,6 +1,6 @@
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -45,7 +45,7 @@ public class RepoIdentityOverrideTests
         public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => new[] { "origin" };
         public string? GetRemoteUrlRaw(string repoPath, string remoteName) => Url;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
+        public void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs) { }
     }
 
     [Fact]

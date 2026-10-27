@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
-using GitBench.Pty;
-using GitBench.Terminal.Vt;
+using Zdev.Pty;
+using Zdev.Terminal.Vt;
 using ZGF.Observable;
 
 namespace GitBench.Features.Terminal;

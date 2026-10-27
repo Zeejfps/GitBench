@@ -1,6 +1,7 @@
 using System.Text;
 using GitBench.Features.Diff;
 using ZGF.Gui;
+using Zdev.Git;
 
 namespace GitBench.Features.Editor;
 

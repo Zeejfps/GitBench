@@ -11,6 +11,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.Pairing;
 
@@ -153,5 +154,5 @@ internal sealed record NewPairingSessionDialog : Widget
     }
 
     public static IEnumerable<(PairingAgentChoice, string, string)> PresetOptions(IReadOnlyList<AgentPreset> presets, Strings s) =>
-        presets.Select(p => ((PairingAgentChoice)new PairingAgentChoice.Preset(p), p.Name, AgentKinds.Detail(p.Kind, s)));
+        presets.Select(p => ((PairingAgentChoice)new PairingAgentChoice.Preset(p), p.Name, AgentKindText.Detail(p.Kind, s)));
 }

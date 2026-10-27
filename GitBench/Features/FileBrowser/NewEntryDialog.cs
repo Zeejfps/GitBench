@@ -6,6 +6,7 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.FileBrowser;
 

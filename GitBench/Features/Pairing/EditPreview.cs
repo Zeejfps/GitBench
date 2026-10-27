@@ -1,4 +1,4 @@
-using GitBench.Features.AgentConnections.Acp;
+using Zdev.Agents.Acp;
 using GitBench.Features.Assistant;
 using ZGF.Observable;
 

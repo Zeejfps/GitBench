@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 using GitBench.Features.Terminal;
-using GitBench.Pty;
-using GitBench.Terminal.Vt;
-using GitBench.Terminal.Vt.Adapters;
+using Zdev.Pty;
+using Zdev.Terminal.Vt;
+using Zdev.Terminal.Vt.Adapters;
 using ZGF.Observable;
 using Xunit;
 

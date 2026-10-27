@@ -1,8 +1,9 @@
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

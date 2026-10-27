@@ -2,7 +2,7 @@ using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 using Xunit;
 
@@ -26,7 +26,7 @@ public sealed class LocalChangesProjectionTests
             GitStatusSummary.Unknown);
         var store = new FakeSnapshotStore
         {
-            LocalState = { Value = new Fetched<LocalChangesData>.Ok(new LocalChangesData(snapshot, Array.Empty<GitBench.Features.Submodules.SubmoduleInfo>())) },
+            LocalState = { Value = new Fetched<LocalChangesData>.Ok(new LocalChangesData(snapshot, Array.Empty<Zdev.Git.SubmoduleInfo>())) },
         };
 
         Assert.Same(snapshot, LocalChangesProjection.ActiveSnapshot(store, Repo));

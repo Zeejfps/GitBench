@@ -1,9 +1,10 @@
 using GitBench.Features.Branches;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Repos;
 

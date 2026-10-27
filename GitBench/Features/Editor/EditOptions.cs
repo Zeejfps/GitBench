@@ -1,6 +1,7 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Infrastructure;
+using Zdev.Git;
 
 namespace GitBench.Features.Editor;
 

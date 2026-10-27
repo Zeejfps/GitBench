@@ -1,6 +1,7 @@
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
+using Zdev.Git;
 
 namespace GitBench.Features.Commits;
 

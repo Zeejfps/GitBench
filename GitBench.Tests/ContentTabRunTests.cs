@@ -1,7 +1,7 @@
 using GitBench.App;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Terminal;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;

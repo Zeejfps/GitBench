@@ -1,6 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;

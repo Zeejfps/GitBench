@@ -1,5 +1,5 @@
 using GitBench.Features.Diff;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Theming;
 using Xunit;
 

@@ -1,5 +1,5 @@
 using GitBench.Controls.Dialogs;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -55,7 +55,7 @@ internal sealed class CreateWorktreeDialogViewModel
         NewBranchStatus = new Derived<FieldStatus?>(() =>
         {
             var s = loc.Strings.Value;
-            return RefNameRules.Validate(NewBranchName.Value.Trim(), s, s.RefnameNounBranch);
+            return RefNameMessages.Validate(NewBranchName.Value.Trim(), s, s.RefnameNounBranch);
         });
         var gate = new Derived<bool>(() =>
             ParentDir.Value.Trim().Length > 0 && FolderName.Value.Trim().Length > 0

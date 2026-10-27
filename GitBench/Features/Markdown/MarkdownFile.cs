@@ -1,5 +1,6 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
+using Zdev.Git;
 
 namespace GitBench.Features.Markdown;
 

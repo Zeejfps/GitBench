@@ -2,7 +2,7 @@ using GitBench.App;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Editor;
 using GitBench.Features.Terminal;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;

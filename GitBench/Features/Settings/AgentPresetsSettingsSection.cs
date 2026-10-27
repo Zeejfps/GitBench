@@ -10,6 +10,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.Settings;
 
@@ -178,7 +179,7 @@ internal sealed record AgentPresetFields : Widget
                     Value = new OptionDropdown<AgentKind>
                     {
                         Selected = vm.Kind,
-                        Options = [.. AgentKinds.All.Select(k => (k, AgentKinds.Label(k), AgentKinds.Detail(k, s)))],
+                        Options = [.. AgentKinds.All.Select(k => (k, AgentKinds.Label(k), AgentKindText.Detail(k, s)))],
                     },
                 },
                 new LabeledRow

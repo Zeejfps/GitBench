@@ -3,7 +3,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Lsp;
 using ZGF.Gui;
 using ZGF.Observable;

@@ -1,9 +1,10 @@
 using GitBench.Features.Identity;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Repos;
 
@@ -75,7 +76,7 @@ internal sealed class CloneRepoDialogViewModel
             work: () =>
             {
                 var target = Path.Combine(ParentDir.Value.Trim(), FolderName.Value.Trim());
-                var config = Resolve(profiles) is { } profile ? LocalIdentityConfig.For(profile) : null;
+                var config = Resolve(profiles) is { } profile ? ProfileIdentityConfig.For(profile) : null;
                 switch (gitService.Clone(Url.Value.Trim(), target, config))
                 {
                     case CloneOutcome.Failed failed:

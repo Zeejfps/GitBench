@@ -1,5 +1,5 @@
 using GitBench.Features.CodeIntel;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Theming;
 
 namespace GitBench.Features.Diff;

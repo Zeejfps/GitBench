@@ -6,7 +6,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Features.Assistant.Tools;
 

@@ -1,5 +1,5 @@
 using GitBench.Controls;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;

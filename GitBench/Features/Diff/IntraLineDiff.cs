@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Features.Diff;
 

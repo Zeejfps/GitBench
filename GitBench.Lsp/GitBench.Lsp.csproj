@@ -7,12 +7,17 @@
         <IsAotCompatible>true</IsAotCompatible>
     </PropertyGroup>
 
-    <!-- Deliberately references nothing. The protocol, the config parser and the document
-         bookkeeping know about a byte stream and their own types; the repository, the UI and the
-         process are the app's side of the seam. Adding a reference here is the boundary breaking. -->
+    <!-- Deliberately references nothing but Zdev.Common, which references nothing itself and lends
+         only IServerEnvironment: the protocol, the config parser and the document bookkeeping know
+         about a byte stream and their own types; the repository, the UI and the process are the
+         app's side of the seam. Any other reference here is the boundary breaking. -->
 
     <ItemGroup>
         <InternalsVisibleTo Include="GitBench.Lsp.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\zdev\Zdev.Common\Zdev.Common.csproj" />
     </ItemGroup>
 
 </Project>

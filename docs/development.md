@@ -25,11 +25,12 @@ If you already cloned without submodules:
 git submodule update --init --recursive
 ```
 
-The framework submodule uses an SSH URL. If you do not have GitHub SSH access,
-configure HTTPS for this checkout and try again:
+The framework and zdev submodules use SSH URLs. If you do not have GitHub SSH
+access, configure HTTPS for this checkout and try again:
 
 ```bash
 git config submodule.framework.url https://github.com/Zeejfps/ENV-Game-Framework.git
+git config submodule.zdev.url https://github.com/Zeejfps/cs_zdev.git
 git submodule update --init --recursive
 ```
 
@@ -65,9 +66,9 @@ setup and cross-platform build limits.
 ```bash
 dotnet test GitBench.Tests/GitBench.Tests.csproj
 dotnet test GitBench.Lsp.Tests/GitBench.Lsp.Tests.csproj
-dotnet test GitBench.Pty.Tests/GitBench.Pty.Tests.csproj
-dotnet test GitBench.Terminal.Vt.Tests/GitBench.Terminal.Vt.Tests.csproj
 ```
+
+`dotnet test GitBench.sln` also runs the zdev libraries' tests.
 
 ## Development notes
 
@@ -75,8 +76,12 @@ dotnet test GitBench.Terminal.Vt.Tests/GitBench.Terminal.Vt.Tests.csproj
 - Set `DIFFDINO_DATA_DIR` to a temporary folder to run with separate settings and
   repository state. This is useful for testing without changing your usual setup.
 - Local builds skip the update check. Auto-update requires an installed build.
-- The framework and tree-sitter bindings are Git submodules. Commit changes inside
-  a submodule first, then commit its updated reference in this repository.
+- The framework, the zdev libraries and the tree-sitter bindings are Git
+  submodules. Commit changes inside a submodule first, then commit its updated
+  reference in this repository.
+- Git, the PTY, the terminal's VT engine and the agent connections live in
+  [zdev](https://github.com/Zeejfps/cs_zdev), which Zultree shares. Changes to
+  them belong there, not in this repository.
 - The tree-sitter bindings are maintained as part of this project. Changes to its
   C# wrappers or native build support belong in `external/cs_tree_sitter`.
 

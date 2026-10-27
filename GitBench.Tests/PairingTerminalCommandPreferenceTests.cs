@@ -2,6 +2,7 @@ using System.Text.Json;
 using GitBench.App;
 using GitBench.Features.Pairing;
 using Xunit;
+using Zdev.Agents;
 
 namespace GitBench.Tests;
 

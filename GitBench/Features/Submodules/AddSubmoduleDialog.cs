@@ -1,5 +1,5 @@
 using GitBench.Controls.Dialogs;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -38,7 +38,7 @@ internal sealed record AddSubmoduleDialog : Widget
         var branchStatus = new Derived<FieldStatus?>(() =>
         {
             var strings = loc.Strings.Value;
-            return RefNameRules.Validate(branch.Value.Trim(), strings, strings.RefnameNounBranch);
+            return RefNameMessages.Validate(branch.Value.Trim(), strings, strings.RefnameNounBranch);
         });
         var gate = new Derived<bool>(() =>
             url.Value.Trim().Length > 0 && path.Value.Trim().Length > 0

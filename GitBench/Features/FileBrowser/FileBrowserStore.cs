@@ -2,7 +2,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;

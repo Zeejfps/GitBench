@@ -1,11 +1,13 @@
 using System.Threading.Channels;
 using GitBench.Features.Editor;
 using GitBench.Features.AgentConnections;
-using GitBench.Features.AgentConnections.Acp;
+using Zdev.Agents.Acp;
 using GitBench.Features.Assistant;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Lsp.Lifecycle;
 using ZGF.Observable;
+using Zdev.Agents;
+using Zdev.Common;
 
 namespace GitBench.Features.Pairing;
 

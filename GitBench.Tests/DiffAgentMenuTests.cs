@@ -1,6 +1,6 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using ZGF.Observable;
 using Xunit;

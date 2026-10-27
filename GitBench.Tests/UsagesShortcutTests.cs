@@ -1,7 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;

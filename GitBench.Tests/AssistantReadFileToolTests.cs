@@ -2,9 +2,10 @@ using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

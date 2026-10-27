@@ -6,6 +6,7 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using Zdev.Git;
 
 namespace GitBench.Features.Branches;
 

@@ -4,7 +4,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;
@@ -238,7 +238,7 @@ internal sealed class StubReader : IGitRawConfigReader
     public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => Array.Empty<string>();
     public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
     public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-    public void AttachIdentityResolver(GitIdentityService identity) { }
+    public void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs) { }
 }
 
 internal sealed class ManualTicker : IFrameTicker

@@ -8,6 +8,7 @@ using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 using ZGF.Gui.Desktop;
+using Zdev.Agents;
 
 namespace GitBench.App;
 
@@ -158,7 +159,7 @@ public static class PreferencesStore
                 PairingPanelWidth = file.PairingPanelWidth is > 0 ? file.PairingPanelWidth.Value : defaults.PairingPanelWidth,
                 PairingChatSplitFraction = file.PairingChatSplitFraction is > 0 ? file.PairingChatSplitFraction.Value : defaults.PairingChatSplitFraction,
                 PairingTerminalCommand = string.IsNullOrWhiteSpace(file.PairingTerminalCommand)
-                                         || file.PairingTerminalCommand == Features.Pairing.TerminalAgentCommand.LegacyClaudeCode
+                                         || file.PairingTerminalCommand == Zdev.Agents.TerminalAgentCommand.LegacyClaudeCode
                     ? defaults.PairingTerminalCommand
                     : file.PairingTerminalCommand,
                 ChatAgent = string.IsNullOrWhiteSpace(file.ChatAgent) ? null : file.ChatAgent,

@@ -2,7 +2,7 @@ using System.Text.Json;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;

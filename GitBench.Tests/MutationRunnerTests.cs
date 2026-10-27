@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Observable;

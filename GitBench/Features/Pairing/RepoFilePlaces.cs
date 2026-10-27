@@ -1,7 +1,8 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.LanguageServers;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
+using Zdev.Common;
 
 namespace GitBench.Features.Pairing;
 

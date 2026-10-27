@@ -1,9 +1,10 @@
 using GitBench.Features.FileBrowser;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Platform;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

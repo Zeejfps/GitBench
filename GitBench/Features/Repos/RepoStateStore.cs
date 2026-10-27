@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GitBench.Features.Branches;
 using GitBench.Features.FileBrowser;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 
 namespace GitBench.Features.Repos;

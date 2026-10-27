@@ -1,6 +1,6 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Infrastructure;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Features.Diff;
 

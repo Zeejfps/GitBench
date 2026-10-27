@@ -1,6 +1,7 @@
 using GitBench.Lsp.Configuration;
 using GitBench.Lsp.Lifecycle;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Lsp.Tests;
 

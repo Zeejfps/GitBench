@@ -10,6 +10,7 @@ using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.Commits;
 

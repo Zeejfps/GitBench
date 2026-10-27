@@ -6,6 +6,7 @@ using GitBench.Controls;
 using GitBench.Localization;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.LocalChanges;
 

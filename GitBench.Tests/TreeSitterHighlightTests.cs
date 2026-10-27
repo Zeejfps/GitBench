@@ -3,6 +3,7 @@ using GitBench.Features.Diff;
 using GitBench.Theming;
 
 using Xunit;
+using Zdev.Git;
 
 namespace GitBench.Tests;
 

@@ -1,6 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Identity;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
