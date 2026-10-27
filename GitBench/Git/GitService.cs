@@ -29,7 +29,8 @@ public interface IGitRawConfigReader
     // Wires the resolver that injects per-repo identity into every git invocation. Called once at
     // startup by GitIdentityService itself (its hosted Start), which needs this reader for its raw
     // config reads — hence the post-construction back-wire rather than a constructor arg either way.
-    void AttachIdentityResolver(GitIdentityService identity);
+    // Takes the resolver's one function rather than the service, so this reader never depends on it.
+    void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs);
 }
 
 public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
@@ -3467,8 +3468,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         }
     }
 
-    void IGitRawConfigReader.AttachIdentityResolver(GitIdentityService identity)
-        => _runner.IdentityPrefixResolver = identity.ResolvePrefixArgs;
+    void IGitRawConfigReader.AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs)
+        => _runner.IdentityPrefixResolver = resolvePrefixArgs;
 
     public bool IsPathTracked(Repo repo, string relativePath) => IsTracked(repo.Path, relativePath);
 

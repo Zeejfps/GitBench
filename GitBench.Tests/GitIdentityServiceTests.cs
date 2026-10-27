@@ -22,7 +22,7 @@ public class GitIdentityServiceTests
             => Urls.TryGetValue($"{repoPath}|{remoteName}", out var u) ? u : null;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath)
             => Local.TryGetValue(repoPath, out var v) ? v : (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
+        public void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs) { }
     }
 
     private sealed class FakeOverrides : IIdentityOverrides
@@ -359,6 +359,6 @@ public class GitIdentityServiceTests
         public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => throw new IOException("git remote: locked");
         public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
+        public void AttachIdentityResolver(Func<string, IReadOnlyList<string>> resolvePrefixArgs) { }
     }
 }

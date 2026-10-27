@@ -47,7 +47,7 @@ public sealed class GitIdentityService : IHostedService
     // Back-wires this resolver into the git reader so every git invocation injects the right
     // per-repo identity. Deferred to startup because the reader (GitService) and this resolver
     // depend on each other; see IGitRawConfigReader.AttachIdentityResolver.
-    public void Start() => _git.AttachIdentityResolver(this);
+    public void Start() => _git.AttachIdentityResolver(ResolvePrefixArgs);
 
     public Identity Resolve(string workingDir)
     {
