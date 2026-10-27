@@ -1,3 +1,5 @@
+using Zdev.Git;
+
 namespace GitBench.Features.Diff;
 
 /// <summary>A UTF-16 offset into a line's raw text — the file's own characters, a tab counting as

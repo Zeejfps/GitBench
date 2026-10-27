@@ -6,10 +6,11 @@ using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

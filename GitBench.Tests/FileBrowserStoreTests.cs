@@ -2,7 +2,7 @@
 using GitBench.Localization;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;

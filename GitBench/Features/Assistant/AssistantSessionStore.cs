@@ -7,7 +7,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Editor;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;

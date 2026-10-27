@@ -1,4 +1,4 @@
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using GitBench.Theming;
 
 namespace GitBench.Features.Terminal;

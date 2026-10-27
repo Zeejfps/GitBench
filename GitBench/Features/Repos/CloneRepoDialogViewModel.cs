@@ -1,9 +1,10 @@
 using GitBench.Features.Identity;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Repos;
 

@@ -2,10 +2,11 @@ using GitBench.App;
 using GitBench.Features.AgentConnections;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using ZGF.Observable;
 using Xunit;
+using Zdev.Agents;
 
 namespace GitBench.Tests;
 

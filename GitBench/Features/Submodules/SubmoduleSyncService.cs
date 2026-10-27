@@ -1,9 +1,10 @@
 using GitBench.Features.Repos;
 using GitBench.Infrastructure;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Submodules;
 

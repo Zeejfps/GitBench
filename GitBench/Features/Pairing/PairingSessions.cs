@@ -1,5 +1,5 @@
 using GitBench.Features.AgentConnections;
-using GitBench.Features.AgentConnections.Acp;
+using Zdev.Agents.Acp;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
@@ -8,10 +8,12 @@ using GitBench.Features.LanguageServers;
 using GitBench.Features.Repos;
 using GitBench.Features.Terminal;
 using GitBench.App;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Lsp.Lifecycle;
 using ZGF.Gui;
 using ZGF.Observable;
+using Zdev.Agents;
+using Zdev.Common;
 
 namespace GitBench.Features.Pairing;
 

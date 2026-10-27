@@ -1,4 +1,4 @@
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 
 namespace GitBench.Controls.Dialogs;

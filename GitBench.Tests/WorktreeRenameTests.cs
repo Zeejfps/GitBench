@@ -1,7 +1,8 @@
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

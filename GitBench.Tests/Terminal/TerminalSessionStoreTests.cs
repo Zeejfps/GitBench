@@ -1,9 +1,9 @@
 using GitBench.Features.Repos;
 using GitBench.Features.Terminal;
-using GitBench.Git;
-using GitBench.Pty;
-using GitBench.Terminal.Vt;
-using GitBench.Terminal.Vt.Adapters;
+using Zdev.Git;
+using Zdev.Pty;
+using Zdev.Terminal.Vt;
+using Zdev.Terminal.Vt.Adapters;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;

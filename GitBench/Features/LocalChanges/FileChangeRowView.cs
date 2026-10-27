@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Submodules;
+using Zdev.Git;
 
 namespace GitBench.Features.LocalChanges;
 

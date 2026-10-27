@@ -5,13 +5,14 @@ using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

@@ -1,6 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;

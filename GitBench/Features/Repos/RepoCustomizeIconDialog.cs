@@ -1,6 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Desktop;

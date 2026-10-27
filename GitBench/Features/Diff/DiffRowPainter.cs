@@ -1,5 +1,5 @@
 using GitBench.Controls;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Lsp;
 using GitBench.Theming;

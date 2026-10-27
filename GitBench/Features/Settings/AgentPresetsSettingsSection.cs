@@ -10,6 +10,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.Settings;
 

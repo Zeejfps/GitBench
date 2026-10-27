@@ -2,8 +2,9 @@ using System.Text.Json.Nodes;
 using GitBench.App;
 using GitBench.Features.AgentConnections;
 using GitBench.Features.Terminal;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.Pairing;
 

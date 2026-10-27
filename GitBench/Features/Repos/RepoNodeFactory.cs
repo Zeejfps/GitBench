@@ -1,4 +1,4 @@
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;

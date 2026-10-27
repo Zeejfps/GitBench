@@ -1,5 +1,5 @@
 using GitBench.Features.Review.Walkthrough;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
 

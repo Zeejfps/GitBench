@@ -1,6 +1,6 @@
 ﻿using GitBench.Features.Terminal;
-using GitBench.Pty;
-using GitBench.Terminal.Vt;
+using Zdev.Pty;
+using Zdev.Terminal.Vt;
 using Xunit;
 
 namespace GitBench.Tests.Terminal;

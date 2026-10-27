@@ -1,7 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Theming;

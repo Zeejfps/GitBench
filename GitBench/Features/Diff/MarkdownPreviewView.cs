@@ -4,6 +4,7 @@ using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
+using Zdev.Git;
 
 namespace GitBench.Features.Diff;
 

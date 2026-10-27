@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Localization;
+using Zdev.Git;
 
 namespace GitBench.Features.LocalChanges;
 

@@ -9,6 +9,7 @@ using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.FileBrowser;
 

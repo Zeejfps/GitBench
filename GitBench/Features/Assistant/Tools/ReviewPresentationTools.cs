@@ -3,7 +3,7 @@ using System.Text.Json;
 using GitBench.Features.Diff;
 using GitBench.Features.Review;
 using GitBench.Features.Review.Walkthrough;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 
 namespace GitBench.Features.Assistant.Tools;

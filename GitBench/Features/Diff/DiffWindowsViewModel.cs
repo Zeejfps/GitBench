@@ -1,7 +1,7 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;

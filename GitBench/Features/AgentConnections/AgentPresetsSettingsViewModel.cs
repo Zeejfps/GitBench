@@ -5,6 +5,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.AgentConnections;
 

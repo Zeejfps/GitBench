@@ -3,7 +3,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Gui;

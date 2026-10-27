@@ -2,7 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Input;
 using GitBench.Localization;
@@ -17,6 +17,7 @@ using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.Diff;
 

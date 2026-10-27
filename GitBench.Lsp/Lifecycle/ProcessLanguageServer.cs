@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Lsp.Documents;
+using Zdev.Common;
 
 namespace GitBench.Lsp.Lifecycle;
 

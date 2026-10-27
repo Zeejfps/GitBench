@@ -4,7 +4,7 @@ using GitBench.Features.Assistant.Tools;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;

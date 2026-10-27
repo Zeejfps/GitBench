@@ -1,11 +1,11 @@
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Gui;
 
 namespace GitBench.Features.Repos;
 
 /// <summary>
 /// Tells the shared read gate which repo the user is looking at, so that repo's reads are admitted
-/// ahead of every other repo's. The gate can't read the registry itself: it would point GitBench.Git
+/// ahead of every other repo's. The gate can't read the registry itself: it would point Zdev.Git
 /// at Features.Repos, and <see cref="IRepoRegistry.Active"/> is dependency-tracked, so reading it
 /// from a gate waiter's thread would register a spurious dependency in whatever Derived happens to be
 /// evaluating. So the id is pushed in from here, on the UI thread.

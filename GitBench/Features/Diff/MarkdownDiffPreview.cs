@@ -1,6 +1,6 @@
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Rendering;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Features.Diff;
 

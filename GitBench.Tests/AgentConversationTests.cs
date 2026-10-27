@@ -2,8 +2,9 @@ using GitBench.Features.AgentConnections;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.Pairing;
-using GitBench.Git;
+using Zdev.Git;
 using Xunit;
+using Zdev.Agents;
 
 namespace GitBench.Tests;
 

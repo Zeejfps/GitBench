@@ -2,9 +2,10 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
 using GitBench.Features.Markdown;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.FileBrowser;
 

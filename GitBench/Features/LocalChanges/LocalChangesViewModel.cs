@@ -6,7 +6,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -14,6 +14,7 @@ using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.Features.LocalChanges;
 

@@ -3,7 +3,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Editor;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Observable;

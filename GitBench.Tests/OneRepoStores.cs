@@ -51,7 +51,7 @@ internal sealed class NoTerminals : ITerminalSessionStore
 
     public IReadOnlyList<Guid> ReposWithLiveShells() => [];
 
-    public TerminalInstance StartIn(GitBench.Git.Repo repo, ITerminalLaunch launch) => throw new NotSupportedException();
+    public TerminalInstance StartIn(Zdev.Git.Repo repo, ITerminalLaunch launch) => throw new NotSupportedException();
 
-    public void CloseIn(GitBench.Git.Repo repo, TerminalInstance terminal) { }
+    public void CloseIn(Zdev.Git.Repo repo, TerminalInstance terminal) { }
 }

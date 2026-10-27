@@ -6,7 +6,7 @@ using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Settings;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui.Desktop;

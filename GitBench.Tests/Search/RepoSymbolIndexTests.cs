@@ -1,6 +1,6 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Search;
-using GitBench.Git;
+using Zdev.Git;
 using Xunit;
 
 namespace GitBench.Tests.Search;

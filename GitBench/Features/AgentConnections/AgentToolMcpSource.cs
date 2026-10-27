@@ -2,7 +2,7 @@ using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Review.Walkthrough;
-using GitBench.Git;
+using Zdev.Git;
 using McpSdk.Adapter.System.Text.Json;
 using McpSdk.Protocol;
 using McpSdk.Protocol.Models;

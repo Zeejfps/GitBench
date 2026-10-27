@@ -2,6 +2,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Theming;
 
 using TreeSitter;
+using Zdev.Git;
 
 namespace GitBench.Features.Diff;
 

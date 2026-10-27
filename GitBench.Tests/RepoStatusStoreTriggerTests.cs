@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

@@ -1,7 +1,7 @@
 using System.Text;
 using GitBench.Controls;
 using GitBench.Features.Diff;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Theming;

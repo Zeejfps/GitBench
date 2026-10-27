@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using GitBench.Features.Commits;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;

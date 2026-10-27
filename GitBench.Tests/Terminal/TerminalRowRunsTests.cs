@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using GitBench.Features.Terminal;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using Xunit;
 
 namespace GitBench.Tests.Terminal;

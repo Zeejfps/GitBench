@@ -1,7 +1,7 @@
 ﻿using GitBench.App;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.FileBrowser;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 using Xunit;
 

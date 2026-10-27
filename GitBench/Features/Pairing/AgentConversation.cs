@@ -1,5 +1,5 @@
 using GitBench.Features.Editor;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;

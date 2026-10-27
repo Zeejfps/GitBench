@@ -2,7 +2,7 @@ using System.Text;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;

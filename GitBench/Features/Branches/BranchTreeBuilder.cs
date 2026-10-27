@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Infrastructure;
+using Zdev.Git;
 
 namespace GitBench.Features.Branches;
 

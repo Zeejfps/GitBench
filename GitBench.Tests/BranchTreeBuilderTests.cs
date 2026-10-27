@@ -1,6 +1,7 @@
 using GitBench.Features.Branches;
 using GitBench.Features.Repos;
 using Xunit;
+using Zdev.Git;
 
 namespace GitBench.Tests;
 

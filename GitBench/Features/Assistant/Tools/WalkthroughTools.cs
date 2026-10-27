@@ -2,7 +2,7 @@ using System.Text.Json;
 using GitBench.Features.Diff;
 using GitBench.Features.Review;
 using GitBench.Features.Review.Walkthrough;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 
 namespace GitBench.Features.Assistant.Tools;

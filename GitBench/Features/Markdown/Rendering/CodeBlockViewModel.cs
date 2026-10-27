@@ -1,6 +1,6 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Theming;
 using ZGF.Observable;

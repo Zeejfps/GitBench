@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;

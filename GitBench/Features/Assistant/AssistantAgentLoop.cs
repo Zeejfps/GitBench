@@ -4,7 +4,7 @@ using System.Text.Json;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 
 namespace GitBench.Features.Assistant;

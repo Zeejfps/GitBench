@@ -1,5 +1,5 @@
 using GitBench.Controls;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Fonts;

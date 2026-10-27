@@ -1,5 +1,5 @@
 using System.Text.Json;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 
 namespace GitBench.Features.Assistant.Tools;

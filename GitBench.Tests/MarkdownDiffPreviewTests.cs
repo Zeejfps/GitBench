@@ -1,7 +1,7 @@
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
-using GitBench.Git;
+using Zdev.Git;
 using Xunit;
 
 namespace GitBench.Tests;

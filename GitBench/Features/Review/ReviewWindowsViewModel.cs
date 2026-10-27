@@ -4,7 +4,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;

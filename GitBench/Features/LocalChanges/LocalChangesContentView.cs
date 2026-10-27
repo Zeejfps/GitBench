@@ -1,7 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;

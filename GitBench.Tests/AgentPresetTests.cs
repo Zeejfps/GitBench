@@ -1,11 +1,12 @@
 using System.Text.Json.Nodes;
 using GitBench.App;
 using GitBench.Features.AgentConnections;
-using GitBench.Features.AgentConnections.Acp;
+using Zdev.Agents.Acp;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;
+using Zdev.Agents;
 
 namespace GitBench.Tests;
 

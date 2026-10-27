@@ -1,5 +1,6 @@
 using GitBench.Infrastructure;
 using ZGF.Gui;
+using Zdev.Common;
 
 namespace GitBench.Features.Editor;
 

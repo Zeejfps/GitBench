@@ -2,6 +2,7 @@
 using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Gui;
+using Zdev.Common;
 
 namespace GitBench.Features.Editor;
 

@@ -3,6 +3,7 @@ using GitBench.Features.Editor;
 using GitBench.Infrastructure;
 using GitBench.Lsp.Documents;
 using GitBench.Theming;
+using Zdev.Common;
 
 namespace GitBench.Features.Pairing;
 

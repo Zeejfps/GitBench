@@ -1,5 +1,5 @@
-using GitBench.Terminal.Vt;
-using GitBench.Terminal.Vt.Adapters;
+using Zdev.Terminal.Vt;
+using Zdev.Terminal.Vt.Adapters;
 
 namespace GitBench.Features.Terminal;
 

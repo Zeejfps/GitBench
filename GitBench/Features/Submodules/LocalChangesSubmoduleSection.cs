@@ -6,6 +6,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.Submodules;
 

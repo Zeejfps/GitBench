@@ -2,7 +2,7 @@ using System.Text;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Theming;

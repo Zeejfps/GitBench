@@ -20,19 +20,20 @@ using GitBench.Features.Review;
 using GitBench.Features.Search;
 using GitBench.Features.Submodules;
 using GitBench.Features.Terminal;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using GitBench.Features.Worktrees;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Input;
 using GitBench.Lsp.Lifecycle;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
-using GitBench.Pty;
+using Zdev.Pty;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
+using Zdev.Common;
 
 namespace GitBench.App;
 

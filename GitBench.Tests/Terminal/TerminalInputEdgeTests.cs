@@ -1,7 +1,7 @@
 using System.Text;
 using GitBench.Features.Terminal;
 using GitBench.Localization;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;

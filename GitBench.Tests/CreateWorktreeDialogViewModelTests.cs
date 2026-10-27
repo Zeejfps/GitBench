@@ -1,5 +1,5 @@
 using GitBench.Features.Worktrees;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;

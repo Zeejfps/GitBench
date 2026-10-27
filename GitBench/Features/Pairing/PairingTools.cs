@@ -1,7 +1,7 @@
 using System.Text.Json;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.FileBrowser;
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 
 namespace GitBench.Features.Pairing;

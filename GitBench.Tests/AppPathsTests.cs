@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Infrastructure;
 using Xunit;
+using Zdev.Common;
 
 namespace GitBench.Tests;
 

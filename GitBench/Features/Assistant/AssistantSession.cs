@@ -1,5 +1,5 @@
 using GitBench.Features.Assistant.Backend;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using ZGF.Gui;
 using ZGF.Observable;

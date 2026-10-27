@@ -4,7 +4,7 @@ using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Pairing;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Features.AgentConnections;
 

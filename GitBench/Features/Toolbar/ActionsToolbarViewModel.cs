@@ -6,7 +6,7 @@ using GitBench.Features.Operations;
 using GitBench.Features.Pairing;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;

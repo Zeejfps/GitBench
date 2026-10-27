@@ -11,6 +11,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using Zdev.Agents;
 
 namespace GitBench.Features.Pairing;
 

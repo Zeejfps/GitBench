@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.CodeIntel;
 using GitBench.Infrastructure;
+using Zdev.Common;
 
 namespace GitBench.Features.FileBrowser;
 

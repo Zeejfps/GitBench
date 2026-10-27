@@ -6,7 +6,7 @@ using GitBench.Features.Editor;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review.Walkthrough;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;

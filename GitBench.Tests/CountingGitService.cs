@@ -3,7 +3,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Submodules;
-using GitBench.Git;
+using Zdev.Git;
 
 namespace GitBench.Tests;
 

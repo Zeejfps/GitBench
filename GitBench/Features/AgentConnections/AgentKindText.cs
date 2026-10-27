@@ -1,4 +1,5 @@
 using GitBench.Localization;
+using Zdev.Agents;
 
 namespace GitBench.Features.AgentConnections;
 

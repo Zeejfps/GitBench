@@ -6,7 +6,7 @@ using GitBench.Features.LanguageServers;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;

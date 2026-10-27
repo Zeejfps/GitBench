@@ -4,7 +4,7 @@ using GitBench.Features.LanguageServers;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using McpSdk.Adapter.System.Text.Json;

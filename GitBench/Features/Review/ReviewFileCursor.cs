@@ -2,6 +2,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
+using Zdev.Git;
 
 namespace GitBench.Features.Review;
 

@@ -1,5 +1,5 @@
 ﻿using GitBench.Features.FileBrowser;
-using GitBench.Git;
+using Zdev.Git;
 using Xunit;
 
 namespace GitBench.Tests;

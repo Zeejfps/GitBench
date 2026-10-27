@@ -1,4 +1,4 @@
-using GitBench.Git;
+using Zdev.Git;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;

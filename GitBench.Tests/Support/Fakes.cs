@@ -4,7 +4,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;

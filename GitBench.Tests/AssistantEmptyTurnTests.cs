@@ -2,7 +2,7 @@ using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Localization;
 using ZGF.Observable;
 using Xunit;

@@ -1,6 +1,6 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;

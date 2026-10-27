@@ -4,7 +4,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Theming;
 using ZGF.Observable;
 

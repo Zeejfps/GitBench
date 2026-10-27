@@ -4,7 +4,7 @@ using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
 using GitBench.Features.Search;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Lsp;
 using Xunit;
 

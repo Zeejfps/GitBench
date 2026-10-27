@@ -5,7 +5,7 @@ using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
-using GitBench.Terminal.Vt;
+using Zdev.Terminal.Vt;
 using GitBench.Widgets;
 using ZGF.Desktop;
 using ZGF.Geometry;

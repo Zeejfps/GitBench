@@ -3,7 +3,7 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Repos;
-using GitBench.Git;
+using Zdev.Git;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
