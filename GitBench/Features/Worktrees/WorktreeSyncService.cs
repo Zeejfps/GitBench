@@ -113,7 +113,9 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
             }
             if (primary is null || !primary.IsPrimary) return;
 
-            var infos = _git.ListWorktrees(primary);
+            // A listing git couldn't complete leaves the rows as they were, rather than clearing them.
+            if (_git.ListWorktrees(primary) is not Fetched<IReadOnlyList<WorktreeInfo>>.Ok listed) return;
+            var infos = listed.Value;
             var primaryNormalized = PathKey.Normalize(primary.Path);
 
             string? primaryBranch = null;

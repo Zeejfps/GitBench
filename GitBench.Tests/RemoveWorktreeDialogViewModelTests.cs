@@ -104,7 +104,7 @@ public sealed class RemoveWorktreeDialogViewModelTests
     {
         public WorktreeRemoveOutcome Outcome = WorktreeRemoveOutcome.Ok;
 
-        public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary) => Array.Empty<WorktreeInfo>();
+        public Fetched<IReadOnlyList<WorktreeInfo>> ListWorktrees(Repo primary) => new Fetched<IReadOnlyList<WorktreeInfo>>.Ok(Array.Empty<WorktreeInfo>());
         public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request) => WorktreeAddOutcome.Ok;
         public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => Outcome;
         public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => GitOutcome.Ok;
