@@ -2102,7 +2102,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // fine. A destination whose HEAD resolves got through fetch, ref setup and checkout —
             // treat that as cloned and carry git's complaint as a warning, rather than discarding a
             // working tree the user would then have to delete by hand before retrying.
-            if (RepoStateStore.IsGitRepo(fullTarget) && RefExists(fullTarget, "HEAD"))
+            if (IsGitRepo(fullTarget) && RefExists(fullTarget, "HEAD"))
             {
                 var warning = GitProcessRunner.ErrorTail(captureText);
                 return new CloneOutcome.Cloned(
