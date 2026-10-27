@@ -55,7 +55,7 @@ internal sealed class CreateBranchDialogViewModel
         NameStatus = new Derived<FieldStatus?>(() =>
         {
             var s = loc.Strings.Value;
-            return RefNameRules.Validate(Name.Value, s, s.RefnameNounBranch);
+            return RefNameMessages.Validate(Name.Value, s, s.RefnameNounBranch);
         });
 
         Create = AsyncCommand.ForOutcome(

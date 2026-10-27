@@ -55,7 +55,7 @@ internal sealed class CreateWorktreeDialogViewModel
         NewBranchStatus = new Derived<FieldStatus?>(() =>
         {
             var s = loc.Strings.Value;
-            return RefNameRules.Validate(NewBranchName.Value.Trim(), s, s.RefnameNounBranch);
+            return RefNameMessages.Validate(NewBranchName.Value.Trim(), s, s.RefnameNounBranch);
         });
         var gate = new Derived<bool>(() =>
             ParentDir.Value.Trim().Length > 0 && FolderName.Value.Trim().Length > 0

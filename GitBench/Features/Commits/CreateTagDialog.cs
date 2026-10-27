@@ -48,7 +48,7 @@ internal sealed record CreateTagDialog : Widget
         var nameStatus = new Derived<FieldStatus?>(() =>
         {
             var strings = loc.Strings.Value;
-            return RefNameRules.Validate(name.Value.Trim(), strings, strings.RefnameNounTag);
+            return RefNameMessages.Validate(name.Value.Trim(), strings, strings.RefnameNounTag);
         });
         var gate = new Derived<bool>(() =>
             name.Value.Trim().Length > 0 && RefNameRules.IsValid(name.Value.Trim()));
