@@ -255,7 +255,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     {
         var profile = _profiles.Find(profileId);
         if (profile == null) return;
-        var config = LocalIdentityConfig.For(profile);
+        var config = ProfileIdentityConfig.For(profile);
         var dispatcher = Dispatcher;
         var strings = _loc.Strings.Value;
         Task.Run(() =>

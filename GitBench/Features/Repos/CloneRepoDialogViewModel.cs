@@ -75,7 +75,7 @@ internal sealed class CloneRepoDialogViewModel
             work: () =>
             {
                 var target = Path.Combine(ParentDir.Value.Trim(), FolderName.Value.Trim());
-                var config = Resolve(profiles) is { } profile ? LocalIdentityConfig.For(profile) : null;
+                var config = Resolve(profiles) is { } profile ? ProfileIdentityConfig.For(profile) : null;
                 switch (gitService.Clone(Url.Value.Trim(), target, config))
                 {
                     case CloneOutcome.Failed failed:
