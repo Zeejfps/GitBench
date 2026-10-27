@@ -6,17 +6,14 @@ using GitBench.Messages;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
-using ZGF.Gui.Desktop.Platforms.Linux;
 using ZGF.Gui.Desktop.Platforms.Osx;
-using ZGF.Gui.Desktop.Platforms.Windows;
 using ZGF.Observable;
 
 namespace GitBench.Platform;
 
 internal static class PlatformServices
 {
-    // The clipboard, popup decorator and window chrome all fall through to GuiApp's defaults where
-    // no entry registers one.
+    // The clipboard falls through to GuiApp's default where no entry registers one.
     extension(Context context)
     {
         public void AddPlatformServices()
@@ -33,22 +30,16 @@ internal static class PlatformServices
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 context.AddService<IPlatformShell>(new WindowsPlatformShell());
-                context.AddService<IPopupNativeDecorator>(new WindowsPopupDecorator());
-                context.AddService<IWindowChrome>(new WindowsWindowChrome());
-                context.AddService<IWindowModality>(new WindowsWindowModality());
                 context.AddService<IAppMenu>(new NoopAppMenu());
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
                 context.AddService<IPlatformShell>(new MacOSPlatformShell());
-                context.AddService<IPopupNativeDecorator>(new MacOsPopupDecorator());
-                context.AddService<IWindowChrome>(new MacOsWindowChrome());
                 context.AddService<IAppMenu>(new MacOsAppMenu());
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 context.AddService<IPlatformShell>(new LinuxPlatformShell());
-                context.AddService<IWindowChrome>(new LinuxWindowChrome());
                 context.AddService<IAppMenu>(new NoopAppMenu());
             }
             else

@@ -7,6 +7,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Testing;
+using RichTextRun = GitBench.Features.Markdown.Rendering.RichTextRun;
 
 namespace GitBench.Tests.Markdown;
 

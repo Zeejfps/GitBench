@@ -2,6 +2,11 @@ using GitBench.Features.Markdown.Rendering;
 using Xunit;
 using ZGF.Gui;
 using ZGF.Gui.Testing;
+using RichTextRun = GitBench.Features.Markdown.Rendering.RichTextRun;
+using RichTextSegment = GitBench.Features.Markdown.Rendering.RichTextSegment;
+using RichTextLine = GitBench.Features.Markdown.Rendering.RichTextLine;
+using RichTextLayout = GitBench.Features.Markdown.Rendering.RichTextLayout;
+using RichTextLayoutResult = GitBench.Features.Markdown.Rendering.RichTextLayoutResult;
 
 namespace GitBench.Tests.Markdown;
 

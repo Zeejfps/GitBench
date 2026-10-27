@@ -10,6 +10,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
+using RichTextRun = GitBench.Features.Markdown.Rendering.RichTextRun;
 
 namespace GitBench.Features.Pairing;
 

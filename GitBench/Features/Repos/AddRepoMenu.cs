@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
+using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 

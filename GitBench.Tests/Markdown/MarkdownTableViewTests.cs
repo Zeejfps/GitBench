@@ -3,6 +3,7 @@ using GitBench.Features.Markdown.Rendering;
 using Xunit;
 using ZGF.Gui;
 using ZGF.Gui.Testing;
+using RichTextRun = GitBench.Features.Markdown.Rendering.RichTextRun;
 
 namespace GitBench.Tests.Markdown;
 

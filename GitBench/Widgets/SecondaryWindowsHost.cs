@@ -28,7 +28,6 @@ internal sealed record SecondaryWindowsHost<TVm> : Widget where TVm : class
         private readonly Dictionary<TVm, ISecondaryWindow> _windows = new();
         private readonly SecondaryWindowsHost<TVm> _host;
         private readonly ISecondaryWindowFactory _windowFactory;
-        private readonly IWindowChrome? _windowChrome;
         private readonly State<ThemeMode>? _themeMode;
 
         public Core(Context ctx, SecondaryWindowsHost<TVm> host)
@@ -37,13 +36,12 @@ internal sealed record SecondaryWindowsHost<TVm> : Widget where TVm : class
             Height = 0;
             _host = host;
             _windowFactory = ctx.Require<ISecondaryWindowFactory>();
-            _windowChrome = ctx.Get<IWindowChrome>();
             _themeMode = ctx.Get<State<ThemeMode>>();
 
             this.Use(() => host.Windows.Subscribe(OnWindowsChanged));
             if (host.FocusRequests != null)
                 this.Use(() => host.FocusRequests(FocusExisting));
-            if (_windowChrome != null && _themeMode != null)
+            if (_themeMode != null)
                 this.Bind(_themeMode, _ =>
                 {
                     foreach (var win in _windows.Values) ApplyTitleBarTheme(win);
@@ -52,8 +50,8 @@ internal sealed record SecondaryWindowsHost<TVm> : Widget where TVm : class
 
         private void ApplyTitleBarTheme(ISecondaryWindow win)
         {
-            if (_windowChrome == null || _themeMode == null) return;
-            _windowChrome.SetTitleBarTheme(win.Window, _themeMode.Value == ThemeMode.Dark);
+            if (_themeMode == null) return;
+            win.Window.SetTitleBarTheme(_themeMode.Value == ThemeMode.Dark);
         }
 
         private void OnWindowsChanged(ListChange<TVm> change)

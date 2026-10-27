@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
+using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Input;
