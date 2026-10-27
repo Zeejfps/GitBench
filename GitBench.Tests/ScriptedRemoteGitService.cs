@@ -150,7 +150,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false) => inner.AbortOperation(repo, state, forceQuit);
     public ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state) => inner.ContinueOperation(repo, state);
     public ContinueOutcome SkipOperation(Repo repo, RepoOperationState state) => inner.SkipOperation(repo, state);
-    public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary) => inner.ListWorktrees(primary);
+    public Fetched<IReadOnlyList<WorktreeInfo>> ListWorktrees(Repo primary) => inner.ListWorktrees(primary);
     public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request) => inner.AddWorktree(primary, request);
     public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => inner.RemoveWorktree(primary, worktreePath, force);
     public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => inner.UnlockWorktree(primary, worktreePath);

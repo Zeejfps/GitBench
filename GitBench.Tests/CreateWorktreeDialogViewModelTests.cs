@@ -154,7 +154,7 @@ public sealed class CreateWorktreeDialogViewModelTests
         public WorktreeAddOutcome Outcome = WorktreeAddOutcome.Ok;
         public WorktreeAddRequest? Request;
 
-        public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary) => Array.Empty<WorktreeInfo>();
+        public Fetched<IReadOnlyList<WorktreeInfo>> ListWorktrees(Repo primary) => new Fetched<IReadOnlyList<WorktreeInfo>>.Ok(Array.Empty<WorktreeInfo>());
 
         public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request)
         {
