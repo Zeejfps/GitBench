@@ -62,7 +62,9 @@ jobs:
             exe: DiffDino
             icon: macicon/AppIcon.icns
             extra: "--bundleId com.builtbyzee.gitbench"
-          - os: ubuntu-latest
+          # Pinned: ubuntu-26.04's toolchain stamps the AOT binary "x86 ISA needed: x86-64-v3",
+          # so glibc refuses to start it on pre-AVX2 CPUs ("CPU ISA level is lower than required").
+          - os: ubuntu-24.04
             rid: linux-x64
             channel: linux-x64
             exe: DiffDino
