@@ -33,6 +33,23 @@ Download the build for your system from the
 - **macOS:** Apple Silicon or Intel build.
 - **Linux:** AppImage.
 
+Or install the latest release from a terminal:
+
+**macOS / Linux:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Zeejfps/GitBench/main/install.sh | sh
+```
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Zeejfps/GitBench/main/install.ps1 | iex
+```
+
+On macOS this installs into `/Applications` and asks for your password; on Linux it puts
+the AppImage in `~/.local/bin`. See [install.sh](install.sh) and [install.ps1](install.ps1).
+
 You also need [Git](https://git-scm.com/downloads) installed and available on your
 `PATH`. No .NET installation is needed. Installed builds check for updates and let
 you restart to apply them.
