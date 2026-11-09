@@ -1,4 +1,5 @@
 using GitBench.App;
+using GitBench.Platform;
 using Velopack;
 using ZGF.Observable;
 
@@ -14,6 +15,8 @@ internal static class Program
             RecoveryUpdater.TryApplyLatest();
             return 0;
         }
+
+        LinuxDesktopEntry.EnsureRegistered();
 
         var health = StartupHealth.BeginLaunch(AppPaths.AppDataPath("startup.state"), AppVersion.Display);
         if (health.IsCrashLooping)
