@@ -21,13 +21,6 @@ namespace GitBench.Tests;
 /// stop.</summary>
 public sealed class PairingStopSlotTests : IDisposable
 {
-    private sealed class FakeClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
-    }
-
     private sealed class FakeShell : IPlatformShell
     {
         public void OpenFolder(string path) { }

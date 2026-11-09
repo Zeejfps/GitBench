@@ -269,7 +269,7 @@ public sealed class AgentConnectionServiceTests : IDisposable
     {
         using var service = Service();
         using var vm = new AgentConnectionsSettingsViewModel(
-            _settings, _state, new NoopClipboard(), new MessageBus(), new LocalizationService(new State<Locale>(Locale.En)));
+            _settings, _state, new FakeClipboard(), new MessageBus(), new LocalizationService(new State<Locale>(Locale.En)));
 
         vm.PortDraft.Value = "abc";
         Assert.True(vm.PortInvalid.Value);
@@ -290,11 +290,5 @@ public sealed class AgentConnectionServiceTests : IDisposable
         Assert.Contains(":6200/", Assert.IsType<AgentConnectionState.Listening>(_state.Value).Endpoint.ToString());
         Assert.True(vm.CanCopy.Value);
         Assert.Contains("Listening on http://127.0.0.1:6200/", vm.StatusText.Value);
-    }
-
-    private sealed class NoopClipboard : ZGF.Gui.IClipboard
-    {
-        public void SetText(string text) { }
-        public string? GetText() => null;
     }
 }

@@ -398,16 +398,9 @@ public sealed class DiffUsageLensTests(CodeIntelFixture fixture)
         ctx.AddService(mode);
         ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(mode));
         ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-        ctx.AddService<IClipboard>(new NullClipboard());
+        ctx.AddService<IClipboard>(new FakeClipboard());
         ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
     }
 
     private static ILocalizationService Loc() => new LocalizationService(new State<Locale>(Locale.En));
-
-    private sealed class NullClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
-    }
 }

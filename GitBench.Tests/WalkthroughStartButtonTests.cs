@@ -25,13 +25,6 @@ public sealed class WalkthroughStartButtonTests : IDisposable
     private const int Width = 800;
     private const int Height = 200;
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
-    }
-
     private sealed class FakeShell : IPlatformShell
     {
         public void OpenFolder(string path) { }

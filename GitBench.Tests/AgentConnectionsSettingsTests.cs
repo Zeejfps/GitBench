@@ -19,13 +19,6 @@ public sealed class AgentConnectionsSettingsTests
     private const int Width = 700;
     private const int Height = 400;
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text { get; private set; }
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
     private readonly State<AgentConnectionSettings> _settings = new(new AgentConnectionSettings(false, 5577, null));
     private readonly State<AgentConnectionState> _state = new(new AgentConnectionState.Off());
     private readonly FakeClipboard _clipboard = new();

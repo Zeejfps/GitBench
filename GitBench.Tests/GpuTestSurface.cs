@@ -90,7 +90,7 @@ internal sealed class GpuTestSurface(
             Assert.NotEqual(IntPtr.Zero, device);
             queue = msg_IntPtr(device, Sel("newCommandQueue"));
             Assert.NotEqual(IntPtr.Zero, queue);
-            images = new MetalImageManager(device);
+            images = new MetalImageManager(device, queue);
             shared = new MetalSharedResources(device, queue, fonts, images);
             canvas = new MetalRenderedCanvas(width, height, fonts, font, shared, scale);
             var pixelWidth = (int)MathF.Round(width * scale);

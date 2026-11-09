@@ -4,6 +4,7 @@ using GitBench.Localization;
 using Zdev.Pty;
 using Zdev.Terminal.Vt;
 using GitBench.Theming;
+using ZGF.Desktop.Input;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;

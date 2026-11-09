@@ -108,7 +108,7 @@ public sealed class RepoCustomColorTests : IDisposable
                 ctx.AddService<IRepoRegistry>(registry);
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new Clipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
             });
         h.Layout();
         return h;
@@ -121,9 +121,4 @@ public sealed class RepoCustomColorTests : IDisposable
     }
 
     public void Dispose() => _dir.Dispose();
-    private sealed class Clipboard : IClipboard
-    {
-        public string? GetText() => null;
-        public void SetText(string text) { }
-    }
 }

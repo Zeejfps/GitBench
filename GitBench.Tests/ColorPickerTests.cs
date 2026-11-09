@@ -245,12 +245,6 @@ public sealed class ColorPickerTests
     {
         ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(theme)));
         ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-        ctx.AddService<IClipboard>(new Clipboard());
-    }
-
-    private sealed class Clipboard : IClipboard
-    {
-        public string? GetText() => null;
-        public void SetText(string text) { }
+        ctx.AddService<IClipboard>(new FakeClipboard());
     }
 }

@@ -88,16 +88,9 @@ public class FileSearchBarLayerTests
                 ctx.AddService(mode);
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(mode));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new NoClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
             });
         view = built;
         return harness;
-    }
-
-    private sealed class NoClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
     }
 }
