@@ -42,7 +42,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZGF.Svg", "framework\ZGF.Sv
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZGF.Gui.OpenGL", "framework\ZGF.Gui.OpenGL\ZGF.Gui.OpenGL.csproj", "{20009DCA-30EF-4251-84AE-A6F555830589}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JpegSharp", "framework\JpegSharp\JpegSharp.csproj", "{470E50E5-229B-4E8F-B972-FF7D1473330E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JpegSharp", "framework\JpegSharp\JpegSharp\JpegSharp.csproj", "{470E50E5-229B-4E8F-B972-FF7D1473330E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "external", "external", "{A288BEE0-695A-BEEA-455C-649571D89326}"
 EndProject
