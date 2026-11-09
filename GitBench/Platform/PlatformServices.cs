@@ -20,9 +20,6 @@ internal static class PlatformServices
     {
         public void AddPlatformServices()
         {
-            // Unowned: the Windows picker hangs inside IFileDialog::Show when given the main window.
-            context.AddNativeFilePicker(null);
-
             // The OS credential store (DPAPI / Keychain / Secret Service), under
             // ISecretStore. The folder name is the app's stable identity: change it and saved
             // secrets stop resolving.
