@@ -3,8 +3,8 @@ using GitBench.Features.LocalChanges;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
-using ZGF.Gui.Desktop;
 using Zdev.Agents;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.App;
 

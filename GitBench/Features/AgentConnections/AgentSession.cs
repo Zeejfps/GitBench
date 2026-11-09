@@ -1,7 +1,7 @@
 using GitBench.Features.Review.Walkthrough;
 using Zdev.Git;
-using ZGF.Gui.Desktop;
 using ZGF.Observable;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Features.AgentConnections;
 

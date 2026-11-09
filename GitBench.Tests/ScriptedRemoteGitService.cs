@@ -153,6 +153,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public Fetched<IReadOnlyList<WorktreeInfo>> ListWorktrees(Repo primary) => inner.ListWorktrees(primary);
     public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request) => inner.AddWorktree(primary, request);
     public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => inner.RemoveWorktree(primary, worktreePath, force);
+    public WorktreeResetOutcome ResetWorktree(Repo primary, WorktreeResetRequest request) => inner.ResetWorktree(primary, request);
     public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => inner.UnlockWorktree(primary, worktreePath);
     public GitOutcome PruneWorktrees(Repo primary) => inner.PruneWorktrees(primary);
     public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary) => inner.ListSubmodules(primary);

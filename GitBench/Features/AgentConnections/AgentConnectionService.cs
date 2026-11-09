@@ -1,6 +1,7 @@
 using McpSdk.Server;
-using ZGF.Gui.Desktop;
 using ZGF.Observable;
+using ZGF.Gui.Desktop;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Features.AgentConnections;
 
@@ -109,7 +110,6 @@ internal sealed class AgentConnectionService : IDisposable
                 Instructions = AgentConnectionInstructions.Text,
                 Prompts = _prompts,
                 ToolSources = [_source],
-                IncludeGuiTools = false,
             };
             switch (_host.Start(options))
             {

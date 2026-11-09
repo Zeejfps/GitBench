@@ -16,10 +16,10 @@ using Zdev.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Automation;
 using ZGF.Observable;
 using Xunit;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Tests;
 
@@ -121,9 +121,7 @@ public sealed class AgentToolMcpSourceTests : IDisposable
                 PathToken = _token,
                 ToolSources = [_source],
                 Prompts = new WalkthroughPrompt(),
-                IncludeGuiTools = false,
-            },
-            new GuiDriver(() => [], new InlineDispatcher(), (_, _, _) => { }));
+            });
         _client = new McpTestClient(_server.Endpoint);
     }
 

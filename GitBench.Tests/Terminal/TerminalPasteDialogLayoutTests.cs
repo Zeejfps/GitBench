@@ -39,7 +39,7 @@ public class TerminalPasteDialogLayoutTests
         var font = fonts.LoadFontFromMemory(
             EmbeddedAssets.LoadBytes(typeof(LucideIcons).Assembly, "Inter-Italic.ttf"), 16);
 
-        using var harness = GuiTestHarness.CreateRaster(
+        using var harness = GuiTestHarness.Create(
             ctx => new ConfirmPasteDialog
             {
                 Lines = 19,
@@ -48,9 +48,10 @@ public class TerminalPasteDialogLayoutTests
                 OnRun = () => { },
                 OnFlatten = () => { },
             }.BuildView(ctx),
-            fonts, font, (int)ConfirmPasteDialog.FrameWidth + 200, 320,
+            (int)ConfirmPasteDialog.FrameWidth + 200, 320,
             configure: ctx =>
             {
+                ctx.Canvas = new CaptureCanvas(fonts, font);
                 ctx.AddService<IThemeService<ThemeStyles>>(
                     new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(

@@ -14,6 +14,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Tests;
 

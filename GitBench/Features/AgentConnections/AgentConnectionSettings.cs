@@ -1,5 +1,5 @@
 using GitBench.App;
-using ZGF.Gui.Desktop;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Features.AgentConnections;
 

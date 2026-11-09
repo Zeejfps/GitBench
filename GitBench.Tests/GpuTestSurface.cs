@@ -34,6 +34,7 @@ internal sealed class GpuTestSurface(
         var pixelWidth = (int)MathF.Round(width * scale);
         var pixelHeight = (int)MathF.Round(height * scale);
         var window = GLFW.Glfw.CreateWindow(pixelWidth, pixelHeight, "Settings rendering test", GLFW.Monitor.None, GLFW.Window.None);
+        GlEntryPointOwner? entryPoints = null;
         GlImageManager? images = null;
         GlSharedResources? shared = null;
         OpenGlRenderedCanvas? canvas = null;
@@ -44,11 +45,13 @@ internal sealed class GpuTestSurface(
             images?.Dispose();
             GLFW.Glfw.DestroyWindow(window);
             GLFW.Glfw.Terminate();
+            entryPoints?.Dispose();
         }
         try
         {
             GLFW.Glfw.MakeContextCurrent(window);
-            GL46.Import(GLFW.Glfw.GetProcAddress);
+            entryPoints = GlEntryPointOwner.Claim(nameof(GpuTestSurface));
+            GL46.Import(entryPoints, GLFW.Glfw.GetProcAddress);
             images = new GlImageManager();
             shared = new GlSharedResources(fonts, images);
             canvas = new OpenGlRenderedCanvas(width, height, fonts, font, shared, scale);

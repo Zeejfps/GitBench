@@ -163,6 +163,7 @@ public sealed class CreateWorktreeDialogViewModelTests
         }
 
         public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => WorktreeRemoveOutcome.Ok;
+        public WorktreeResetOutcome ResetWorktree(Repo primary, WorktreeResetRequest request) => WorktreeResetOutcome.Ok;
         public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => GitOutcome.Ok;
         public GitOutcome PruneWorktrees(Repo primary) => GitOutcome.Ok;
     }

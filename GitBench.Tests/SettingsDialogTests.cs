@@ -341,9 +341,13 @@ public sealed class SettingsDialogTests : IDisposable
         using var fonts = new FreeTypeFontBackend();
         var font = fonts.LoadFontFromMemory(
             EmbeddedAssets.LoadBytes(typeof(LucideIcons).Assembly, "Inter-Italic.ttf"), 16);
-        using var h = GuiTestHarness.CreateRaster(
-            ctx => new Center { Child = _dialog }.BuildView(ctx), fonts, font,
-            width: 640, height: 480, configure: Configure);
+        using var h = GuiTestHarness.Create(
+            ctx => new Center { Child = _dialog }.BuildView(ctx),
+            width: 640, height: 480, configure: ctx =>
+            {
+                ctx.Canvas = new CaptureCanvas(fonts, font);
+                Configure(ctx);
+            });
         h.ClickOn(SettingsDialog.AgentTabId);
         _dialog.State.Agent.SetKeyProviderDraft(AssistantProviders.Ollama.Id);
         h.Layout();
@@ -368,12 +372,12 @@ public sealed class SettingsDialogTests : IDisposable
         using var fonts = new FreeTypeFontBackend();
         var font = fonts.LoadFontFromMemory(
             EmbeddedAssets.LoadBytes(typeof(Context).Assembly, "Inter-Regular.ttf"), (int)MathF.Round(16 * dpiScale));
-        using var h = GuiTestHarness.CreateRaster(
-            ctx => new Center { Child = _dialog }.BuildView(ctx), fonts, font,
+        using var h = GuiTestHarness.Create(
+            ctx => new Center { Child = _dialog }.BuildView(ctx),
             width: 640, height: 480, configure: ctx =>
             {
+                ctx.Canvas = new CaptureCanvas(fonts, font, dpiScale);
                 Configure(ctx);
-                Assert.IsType<RasterCanvas>(ctx.Canvas).UpdateDpiScale(dpiScale);
             });
         h.Layout();
         AssertCategoryLabelsFit(h);
@@ -396,12 +400,12 @@ public sealed class SettingsDialogTests : IDisposable
         using var fonts = new FreeTypeFontBackend();
         var font = fonts.LoadFontFromMemory(
             EmbeddedAssets.LoadBytes(typeof(Context).Assembly, "Inter-Regular.ttf"), (int)MathF.Round(16 * dpiScale));
-        using var h = GuiTestHarness.CreateRaster(
-            ctx => new Center { Child = _dialog }.BuildView(ctx), fonts, font,
+        using var h = GuiTestHarness.Create(
+            ctx => new Center { Child = _dialog }.BuildView(ctx),
             width: 640, height: 480, configure: ctx =>
             {
+                ctx.Canvas = new CaptureCanvas(fonts, font, dpiScale);
                 Configure(ctx);
-                Assert.IsType<RasterCanvas>(ctx.Canvas).UpdateDpiScale(dpiScale);
             });
         h.ClickOn(tab);
         h.Layout();

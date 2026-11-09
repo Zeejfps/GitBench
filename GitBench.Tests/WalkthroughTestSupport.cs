@@ -1,6 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.Review.Walkthrough;
 using ZGF.Observable;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Tests;
 

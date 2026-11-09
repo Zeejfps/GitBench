@@ -7,8 +7,8 @@ using McpSdk.Adapter.System.Text.Json;
 using McpSdk.Protocol;
 using McpSdk.Protocol.Models;
 using McpSdk.Server;
-using ZGF.Gui.Desktop;
 using ZGF.Observable;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Features.AgentConnections;
 
@@ -45,11 +45,11 @@ internal sealed class AgentToolMcpSource : IMcpToolSource
     /// <summary>How many client sessions are open. UI-thread state.</summary>
     public IReadable<int> OpenSessions => _openSessions;
 
-    public void Register(McpSession session, DefaultToolsController tools)
+    public void Register(McpSession session, McpToolSet tools)
     {
         var agent = new AgentSession(session, _surface.Dispatcher, _clock);
         foreach (var definition in _export.Definitions())
-            tools.AddTool(new Handler(this, agent, definition));
+            tools.Add(new Handler(this, agent, definition));
 
         _surface.Dispatcher.Post(() => _openSessions.Value++);
         session.Ended.Register(() => _surface.Dispatcher.Post(() =>

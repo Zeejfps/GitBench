@@ -47,7 +47,7 @@ public class ConfirmCloseTerminalDialogLayoutTests
             width: 900, height: 700,
             configure: ctx =>
             {
-                var canvas = new RasterCanvas(900, 700, fonts, font, dpiScale: scale);
+                var canvas = new CaptureCanvas(fonts, font, scale);
                 canvas.RegisterFont(LucideIcons.FontFamily, icons);
                 ctx.Canvas = canvas;
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));

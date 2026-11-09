@@ -134,11 +134,13 @@ public sealed class ColorPickerTests
         var font = fonts.LoadFontFromMemory(EmbeddedAssets.LoadBytes(typeof(Context).Assembly, "Inter-Regular.ttf"), 16);
         var iconFont = fonts.LoadFontFromMemory(EmbeddedAssets.LoadBytes(typeof(LucideIcons).Assembly, "Lucide.ttf"), 16);
         var dialog = new RepoCustomizeIconDialog { Repo = new(Guid.NewGuid(), dir.Path, "GitBench"), OnClose = () => { } };
-        using var h = GuiTestHarness.CreateRaster(ctx => new Center { Child = dialog }.BuildView(ctx), fonts, font,
+        using var h = GuiTestHarness.Create(ctx => new Center { Child = dialog }.BuildView(ctx),
             width: 640, height: 700, configure: ctx =>
             {
+                var canvas = new CaptureCanvas(fonts, font);
+                canvas.RegisterFont(LucideIcons.FontFamily, iconFont);
+                ctx.Canvas = canvas;
                 Configure(ctx, theme);
-                ((RenderedCanvasBase)ctx.Canvas).RegisterFont(LucideIcons.FontFamily, iconFont);
                 ctx.AddService<IRepoRegistry>(registry);
             });
         h.Layout();

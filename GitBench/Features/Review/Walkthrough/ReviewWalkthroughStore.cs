@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using GitBench.Features.Diff;
 using ZGF.Observable;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Features.Review.Walkthrough;
 

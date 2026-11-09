@@ -107,6 +107,7 @@ public sealed class RemoveWorktreeDialogViewModelTests
         public Fetched<IReadOnlyList<WorktreeInfo>> ListWorktrees(Repo primary) => new Fetched<IReadOnlyList<WorktreeInfo>>.Ok(Array.Empty<WorktreeInfo>());
         public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request) => WorktreeAddOutcome.Ok;
         public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => Outcome;
+        public WorktreeResetOutcome ResetWorktree(Repo primary, WorktreeResetRequest request) => WorktreeResetOutcome.Ok;
         public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => GitOutcome.Ok;
         public GitOutcome PruneWorktrees(Repo primary) => GitOutcome.Ok;
     }

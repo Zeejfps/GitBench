@@ -9,9 +9,9 @@ using GitBench.Localization;
 using GitBench.Messages;
 using McpSdk.Adapter.System.Text.Json;
 using McpSdk.Server;
-using ZGF.Gui.Desktop;
 using ZGF.Observable;
 using Xunit;
+using ZGF.Gui.Mcp;
 
 namespace GitBench.Tests;
 
@@ -99,7 +99,6 @@ public sealed class AgentConnectionServiceTests : IDisposable
         Assert.NotNull(options.PathToken);
         Assert.Equal(AgentConnectionSettings.DefaultPort, options.Port);
         Assert.Equal(AgentConnectionService.ServerName, options.ServerName);
-        Assert.False(options.IncludeGuiTools);
         Assert.Same(_source, Assert.Single(options.ToolSources));
         Assert.Equal(AgentConnectionInstructions.Text, options.Instructions);
         var listening = Assert.IsType<AgentConnectionState.Listening>(_state.Value);
@@ -221,7 +220,7 @@ public sealed class AgentConnectionServiceTests : IDisposable
 
         // The source counts on the UI thread, which is this test's dispatcher.
         using var ended = new CancellationTokenSource();
-        _source.Register(new McpSession("s1", ended.Token), new DefaultToolsController(new SystemJson()));
+        _source.Register(new McpSession("s1", ended.Token), ToolSet());
         _dispatcher.Drain();
         Assert.Equal(1, Assert.IsType<AgentConnectionState.Listening>(_state.Value).Sessions);
 
@@ -229,6 +228,14 @@ public sealed class AgentConnectionServiceTests : IDisposable
         _dispatcher.Drain();
         Assert.Equal(0, Assert.IsType<AgentConnectionState.Listening>(_state.Value).Sessions);
     }
+
+    // McpToolSet's constructor is internal to the framework; GuiMcpServer is its only maker.
+    private static McpToolSet ToolSet() => (McpToolSet)Activator.CreateInstance(
+        typeof(McpToolSet),
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+        binder: null,
+        [new DefaultToolsController(new SystemJson())],
+        culture: null)!;
 
     [Fact]
     public void Preferences_RoundTripTheToken_AndDropAnInvalidOne()
