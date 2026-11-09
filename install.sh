@@ -71,7 +71,7 @@ desktop_exec() {
     desktop_string "\"$quoted\""
 }
 
-# Writes the menu entry the app itself keeps up to date on launch (LinuxDesktopEntry.cs);
+# Writes the menu entry the app itself keeps up to date on launch (ZGF.AppUtils.LinuxDesktopEntry, via Program.cs);
 # the two must stay identical, or every launch rewrites it.
 install_desktop_entry() {
     mkdir -p "$data_home/applications" "$data_home/icons"

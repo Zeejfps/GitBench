@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Platform;
 using Velopack;
+using ZGF.AppUtils;
 using ZGF.Observable;
 
 internal static class Program
@@ -16,7 +17,13 @@ internal static class Program
             return 0;
         }
 
-        LinuxDesktopEntry.EnsureRegistered();
+        new LinuxDesktopEntry(
+            fileStem: "DiffDino",
+            name: "DiffDino",
+            comment: "A desktop Git client",
+            startupWmClass: "DiffDino",
+            categories: "Development;RevisionControl;",
+            iconSource: PathUtils.ResolveLocalPath("Assets/app_icon.png")).EnsureRegistered();
 
         var health = StartupHealth.BeginLaunch(AppPaths.AppDataPath("startup.state"), AppVersion.Display);
         if (health.IsCrashLooping)
