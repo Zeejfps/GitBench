@@ -4,9 +4,11 @@ using GitBench.Controls.Dialogs;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
+using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
-using ZGF.Gui.Desktop.Platforms.Osx;
+using ZGF.Gui.Hosting;
+using ZGF.KeyboardModule;
 using ZGF.Observable;
 
 namespace GitBench.Platform;
@@ -18,11 +20,10 @@ internal static class PlatformServices
     {
         public void AddPlatformServices()
         {
-            // The OS-native file/folder picker lives in the framework (ZGF.Gui.Desktop); this
-            // registers the right one for the current platform under IFilePicker.
-            context.AddNativeFilePicker();
+            // Unowned: the Windows picker hangs inside IFileDialog::Show when given the main window.
+            context.AddNativeFilePicker(null);
 
-            // Same deal for the OS credential store (DPAPI / Keychain / Secret Service), under
+            // The OS credential store (DPAPI / Keychain / Secret Service), under
             // ISecretStore. The folder name is the app's stable identity: change it and saved
             // secrets stop resolving.
             context.AddNativeSecretStore(AppIdentity.DataFolderName);
@@ -30,22 +31,18 @@ internal static class PlatformServices
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 context.AddService<IPlatformShell>(new WindowsPlatformShell());
-                context.AddService<IAppMenu>(new NoopAppMenu());
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
                 context.AddService<IPlatformShell>(new MacOSPlatformShell());
-                context.AddService<IAppMenu>(new MacOsAppMenu());
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 context.AddService<IPlatformShell>(new LinuxPlatformShell());
-                context.AddService<IAppMenu>(new NoopAppMenu());
             }
             else
             {
                 context.AddService<IPlatformShell>(new NoopPlatformShell());
-                context.AddService<IAppMenu>(new NoopAppMenu());
             }
         }
     }
@@ -54,7 +51,8 @@ internal static class PlatformServices
     {
         public void UseNativeAppMenu()
         {
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
+            var menuBar = app.SystemMenuBar;
+            if (menuBar == null) return;
 
             var context = app.Context;
             var themeMode = context.Require<State<ThemeMode>>();
@@ -63,7 +61,7 @@ internal static class PlatformServices
             var bus = context.Require<IMessageBus>();
             var locale = context.Require<State<Locale>>();
             var loc = context.Require<ILocalizationService>();
-            var appMenu = context.Require<IAppMenu>();
+            var actions = new Dictionary<AppMenuItem, Action>();
 
             void ToggleTheme() =>
                 themeMode.Value = themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
@@ -75,78 +73,73 @@ internal static class PlatformServices
             void ShowSettings() =>
                 bus.Broadcast(new OpenSettingsWindowMessage());
 
-            AppMenuBar BuildMenuBar()
+            AppMenuItem Item(string key, string title, Action action, Shortcut? shortcut = null)
             {
-                var s = loc.Strings.Value;
-                return new AppMenuBar
-                {
-                    Menus =
-                    {
-                        new AppMenu
-                        {
-                            Title = AppIdentity.DisplayName,
-                            Role = AppMenuRole.Application,
-                            Items =
-                            {
-                                new AppMenuItem { Title = s.MenuAppAbout(AppIdentity.DisplayName), OnClick = ShowAbout },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuAppSettings, OnClick = ShowSettings, KeyEquivalent = "," },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuAppCheckUpdates, OnClick = CheckForUpdates },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuAppHide(AppIdentity.DisplayName), Standard = AppMenuStandardAction.Hide, KeyEquivalent = "h" },
-                                new AppMenuItem
-                                {
-                                    Title = s.MenuAppHideOthers,
-                                    Standard = AppMenuStandardAction.HideOthers,
-                                    KeyEquivalent = "h",
-                                    Modifiers = AppMenuModifiers.Command | AppMenuModifiers.Option,
-                                },
-                                new AppMenuItem { Title = s.MenuAppShowAll, Standard = AppMenuStandardAction.ShowAll },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuAppQuit(AppIdentity.DisplayName), Standard = AppMenuStandardAction.Quit, KeyEquivalent = "q" },
-                            },
-                        },
-                        new AppMenu
-                        {
-                            Title = s.MenuViewTitle,
-                            Items =
-                            {
-                                new AppMenuItem { Title = s.MenuViewToggleTheme, OnClick = ToggleTheme },
-                                AppMenuItem.Separator,
-                                new AppMenuItem
-                                {
-                                    Title = s.MenuViewFullscreen,
-                                    Standard = AppMenuStandardAction.ToggleFullScreen,
-                                    KeyEquivalent = "f",
-                                    Modifiers = AppMenuModifiers.Command | AppMenuModifiers.Control,
-                                },
-                            },
-                        },
-                        new AppMenu
-                        {
-                            Title = s.MenuWindowTitle,
-                            Role = AppMenuRole.Window,
-                            Items =
-                            {
-                                new AppMenuItem { Title = s.MenuWindowMinimize, Standard = AppMenuStandardAction.Minimize, KeyEquivalent = "m" },
-                                new AppMenuItem { Title = s.MenuWindowZoom, Standard = AppMenuStandardAction.Zoom },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuWindowClose, Standard = AppMenuStandardAction.Close, KeyEquivalent = "w" },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuWindowBringAllToFront, Standard = AppMenuStandardAction.BringAllToFront },
-                            },
-                        },
-                    },
-                };
+                var item = new AppMenuItem(key, title, shortcut, AppMenuSystemAction.None);
+                actions[item] = action;
+                return item;
             }
 
-            appMenu.Install(BuildMenuBar());
+            static AppMenuItem SystemItem(string key, string title, AppMenuSystemAction action, Shortcut? shortcut = null) =>
+                new(key, title, shortcut, action);
 
-            // The native bar is built once at startup; rebuild it when the locale changes so the
-            // menu titles follow the active language like the rest of the UI. locale.Changed fires
-            // on the UI thread (the menu items that flip it run there), so the AppKit calls are safe.
-            locale.Changed += _ => appMenu.Install(BuildMenuBar());
+            List<AppMenu> BuildMenus()
+            {
+                actions.Clear();
+                var s = loc.Strings.Value;
+                return
+                [
+                    new AppMenu("app", AppIdentity.DisplayName, AppMenuRole.Standard)
+                    {
+                        Entries =
+                        {
+                            Item("about", s.MenuAppAbout(AppIdentity.DisplayName), ShowAbout),
+                            new AppMenuSeparator(),
+                            Item("settings", s.MenuAppSettings, ShowSettings, Shortcut.Command(KeyboardKey.Comma)),
+                            new AppMenuSeparator(),
+                            Item("check-updates", s.MenuAppCheckUpdates, CheckForUpdates),
+                            new AppMenuSeparator(),
+                            SystemItem("hide", s.MenuAppHide(AppIdentity.DisplayName), AppMenuSystemAction.Hide, Shortcut.Command(KeyboardKey.H)),
+                            SystemItem("hide-others", s.MenuAppHideOthers, AppMenuSystemAction.HideOthers, Shortcut.Command(KeyboardKey.H, ShortcutModifiers.Alt)),
+                            SystemItem("show-all", s.MenuAppShowAll, AppMenuSystemAction.ShowAll),
+                            new AppMenuSeparator(),
+                            SystemItem("quit", s.MenuAppQuit(AppIdentity.DisplayName), AppMenuSystemAction.Quit, Shortcut.Command(KeyboardKey.Q)),
+                        },
+                    },
+                    new AppMenu("view", s.MenuViewTitle, AppMenuRole.Standard)
+                    {
+                        Entries =
+                        {
+                            Item("toggle-theme", s.MenuViewToggleTheme, ToggleTheme),
+                            new AppMenuSeparator(),
+                            SystemItem("fullscreen", s.MenuViewFullscreen, AppMenuSystemAction.ToggleFullScreen, Shortcut.Command(KeyboardKey.F, ShortcutModifiers.Control)),
+                        },
+                    },
+                    new AppMenu("window", s.MenuWindowTitle, AppMenuRole.Window)
+                    {
+                        Entries =
+                        {
+                            SystemItem("minimize", s.MenuWindowMinimize, AppMenuSystemAction.Minimize, Shortcut.Command(KeyboardKey.M)),
+                            SystemItem("zoom", s.MenuWindowZoom, AppMenuSystemAction.Zoom),
+                            new AppMenuSeparator(),
+                            SystemItem("close", s.MenuWindowClose, AppMenuSystemAction.Close, Shortcut.Command(KeyboardKey.W)),
+                            new AppMenuSeparator(),
+                            SystemItem("bring-all-to-front", s.MenuWindowBringAllToFront, AppMenuSystemAction.BringAllToFront),
+                        },
+                    },
+                ];
+            }
+
+            void Picked(AppMenuItem item)
+            {
+                if (actions.TryGetValue(item, out var action)) action();
+            }
+
+            menuBar.Show(BuildMenus(), Picked);
+
+            // Rebuilt when the locale changes so the menu titles follow the active language like the
+            // rest of the UI. locale.Changed fires on the UI thread, so the AppKit calls are safe.
+            locale.Changed += _ => menuBar.Show(BuildMenus(), Picked);
         }
     }
 }
