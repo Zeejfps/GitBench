@@ -21,7 +21,9 @@ internal sealed class FakeClipboard : IClipboard
 {
     public string? Text { get; set; }
     public void SetText(string text) => Text = text;
+    public void SetHtml(string html, string text) => Text = text;
     public string? GetText() => Text;
+    public ClipboardImage? GetImage() => null;
 }
 
 internal sealed class FakeShell : IPlatformShell

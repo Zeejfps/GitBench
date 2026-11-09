@@ -288,7 +288,7 @@ public sealed class RepoCustomizeIconTests : IDisposable
             ctx.AddService<IFilePicker>(_picker);
             ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
             ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-            ctx.AddService<IClipboard>(new Clipboard());
+            ctx.AddService<IClipboard>(new FakeClipboard());
         });
 
     private static void ClickSave(GuiTestHarness h)
@@ -315,11 +315,5 @@ public sealed class RepoCustomizeIconTests : IDisposable
         { InitialDirectory = initialDirectory; _pending = onPicked; }
         public void PickFolder(string title, string? initialDirectory, Action<string> onPicked) => throw new NotSupportedException();
         public void PickSaveFile(string title, string? initialDirectory, string? suggestedFileName, IReadOnlyList<FileFilter>? filters, Action<string> onPicked) => throw new NotSupportedException();
-    }
-
-    private sealed class Clipboard : IClipboard
-    {
-        public string? GetText() => null;
-        public void SetText(string text) { }
     }
 }

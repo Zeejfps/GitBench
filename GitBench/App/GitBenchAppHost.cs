@@ -57,6 +57,7 @@ internal sealed class GitBenchAppHost : IDisposable
         app.UseLocaleTextDirection();
         app.UseAppFonts();
         app.UsePlatformIcons();
+        app.AddNativeFilePicker();
         app.UseNativeAppMenu();
         app.UseWarmHighlighter();
         app.UseUpdateChecks();

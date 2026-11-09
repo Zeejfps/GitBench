@@ -97,7 +97,7 @@ public sealed class SearchEverywherePopupTests : IDisposable
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new NoClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IKeyMap>(new KeyMap());
                 ctx.AddService(_search);
             });
@@ -260,12 +260,5 @@ public sealed class SearchEverywherePopupTests : IDisposable
         _harness.Layout();
 
         Assert.True(_search.IsOpen.Value);
-    }
-
-    private sealed class NoClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
     }
 }

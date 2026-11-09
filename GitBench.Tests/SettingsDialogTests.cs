@@ -73,7 +73,7 @@ public sealed class SettingsDialogTests : IDisposable
         ctx.AddService(_connectionState);
         ctx.AddService<IAssistantSessionStore>(_store);
         ctx.AddService<IMessageBus>(_bus);
-        ctx.AddService<IClipboard>(new Clipboard());
+        ctx.AddService<IClipboard>(new FakeClipboard());
         ctx.AddService(_chat);
         ctx.AddService(_keys);
         ctx.AddService<IKeyMap>(_keys);
@@ -520,12 +520,5 @@ public sealed class SettingsDialogTests : IDisposable
         _cache.Dispose();
         _connections.Dispose();
         _connectionState.Dispose();
-    }
-
-    private sealed class Clipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
     }
 }
