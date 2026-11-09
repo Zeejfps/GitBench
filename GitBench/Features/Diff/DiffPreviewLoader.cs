@@ -57,6 +57,11 @@ internal sealed class DiffPreviewLoader(
         if (diff.IsBinary)
             return BuildImage(repo, diff, path, side, commitSha, baseSha)
                 ?? new DiffRenderState.Binary(path, side, diff.IsLfs);
+        // An LFS-tracked picture diffs as its pointer text. Show the picture it points at; the
+        // pointer diff stays as the fallback when the object can't be had.
+        if (IsLfsPointerDiff(diff)
+            && BuildImage(repo, diff with { IsLfs = true }, path, side, commitSha, baseSha) is { } lfsImage)
+            return lfsImage;
 
         return mode == DiffViewMode.Diff
             ? new DiffRenderState.Loaded(
@@ -73,8 +78,16 @@ internal sealed class DiffPreviewLoader(
         return text == null ? null : TextLines.Split(text);
     }
 
+    private static bool IsLfsPointerDiff(DiffResult diff)
+    {
+        foreach (var hunk in diff.Hunks)
+            foreach (var line in hunk.Lines)
+                if (line.Text == LfsPointer.VersionLine) return true;
+        return false;
+    }
+
     // Reads and decodes the blob behind a binary image file, or returns null (non-image path,
-    // unreadable/oversized blob, LFS pointer standing in for the real bytes, a format neither codec
+    // unreadable/oversized blob, LFS object not fetched, a format neither codec
     // handles).
     private DiffRenderState? BuildImage(
         Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha, string? baseSha)
