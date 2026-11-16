@@ -314,6 +314,6 @@ public sealed class RepoCustomizeIconTests : IDisposable
         public void PickFile(string title, string? initialDirectory, IReadOnlyList<FileFilter>? filters, Action<string> onPicked)
         { InitialDirectory = initialDirectory; _pending = onPicked; }
         public void PickFolder(string title, string? initialDirectory, Action<string> onPicked) => throw new NotSupportedException();
-        public void PickSaveFile(string title, string? initialDirectory, string? suggestedFileName, IReadOnlyList<FileFilter>? filters, Action<string> onPicked) => throw new NotSupportedException();
+        public void PickSaveFile(string title, string? initialDirectory, string? suggestedFileName, IReadOnlyList<FileFilter>? filters, Action<string> onPicked, Action onCancelled) => throw new NotSupportedException();
     }
 }
