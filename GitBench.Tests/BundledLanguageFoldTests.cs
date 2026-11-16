@@ -456,6 +456,25 @@ public class BundledLanguageFoldTests(CodeIntelFixture fixture)
             }
             """, [1, 2, 3, 7]),
 
+        (CodeLanguage.Kotlin, """
+            class Auth {
+                fun login(user: String?) {
+                    if (user == null) {
+                        fail()
+                        return
+                    }
+                    val codes = listOf(
+                        1,
+                        2,
+                    )
+                    when (user) {
+                        "a" -> stop()
+                        else -> go()
+                    }
+                }
+            }
+            """, [1, 2, 3, 7, 11]),
+
         (CodeLanguage.Bash, """
             deploy() {
               for host in a b; do

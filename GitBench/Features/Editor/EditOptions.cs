@@ -104,6 +104,7 @@ internal sealed class EditOptions
         ["javascriptreact"] = "//",
         ["jsonc"] = "//",
         ["julia"] = "#",
+        ["kotlin"] = "//",
         ["latex"] = "%",
         ["less"] = "//",
         ["lua"] = "--",

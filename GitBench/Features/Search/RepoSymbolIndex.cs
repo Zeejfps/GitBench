@@ -227,7 +227,7 @@ internal static class SymbolIndexLanguages
     {
         CodeLanguage.CSharp or CodeLanguage.TypeScript or CodeLanguage.Tsx or CodeLanguage.JavaScript
             or CodeLanguage.Python or CodeLanguage.Go or CodeLanguage.Rust or CodeLanguage.Java
-            or CodeLanguage.Bash or CodeLanguage.C or CodeLanguage.Svelte => true,
+            or CodeLanguage.Bash or CodeLanguage.C or CodeLanguage.Svelte or CodeLanguage.Kotlin => true,
         CodeLanguage.Json or CodeLanguage.Css or CodeLanguage.Html or CodeLanguage.Markdown
             or CodeLanguage.Yaml or CodeLanguage.Toml or CodeLanguage.MarkdownInline => false,
         _ => throw new ArgumentOutOfRangeException(nameof(language), language, "Not classified."),

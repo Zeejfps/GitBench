@@ -192,6 +192,49 @@ public class BundledLanguageOutlineTests(CodeIntelFixture fixture)
              ("READ", SymbolKind.EnumMember, 1),
              ("WRITE", SymbolKind.EnumMember, 1)]),
 
+        // A local val is not a property, and an interface and an enum are told apart from a class
+        // by what they contain, the grammar naming no fields.
+        (CodeLanguage.Kotlin, """
+            package app
+
+            const val LIMIT = 3
+
+            interface Store { fun load(): String }
+
+            class AuthService(seed: String) {
+                private val tries = 0
+
+                constructor() : this("")
+
+                fun login(user: String): Boolean {
+                    val ok = true
+                    return ok
+                }
+
+                companion object Factory { fun make() = AuthService("") }
+            }
+
+            enum class Kind { READ, WRITE }
+
+            object Registry
+
+            typealias Handler = (String) -> Unit
+            """,
+            [("LIMIT", SymbolKind.Property, 0),
+             ("Store", SymbolKind.Interface, 0),
+             ("load", SymbolKind.Function, 1),
+             ("AuthService", SymbolKind.Class, 0),
+             ("tries", SymbolKind.Property, 1),
+             ("constructor", SymbolKind.Constructor, 1),
+             ("login", SymbolKind.Function, 1),
+             ("Factory", SymbolKind.Class, 1),
+             ("make", SymbolKind.Function, 2),
+             ("Kind", SymbolKind.Enum, 0),
+             ("READ", SymbolKind.EnumMember, 1),
+             ("WRITE", SymbolKind.EnumMember, 1),
+             ("Registry", SymbolKind.Class, 0),
+             ("Handler", SymbolKind.Type, 0)]),
+
         // A prototype and a definition are two declarations, and a specifier with no body — the
         // `struct Session` in a typedef or a variable declaration — is a reference and neither.
         (CodeLanguage.C, """

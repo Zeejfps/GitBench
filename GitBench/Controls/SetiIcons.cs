@@ -43,6 +43,7 @@ internal static class SetiIcons
     private const string C = "";
     private const string Config = "";
     private const string Svelte = "";
+    private const string Kotlin = "";
 
     /// <summary>The mark for a language, or null where the font has none for it.</summary>
     public static string? For(CodeLanguage language) => language switch
@@ -66,6 +67,7 @@ internal static class SetiIcons
         // Seti has no TOML mark and files one under the generic config glyph, beside .ini and .cfg.
         CodeLanguage.Toml => Config,
         CodeLanguage.Svelte => Svelte,
+        CodeLanguage.Kotlin => Kotlin,
         _ => null,
     };
 }

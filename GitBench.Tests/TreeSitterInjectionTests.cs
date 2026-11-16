@@ -199,6 +199,18 @@ public class TreeSitterInjectionTests(CodeIntelFixture fixture)
         }
     }
 
+    [Fact]
+    public void AKotlinFenceIsColoredAsKotlin()
+    {
+        const string source = "```kotlin\nfun go() = 1\n```\n";
+
+        var spans = fixture.Highlighter.Highlight(source, CodeLanguage.Markdown);
+
+        Assert.NotNull(spans);
+        Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "fun"));
+        Assert.Equal(TokenColorSlot.Function, TreeSitterHighlightTests.SlotOf(source, spans, "go"));
+    }
+
     // A pool of one is what a nested Use would deadlock on.
     [Fact]
     public void InjectionsRunOnAPoolOfOne()

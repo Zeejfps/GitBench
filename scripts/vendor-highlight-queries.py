@@ -30,6 +30,7 @@ SOURCES = {
     "bash": ["tree-sitter-bash"],
     "c": ["tree-sitter-c"],
     "toml": ["tree-sitter-toml"],
+    "kotlin": ["tree-sitter-kotlin"],
     # Svelte's grammar is HTML's with template syntax added, and its queries say so with an
     # `; inherits: html` line -- nvim-treesitter's include directive, which concatenation satisfies.
     "svelte": ["tree-sitter-html", "tree-sitter-svelte"],

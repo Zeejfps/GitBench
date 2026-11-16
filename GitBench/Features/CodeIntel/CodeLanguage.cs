@@ -19,6 +19,7 @@ internal enum CodeLanguage
     C,
     Toml,
     Svelte,
+    Kotlin,
     MarkdownInline,
 }
 
@@ -73,6 +74,7 @@ internal static class CodeLanguages
         new(CodeLanguage.C, "c", "c", [".c", ".h"], None),
         new(CodeLanguage.Toml, "toml", "toml", [".toml"], None),
         new(CodeLanguage.Svelte, "svelte", "svelte", [".svelte"], None),
+        new(CodeLanguage.Kotlin, "kotlin", "kotlin", [".kt", ".kts"], Annotations),
         // No file is written in it: Markdown's block grammar leaves every span of inline syntax as
         // one node, and this is what gets injected into those.
         new(CodeLanguage.MarkdownInline, "markdown_inline", "markdown", [], None, InjectedOnly: true),
@@ -102,6 +104,8 @@ internal static class CodeLanguages
         ("shell", CodeLanguage.Bash),
         ("zsh", CodeLanguage.Bash),
         ("console", CodeLanguage.Bash),
+        ("kt", CodeLanguage.Kotlin),
+        ("kts", CodeLanguage.Kotlin),
     ];
 
     /// <summary>The languages a file can be written in.</summary>

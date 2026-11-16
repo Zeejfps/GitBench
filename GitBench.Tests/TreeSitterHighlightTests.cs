@@ -59,6 +59,13 @@ public class TreeSitterHighlightTests(CodeIntelFixture fixture)
             [("class", TokenColorSlot.Keyword), ("A", TokenColorSlot.Type),
              ("go", TokenColorSlot.Function)]),
 
+        (CodeLanguage.Kotlin, "class A { fun go(n: Int): Pair = load(1) }",
+            [("class", TokenColorSlot.Keyword), ("A", TokenColorSlot.Type),
+             ("fun", TokenColorSlot.Keyword), ("go", TokenColorSlot.Function),
+             ("Int", TokenColorSlot.Keyword), ("Pair", TokenColorSlot.Type),
+             ("load", TokenColorSlot.Function),
+             ("1", TokenColorSlot.Number)]),
+
         (CodeLanguage.Bash, "echo \"hi\"", [("\"hi\"", TokenColorSlot.String)]),
 
         (CodeLanguage.C, "int go(void) { return 0; }",
