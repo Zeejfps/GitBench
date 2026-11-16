@@ -35,6 +35,7 @@ public sealed record RepoBarRowStyles(
     uint BadgeError,
     uint BadgeDirty,
     uint BadgeLoading,
+    uint BadgeShell,
     uint HotkeyDim)
 {
     public uint Text(bool active, bool missing)
@@ -106,6 +107,7 @@ public partial record ThemeStyles
             BadgeDirty: status.Warning,
             // Muted: a repo loading is ambient progress, not a state the user has to read.
             BadgeLoading: p.TextMuted,
+            BadgeShell: p.TextSecondary,
             HotkeyDim: p.TextMuted);
 
     private static BranchesViewStyles BuildBranchesView(ThemePalette p, StatusPalette status) =>

@@ -40,6 +40,7 @@ internal sealed class RailSectionViewModel : IDisposable
     private readonly Derived<bool> _isExpanded;
     private readonly Derived<bool> _containsActive;
     private readonly Derived<RepoRowBadge> _badge;
+    private readonly Derived<bool> _hasLiveShell;
 
     public Group Group { get; }
     public GroupHeaderRowViewModel HeaderVm { get; }
@@ -49,6 +50,7 @@ internal sealed class RailSectionViewModel : IDisposable
     public IReadable<bool> ContainsActive => _containsActive;
 
     public IReadable<RepoRowBadge> Badge => _badge;
+    public IReadable<bool> HasLiveShell => _hasLiveShell;
 
     public ICommand ToggleCollapsed => HeaderVm.ToggleCollapsed;
 
@@ -77,10 +79,12 @@ internal sealed class RailSectionViewModel : IDisposable
             }
             return worst;
         });
+        _hasLiveShell = new Derived<bool>(() => Primaries.Any(p => p.HasLiveShell.Value));
     }
 
     public void Dispose()
     {
+        _hasLiveShell.Dispose();
         _badge.Dispose();
         _containsActive.Dispose();
         _isExpanded.Dispose();

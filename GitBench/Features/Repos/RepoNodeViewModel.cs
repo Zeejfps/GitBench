@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Notifications;
 using GitBench.Features.Submodules;
+using GitBench.Features.Terminal;
 using GitBench.Features.Worktrees;
 using Zdev.Git;
 using GitBench.Infrastructure;
@@ -35,6 +36,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Repo _initial;
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
+    private readonly ITerminalSessionStore _terminals;
     private readonly RepoLoadStore _load;
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
@@ -51,6 +53,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Derived<bool> _isMissing;
     private readonly Derived<bool> _isActive;
     private readonly Derived<RepoRowBadge> _badge;
+    private readonly Derived<bool> _hasLiveShell;
     private readonly Derived<bool> _hasChildren;
     private readonly Derived<bool> _canActivate;
     private readonly Derived<IReadOnlyList<Repo>> _childRepos;
@@ -76,6 +79,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     public IReadable<bool> IsMissing => _isMissing;
     public IReadable<bool> IsActive => _isActive;
     public IReadable<RepoRowBadge> Badge => _badge;
+    public IReadable<bool> HasLiveShell => _hasLiveShell;
 
     // The 1-9 keyboard slot this repo occupies, or null. Only primaries are assignable, so a worktree
     // or submodule row always reads null and shows no badge.
@@ -101,6 +105,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         int depth,
         IRepoRegistry registry,
         IRepoStatusStore status,
+        ITerminalSessionStore terminals,
         RepoLoadStore load,
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
@@ -115,6 +120,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         Depth = depth;
         _registry = registry;
         _status = status;
+        _terminals = terminals;
         _load = load;
         _bus = bus;
         _gitRemotes = gitRemotes;
@@ -139,6 +145,7 @@ internal sealed class RepoNodeViewModel : IDisposable
             if (_load.IsLoading(RepoId)) return RepoRowBadge.Loading;
             return st.IsDirty ? RepoRowBadge.Dirty : RepoRowBadge.None;
         });
+        _hasLiveShell = new Derived<bool>(() => _terminals.HasLiveShell(RepoId));
         _hasChildren = new Derived<bool>(() => HasAnyChild(RepoId));
         _canActivate = new Derived<bool>(() => Kind != RepoKind.Submodule || !IsMissing.Value);
 
@@ -409,6 +416,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _childRepos.Dispose();
         _canActivate.Dispose();
         _hasChildren.Dispose();
+        _hasLiveShell.Dispose();
         _badge.Dispose();
         _isActive.Dispose();
         _isMissing.Dispose();

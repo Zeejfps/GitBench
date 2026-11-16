@@ -54,9 +54,11 @@ internal sealed record RepoRailFolderTile : Widget<RailFolderState>
         var ring = RepoRailTile.Ring(face, isActive, state.Hovered);
         var statusDot = RepoRailTile.StatusDot(() => vm.IsExpanded.Value ? RepoRowBadge.None : vm.Badge.Value);
         var tooltipText = new Derived<string?>(() => vm.Group.Name.Value);
+        var hasLiveShell = new Derived<bool>(() => !vm.IsExpanded.Value && vm.HasLiveShell.Value);
 
-        return RepoRailTile.Compose(ring, statusDot)
+        return RepoRailTile.Compose(ring, statusDot, shellChip: RepoRailTile.ShellChip(hasLiveShell))
             .Use(_ => showsPreview)
+            .Use(_ => hasLiveShell)
             .Use(_ => isActive)
             .Use(_ => tooltipText)
             .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered));

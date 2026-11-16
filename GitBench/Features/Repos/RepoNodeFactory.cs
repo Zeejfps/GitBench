@@ -1,6 +1,7 @@
 using Zdev.Git;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Features.Terminal;
 using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Observable;
@@ -16,6 +17,7 @@ internal sealed class RepoNodeFactory
 {
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
+    private readonly ITerminalSessionStore _terminals;
     private readonly RepoLoadStore _load;
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
@@ -28,6 +30,7 @@ internal sealed class RepoNodeFactory
     public RepoNodeFactory(
         IRepoRegistry registry,
         IRepoStatusStore status,
+        ITerminalSessionStore terminals,
         RepoLoadStore load,
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
@@ -39,6 +42,7 @@ internal sealed class RepoNodeFactory
     {
         _registry = registry;
         _status = status;
+        _terminals = terminals;
         _load = load;
         _bus = bus;
         _gitRemotes = gitRemotes;
@@ -50,6 +54,6 @@ internal sealed class RepoNodeFactory
     }
 
     public RepoNodeViewModel Create(Repo repo, int depth) => new(
-        repo, depth, _registry, _status, _load, _bus, _gitRemotes, _gitWorktrees,
+        repo, depth, _registry, _status, _terminals, _load, _bus, _gitRemotes, _gitWorktrees,
         _shell, _loc, _clipboard, _dispatcher, this);
 }

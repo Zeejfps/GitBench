@@ -35,7 +35,7 @@ internal sealed record RepoRowShell : Widget
 
         // Loading gives way to the dot rather than sitting beside it: the dot reports what the last
         // read found, and while the next one is outstanding that is the thing in flux.
-        var trailing = new Switch<RepoRowBadge>
+        var status = new Switch<RepoRowBadge>
         {
             Value = vm.Badge,
             Case = badge => badge switch
@@ -44,6 +44,13 @@ internal sealed record RepoRowShell : Widget
                 RepoRowBadge.Dirty or RepoRowBadge.Error => StatusDot(badge),
                 _ => Empty.Widget,
             },
+        };
+
+        var trailing = new Row
+        {
+            Gap = Spacing.Hair,
+            CrossAxis = CrossAxisAlignment.Center,
+            Children = [new RepoShellMark { When = vm.HasLiveShell }, status],
         };
 
         var nameColor = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value));

@@ -85,7 +85,7 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
         // to the view's lifetime.
         var tooltipText = new Derived<string?>(() => vm.DisplayName.Value);
 
-        return Compose(ring, statusDot, hotkeyBadge)
+        return Compose(ring, statusDot, hotkeyBadge, ShellChip(vm.HasLiveShell))
             .Use(_ => tooltipText)
             .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered));
     }
@@ -119,7 +119,19 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
         Visible = Prop.Bind(() => badge() != RepoRowBadge.None),
     };
 
-    internal static IWidget Compose(IWidget ring, IWidget statusDot, IWidget? cornerBadge = null) => new Stack
+    internal static IWidget ShellChip(IReadable<bool> when) => new Box
+    {
+        Width = 15,
+        Height = 15,
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+        Background = Theme.Color(s => s.Palette.SurfaceRaised),
+        BorderSize = BorderSizeStyle.All(1),
+        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Palette.Border)),
+        Visible = Prop.Bind(when),
+        Children = [new RepoShellMark { When = when }],
+    };
+
+    internal static IWidget Compose(IWidget ring, IWidget statusDot, IWidget? cornerBadge = null, IWidget? shellChip = null) => new Stack
     {
         Children =
         [
@@ -142,6 +154,12 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
                 MainAxis = MainAxisAlignment.End,
                 CrossAxis = CrossAxisAlignment.End,
                 Children = [cornerBadge ?? Empty.Widget],
+            },
+            new Column
+            {
+                MainAxis = MainAxisAlignment.End,
+                CrossAxis = CrossAxisAlignment.Start,
+                Children = [shellChip ?? Empty.Widget],
             },
         ],
     };

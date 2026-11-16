@@ -213,6 +213,26 @@ public class TerminalSessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void WatchingARepository_SeesItsShellStartAndExit()
+    {
+        // Watched before the repository has any terminals at all, so the answer has to follow its
+        // tabs being made as well as the shell in them.
+        using var store = Store();
+        var third = OpenRepo("third");
+        using var watched = new Derived<bool>(() => store.HasLiveShell(third));
+        Assert.False(watched.Value);
+
+        _registry.SetActive(third);
+        var terminal = StartShell(store);
+        Assert.True(watched.Value);
+
+        _ptys[third].ShellExits();
+        Pump.WaitFor(
+            _dispatcher, () => terminal.Render.Value is TerminalRenderState.Exited, "the exit");
+        Assert.False(watched.Value);
+    }
+
+    [Fact]
     public void ARepositoryNeverActivated_IsNotHoldingAShell()
     {
         // No terminal was ever made for it, so the question has to answer rather than throw.

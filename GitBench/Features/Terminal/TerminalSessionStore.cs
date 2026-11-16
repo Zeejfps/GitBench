@@ -15,6 +15,8 @@ internal interface ITerminalSessionStore
     IReadable<TerminalTabs?> Tabs { get; }
 
     /// <summary>Whether any of this repository's terminals is holding a shell process.</summary>
+    /// <remarks>Tracked when read inside a <see cref="Derived{T}"/>: it recomputes as a shell starts
+    /// or exits and as the repository's terminals come and go.</remarks>
     bool HasLiveShell(Guid repoId);
 
     /// <summary>
@@ -60,6 +62,7 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
 
     readonly Dictionary<Guid, TerminalTabs> _tabs = new();
     readonly State<TerminalTabs?> _active = new(null);
+    readonly State<int> _tabsVersion = new(0);
 
     IDisposable? _activeSub;
     IDisposable? _reposSub;
@@ -75,8 +78,11 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
 
     public IReadable<TerminalTabs?> Tabs => _active;
 
-    public bool HasLiveShell(Guid repoId) =>
-        _tabs.TryGetValue(repoId, out var tabs) && tabs.HasLiveShell;
+    public bool HasLiveShell(Guid repoId)
+    {
+        _ = _tabsVersion.Value;
+        return _tabs.TryGetValue(repoId, out var tabs) && tabs.HasLiveShell;
+    }
 
     public IReadOnlyList<Guid> ReposWithLiveShells() =>
         _tabs.Where(pair => pair.Value.HasLiveShell).Select(pair => pair.Key).ToArray();
@@ -116,6 +122,7 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
 
         var tabs = new TerminalTabs(() => new TerminalInstance(_launches(repo), _dispatcher));
         _tabs[repo.Id] = tabs;
+        _tabsVersion.Value++;
         return tabs;
     }
 
@@ -137,6 +144,8 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
 
             tabs.Dispose();
         }
+
+        if (closed.Length > 0) _tabsVersion.Value++;
     }
 
     public void Dispose()
@@ -154,6 +163,7 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
         foreach (var tabs in _tabs.Values) tabs.Dispose();
         _tabs.Clear();
         _active.Dispose();
+        _tabsVersion.Dispose();
     }
 }
 
