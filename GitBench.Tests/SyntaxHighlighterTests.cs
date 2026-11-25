@@ -210,6 +210,40 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Ctx_ContextualKeywords_AreKeywordsOnlyInPlace()
+    {
+        var src = string.Join("\n",
+            "fn take { s: []u8 into out, h: Handle ends } -> []u8 from s and t {",
+            "    for c at i in s { }",
+            "    if x is some{ value = v } { n = a +% b ifoverflow 0 }",
+            "type Id = distinct u32",
+            "    static count: u64,",
+            "expose \"tpc\"",
+            "let into = from{ into }",
+            "    into: []mut u8,",
+            "    let ends = is{ n }");
+        var lines = HighlightOrFail(src, "ctx");
+
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[0], 18));   // into
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[0], 38));   // ends
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[0], 53));   // from
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[1], 4));    // for
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[1], 10));   // at
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[1], 15));   // in
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[2], 9));    // is
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[2], 43));   // ifoverflow
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[3], 10));   // distinct
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[4], 4));    // static
+        Assert.Equal(TokenColorSlot.Keyword, SlotAt(lines[5], 0));    // expose
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[6], 4));  // into as a name
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[6], 11)); // from as a call
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[6], 17)); // into as a pun
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[7], 4));  // into as a field
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[8], 8));  // ends as a name
+        Assert.NotEqual(TokenColorSlot.Keyword, SlotAt(lines[8], 15)); // is as a call
+    }
+
+    [Fact]
     public void Ctx_OffSpecPrimitives_AreNotTypes()
     {
         var lines = HighlightOrFail("let a = i128", "ctx");
